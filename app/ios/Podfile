@@ -1,0 +1,77 @@
+platform :ios, '15.0'
+
+require 'digest'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        'PERMISSION_BLUETOOTH=1',
+      ]
+    end
+  end
+
+  # shared_preferences_foundation 2.5.6 omits CA92.1 for app-private defaults.
+  # Keep the correction in the SDK's existing privacy bundle, leaving Pub cache
+  # untouched. Review/remove this override when the upstream manifest changes.
+  privacy_targets = installer.pods_project.targets.select do |target|
+    target.name == 'shared_preferences_foundation-shared_preferences_foundation_privacy'
+  end
+  unless privacy_targets.length == 1
+    raise 'Expected one shared_preferences_foundation privacy resource target'
+  end
+  privacy_references = privacy_targets.first.resources_build_phase.files_references.select do |reference|
+    File.basename(reference.path.to_s) == 'PrivacyInfo.xcprivacy'
+  end
+  unless privacy_references.length == 1
+    raise 'Expected one shared_preferences_foundation privacy manifest resource'
+  end
+  privacy_reference = privacy_references.first
+  upstream_sha256 = '056428b938bd57018a60019d15c3c1ee2fa727f23687598bbbd934848b180b1a'
+  unless Digest::SHA256.file(privacy_reference.real_path).hexdigest == upstream_sha256
+    raise 'Upstream shared_preferences_foundation privacy manifest changed; review the CA92.1 override'
+  end
+  privacy_override = File.expand_path('privacy_manifests/shared_preferences_foundation/PrivacyInfo.xcprivacy', __dir__)
+  unless File.file?(privacy_override)
+    raise 'Missing shared_preferences_foundation privacy manifest override'
+  end
+  privacy_reference.source_tree = 'SOURCE_ROOT'
+  privacy_reference.path = Pathname.new(privacy_override).relative_path_from(installer.pods_project.project_dir).to_s
+end

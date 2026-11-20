@@ -1,0 +1,457 @@
+{
+  "framework_archives": 51,
+  "framework_selection": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/selection.json",
+  "legal_files": [
+    {
+      "component": "Selected ESP32-S3 framework archive provenance",
+      "license": "NOASSERTION",
+      "origin": "Deterministic selection and SHA-256 observations from the current S3 link map and exact installed packages",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/selection.json",
+      "role": "provenance-metadata",
+      "sha256": "8fc963661f34d9dae54e486366e4e8bbeeadc28a3b074f2b9ba40a45951bc6d5",
+      "source_url": "Local S3 linker-map selection; package and upstream source references are recorded in this metadata."
+    },
+    {
+      "component": "Selected ESP32-S3 toolchain runtime archive provenance",
+      "license": "NOASSERTION",
+      "origin": "Deterministic selection and SHA-256 observations from the current S3 link map and exact installed packages",
+      "path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/selection.json",
+      "role": "provenance-metadata",
+      "sha256": "20e1686fa82d83edb64d1a19d3468075e64d1e5695a17335b68aa87fe72a7db7",
+      "source_url": "Local S3 linker-map selection; package and upstream source references are recorded in this metadata."
+    },
+    {
+      "component": "Arduino core and source libraries",
+      "license": "LGPL-2.1-or-later",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/arduino-esp32/dcc1105b/LICENSE.md",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md",
+      "role": "license-text",
+      "sha256": "994ce1902a23c74519b5d118c6bbb657edabce91dd6b7cc825d86bb8f5c9780f",
+      "source_url": "https://raw.githubusercontent.com/espressif/arduino-esp32/dcc1105b/LICENSE.md"
+    },
+    {
+      "component": "ESP-IDF and radio libraries",
+      "license": "Apache-2.0",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/LICENSE",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+      "role": "license-text",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/LICENSE"
+    },
+    {
+      "component": "ESP-IDF third-party attribution",
+      "license": "NOASSERTION",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/docs/en/COPYRIGHT.rst",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+      "role": "notice-text",
+      "sha256": "a1db55f6af33968650e8c53553fc58386bf3d871d740ccfe464c73c60779acc7",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/docs/en/COPYRIGHT.rst"
+    },
+    {
+      "component": "FreeRTOS",
+      "license": "MIT",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/freertos/LICENSE.md",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/freertos/LICENSE.md",
+      "role": "license-text",
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/freertos/LICENSE.md"
+    },
+    {
+      "component": "ESP-IDF Newlib additions",
+      "license": "NOASSERTION",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/newlib/COPYING.NEWLIB",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYING.NEWLIB",
+      "role": "license-text",
+      "sha256": "0681089a556e93791da82718d68011ba452de245f7f59c3846936304756ac0c0",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/newlib/COPYING.NEWLIB"
+    },
+    {
+      "component": "wpa_supplicant",
+      "license": "BSD-3-Clause",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/wpa_supplicant/COPYING",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/wpa_supplicant/COPYING",
+      "role": "license-text",
+      "sha256": "e9f84e02bb9ba965464e21604014f13d0f3c9299a1b5f7882574a9b4a261abe7",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/wpa_supplicant/COPYING"
+    },
+    {
+      "component": "lwIP",
+      "license": "BSD-3-Clause",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/esp-lwip/a45be9e438f6cf9c54ec150581819c3b95d5af6b/COPYING",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/lwip/COPYING",
+      "role": "license-text",
+      "sha256": "8fb15ebdb19eb669e1d37fcd8e57a44c477fcc0e93a9ab0d181760965f94d5ed",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-lwip/a45be9e438f6cf9c54ec150581819c3b95d5af6b/COPYING"
+    },
+    {
+      "component": "lwIP and ESP-IDF lwIP glue",
+      "license": "NOASSERTION",
+      "origin": "Exact license/notice bytes from Pinned lwIP archive source notices; exact per-source URLs and hashes are carried inside this file.",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/lwip/SOURCE_NOTICES.txt",
+      "role": "notice-text",
+      "sha256": "4b49b09af53103b1876c0bab110c2a586d4f32d6a035a092b3808011edf6a41d",
+      "source_url": "Pinned lwIP archive source notices; exact per-source URLs and hashes are carried inside this file."
+    },
+    {
+      "component": "Mbed TLS",
+      "license": "Apache-2.0 OR GPL-2.0-or-later",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/mbedtls/2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9/LICENSE",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/mbedtls/LICENSE",
+      "role": "license-text",
+      "sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b",
+      "source_url": "https://raw.githubusercontent.com/espressif/mbedtls/2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9/LICENSE"
+    },
+    {
+      "component": "TinyUSB",
+      "license": "MIT",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/hathach/tinyusb/a0e5626bc/LICENSE",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/tinyusb/LICENSE",
+      "role": "license-text",
+      "sha256": "b171720e8a442e7a3957d83c62cd3299dbb29da3db534cc626f9dded0de2ca44",
+      "source_url": "https://raw.githubusercontent.com/hathach/tinyusb/a0e5626bc/LICENSE"
+    },
+    {
+      "component": "ESP LittleFS wrapper",
+      "license": "MIT",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/joltwallet/esp_littlefs/41873c2/LICENSE",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp_littlefs/LICENSE",
+      "role": "license-text",
+      "sha256": "b6bbf3bd17c2b5532bc25a7acf1760faac0b995d6e0ad8bec29435166727d4c5",
+      "source_url": "https://raw.githubusercontent.com/joltwallet/esp_littlefs/41873c2/LICENSE"
+    },
+    {
+      "component": "LittleFS core",
+      "license": "BSD-3-Clause",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/littlefs-project/littlefs/f53a0cc961a8acac85f868b431d2f3e58e447ba3/LICENSE.md",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/littlefs/LICENSE.md",
+      "role": "license-text",
+      "sha256": "0cb4ff1daf5fdc1359c6a6ee3116092f08fc100c9d58b1b77ab17bfd801f856d",
+      "source_url": "https://raw.githubusercontent.com/littlefs-project/littlefs/f53a0cc961a8acac85f868b431d2f3e58e447ba3/LICENSE.md"
+    },
+    {
+      "component": "ESP Diagnostics from ESP Insights",
+      "license": "Apache-2.0",
+      "origin": "Exact license/notice bytes from https://raw.githubusercontent.com/espressif/esp-insights/203a87f671710295579404f7d4c62a8a5e25ae7c/LICENSE",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp_insights/LICENSE",
+      "role": "license-text",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-insights/203a87f671710295579404f7d4c62a8a5e25ae7c/LICENSE"
+    },
+    {
+      "component": "Fast PBKDF2",
+      "license": "CC0-1.0",
+      "origin": "Exact license/notice bytes from https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/fastpbkdf2/CC0-1.0.txt",
+      "role": "license-text",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+      "source_url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt"
+    },
+    {
+      "component": "TLSF allocator",
+      "license": "BSD-3-Clause",
+      "origin": "Exact leading comment bytes 0..1911 from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/heap/heap_tlsf.c; full source SHA-256 008e2f4f868ab40ffe4c1dac4786e9d0f535633378fc89c3b558c816362be651",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/tlsf/NOTICE.txt",
+      "role": "notice-text",
+      "sha256": "ed6fb03d1f60749069487729e2570f47042b1ec235375e0382f1a97757dc57f1",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/heap/heap_tlsf.c"
+    },
+    {
+      "component": "UBSAN runtime",
+      "license": "BSD-2-Clause",
+      "origin": "Exact leading comment bytes 0..1472 from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/esp_system/ubsan.c; full source SHA-256 d66b60862f7299f01055c52809ed764a9f0158b9a43cc1ff49bd1fb453cb4aa5",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/ubsan/NOTICE.txt",
+      "role": "notice-text",
+      "sha256": "703fcd8809a453bd9a5ffe846788a5cb17e7086044f0b325ccae168a7fd3d652",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/esp_system/ubsan.c"
+    },
+    {
+      "component": "Xtensa HAL",
+      "license": "MIT",
+      "origin": "Exact leading comment bytes 0..1796 from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/xtensa/include/xtensa/hal.h; full source SHA-256 2e54b026691b4c3b166500f011d99fec5f0824a08dff489dff75c43311010f89",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/xtensa/NOTICE.txt",
+      "role": "notice-text",
+      "sha256": "274cb732d5292ab3fe9a58a7149b447fd3fb43517d9640f074d64dc485c24c98",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/xtensa/include/xtensa/hal.h"
+    },
+    {
+      "component": "Fast PBKDF2",
+      "license": "CC0-1.0",
+      "origin": "Exact leading comment bytes 0..632 from https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/wpa_supplicant/src/crypto/fastpbkdf2.c; full source SHA-256 152a561b9dc9f3e65598978ec9f4bcd1dc08a001c6789313de33f10ff47294f2",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/fastpbkdf2/NOTICE.txt",
+      "role": "notice-text",
+      "sha256": "1433d7e65aa9df41aa201eca61783e62b6e589225f12e9adb503dfa07acaa9c0",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/wpa_supplicant/src/crypto/fastpbkdf2.c"
+    },
+    {
+      "component": "libb64",
+      "license": "NOASSERTION",
+      "origin": "Exact installed Arduino package libb64 public-domain dedication",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/libb64/LICENSE",
+      "role": "license-text",
+      "sha256": "834b7afa1b3c40289a3be775d3625016be1c0d7ea7a4a26c1eb207f53dc961d8",
+      "source_url": "https://github.com/espressif/arduino-esp32/tree/dcc1105b/cores/esp32/libb64"
+    },
+    {
+      "component": "GCC runtime",
+      "license": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "origin": "Exact installed toolchain text, byte-matched to https://raw.githubusercontent.com/espressif/gcc/esp-2021r2-patch4/COPYING3",
+      "path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING3",
+      "role": "license-text",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "source_url": "https://raw.githubusercontent.com/espressif/gcc/esp-2021r2-patch4/COPYING3"
+    },
+    {
+      "component": "GCC runtime",
+      "license": "GCC-exception-3.1",
+      "origin": "Exact installed toolchain text, byte-matched to https://raw.githubusercontent.com/espressif/gcc/esp-2021r2-patch4/COPYING.RUNTIME",
+      "path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING.RUNTIME",
+      "role": "license-text",
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "source_url": "https://raw.githubusercontent.com/espressif/gcc/esp-2021r2-patch4/COPYING.RUNTIME"
+    },
+    {
+      "component": "Newlib runtime",
+      "license": "NOASSERTION",
+      "origin": "Exact installed toolchain text, byte-matched to https://raw.githubusercontent.com/espressif/newlib-esp32/esp-2021r2-patch5/COPYING.NEWLIB",
+      "path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/newlib/COPYING.NEWLIB",
+      "role": "license-text",
+      "sha256": "dec5d419a7a4b27c064c8367a21e5d7b58aefc162719dc169bc4f82a88994859",
+      "source_url": "https://raw.githubusercontent.com/espressif/newlib-esp32/esp-2021r2-patch5/COPYING.NEWLIB"
+    },
+    {
+      "component": "GNU C++ library",
+      "license": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "origin": "Exact leading GNU C++ library notice from installed include/c++/8.4.0/xtensa-esp32s3-elf/no-rtti/bits/c++config.h",
+      "path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/RUNTIME_DECLARATION.txt",
+      "role": "notice-text",
+      "sha256": "a35d4c472c56a99f62c5b16f47b55b89b8abdb9f4e79235b3038065096f784ad",
+      "source_url": "https://github.com/espressif/gcc/tree/esp-2021r2-patch4/libstdc++-v3"
+    },
+    {
+      "component": "FreeBSD net80211 attribution",
+      "license": "BSD-2-Clause-FreeBSD",
+      "origin": "Exact leading comment bytes from FreeBSD source revision 5f438dd3acba47e54e63b13bfff31a49bcc6ddea, with explicit closed-binary source-binding limitation",
+      "path": "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/net80211/FAMILY_NOTICES.txt",
+      "role": "notice-text",
+      "sha256": "4d4d20abf6ab5adaa453d28fa6981373f6bf6cc5cf4c3f2e7524cc1e27a1aeac",
+      "source_url": "https://github.com/freebsd/freebsd-src/tree/5f438dd3acba47e54e63b13bfff31a49bcc6ddea/sys/net80211"
+    },
+    {
+      "component": "bblanchon/ArduinoJson 6.21.5",
+      "license": "MIT",
+      "origin": "Exact local PlatformIO package bblanchon/ArduinoJson 6.21.5 selected by tracked platformio.ini; .piopm owner/name/version checked; extracted LICENSE.txt",
+      "path": "tools/release/license_evidence/platformio-lib/bblanchon__ArduinoJson-6.21.5/LICENSE.txt",
+      "role": "license-text",
+      "sha256": "2d9db49bfc83e1148523121b87ed57dc5e3c2278a24705e6e19618a63f566df8",
+      "source_url": "https://arduinojson.org/"
+    },
+    {
+      "component": "h2zero/NimBLE-Arduino 2.3.7",
+      "license": "NOASSERTION",
+      "origin": "Exact local PlatformIO package h2zero/NimBLE-Arduino 2.3.7 selected by tracked platformio.ini; .piopm owner/name/version checked; extracted LICENSE",
+      "path": "tools/release/license_evidence/platformio-lib/h2zero__NimBLE-Arduino-2.3.7/LICENSE",
+      "role": "license-text",
+      "sha256": "1352de53fbef2f779adefaafb5568854c9532d1475955d1331f9f5427f9db713",
+      "source_url": "https://github.com/h2zero/NimBLE-Arduino"
+    },
+    {
+      "component": "h2zero/NimBLE-Arduino 2.3.7",
+      "license": "NOASSERTION",
+      "origin": "Exact local PlatformIO package h2zero/NimBLE-Arduino 2.3.7 selected by tracked platformio.ini; .piopm owner/name/version checked; extracted NOTICE",
+      "path": "tools/release/license_evidence/platformio-lib/h2zero__NimBLE-Arduino-2.3.7/NOTICE",
+      "role": "notice-text",
+      "sha256": "3f5b3600d59a04cc1d5bf6712438c02a4e8be44dea6a1d87701557f899be0418",
+      "source_url": "https://github.com/h2zero/NimBLE-Arduino"
+    },
+    {
+      "component": "h2zero/NimBLE-Arduino 2.3.7",
+      "license": "NOASSERTION",
+      "origin": "Exact local PlatformIO package h2zero/NimBLE-Arduino 2.3.7 selected by tracked platformio.ini; .piopm owner/name/version checked; extracted src/nimble/LICENSE",
+      "path": "tools/release/license_evidence/platformio-lib/h2zero__NimBLE-Arduino-2.3.7/src/nimble/LICENSE",
+      "role": "license-text",
+      "sha256": "0deb15bc7df50b1d009c644b008f92e1062909e9521328d337c5fad3a5d4921c",
+      "source_url": "https://github.com/h2zero/NimBLE-Arduino"
+    },
+    {
+      "component": "h2zero/NimBLE-Arduino 2.3.7",
+      "license": "NOASSERTION",
+      "origin": "Exact local PlatformIO package h2zero/NimBLE-Arduino 2.3.7 selected by tracked platformio.ini; .piopm owner/name/version checked; extracted src/nimble/NOTICE",
+      "path": "tools/release/license_evidence/platformio-lib/h2zero__NimBLE-Arduino-2.3.7/src/nimble/NOTICE",
+      "role": "notice-text",
+      "sha256": "b838c4733a5020cd8e2bafbe70842acd8c8dc7816012965b77d10c1f4c0727f6",
+      "source_url": "https://github.com/h2zero/NimBLE-Arduino"
+    },
+    {
+      "component": "h2zero/NimBLE-Arduino 2.3.7",
+      "license": "NOASSERTION",
+      "origin": "Exact local PlatformIO package h2zero/NimBLE-Arduino 2.3.7 selected by tracked platformio.ini; .piopm owner/name/version checked; extracted src/nimble/ext/tinycrypt/LICENSE",
+      "path": "tools/release/license_evidence/platformio-lib/h2zero__NimBLE-Arduino-2.3.7/src/nimble/ext/tinycrypt/LICENSE",
+      "role": "license-text",
+      "sha256": "b2d451fcba3577b118741d733d37ebd15bdd0b6b381e554a7345bdbfa3743108",
+      "source_url": "https://github.com/h2zero/NimBLE-Arduino"
+    },
+    {
+      "component": "makuna/NeoPixelBus 2.8.4",
+      "license": "LGPL-3.0-or-later",
+      "origin": "Exact local PlatformIO package makuna/NeoPixelBus 2.8.4 selected by tracked platformio.ini; .piopm owner/name/version checked; extracted COPYING",
+      "path": "tools/release/license_evidence/platformio-lib/makuna__NeoPixelBus-2.8.4/COPYING",
+      "role": "license-text",
+      "sha256": "a5681bf9b05db14d86776930017c647ad9e6e56ff6bbcfdf21e5848288dfaf1b",
+      "source_url": "https://github.com/Makuna/NeoPixelBus"
+    },
+    {
+      "component": "PCA95x5",
+      "license": "MIT",
+      "origin": "Exact reviewed tracked firmware dependency evidence",
+      "path": "lib/PCA95x5/LICENSE",
+      "role": "license-text",
+      "sha256": "e38a878eb6e9a21413bca755242c8a239e70a96e96c0e978009a381cdabadeef",
+      "source_url": "https://github.com/hideakitai/PCA95x5/tree/v0.1.3"
+    },
+    {
+      "component": "mcu-max",
+      "license": "MIT",
+      "origin": "Exact reviewed tracked firmware dependency evidence",
+      "path": "lib/litch-max/vendor/mcu-max/LICENSE",
+      "role": "license-text",
+      "sha256": "bd896154097fe85796b8ff31771ba315be734fe9e9d30b80a72e5e52ad64ea84",
+      "source_url": "https://github.com/Gissio/mcu-max/tree/aa03caffce50729566b5db6965bf735c31f33eea"
+    },
+    {
+      "component": "mcu-max and micro-Max grant",
+      "license": "MIT AND LicenseRef-micro-Max-Public-Domain",
+      "origin": "Exact reviewed tracked firmware dependency evidence",
+      "path": "lib/litch-max/docs/mcu_max_provenance.md",
+      "role": "notice-text",
+      "sha256": "2708c321e9ef3a89a1077cc6daad30349f272609b598d7873efd7472868906e4",
+      "source_url": "https://www.talkchess.com/forum/viewtopic.php?p=996683#p996683"
+    },
+    {
+      "component": "SparkFun VEML6030",
+      "license": "LicenseRef-SparkFun-VEML6030",
+      "origin": "Exact reviewed tracked firmware dependency evidence",
+      "path": "docs/vendor/sparkfun_veml6030.md",
+      "role": "notice-text",
+      "sha256": "720731588f822de9a407c0c440c9d23a0c2d3e3eeb69e68969a1607b7edd6861",
+      "source_url": "https://github.com/sparkfun/SparkFun_Ambient_Light_Sensor_Arduino_Library/tree/efde0817bd6857863067bd1653a2cfafe6c68732"
+    },
+    {
+      "component": "Selected macOS ARM toolchain package identity",
+      "license": "NOASSERTION",
+      "origin": "Exact installed darwin_arm64 PlatformIO toolchain package.json retained with the original runtime evidence",
+      "path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/package.json",
+      "role": "provenance-metadata",
+      "sha256": "40b436b30848b52f0a66cb28b4a6c0118afb7ee242558078f4c2460b3bd70f8d",
+      "source_url": "https://github.com/espressif/crosstool-NG"
+    },
+    {
+      "component": "Selected Linux x86-64 toolchain package identity",
+      "license": "NOASSERTION",
+      "origin": "Canonical JSON serialization of package.json parsed from the checksum-verified Linux distribution; original whitespace is not asserted",
+      "path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/linux_x86_64/package.json",
+      "role": "provenance-metadata",
+      "sha256": "1399421eebbf5831580e75e8111fa8a24040f8b9826cd4239e40f874aa04548a",
+      "source_url": "https://dl.registry.platformio.org/download/espressif/tool/toolchain-xtensa-esp32s3/8.4.0+2021r2-patch5/toolchain-xtensa-esp32s3-linux_x86_64-8.4.0+2021r2-patch5.tar.gz"
+    },
+    {
+      "component": "Selected Linux x86-64 toolchain distribution provenance",
+      "license": "NOASSERTION",
+      "origin": "Published whole-package SHA-256 and size verified during one read-only stream; four runtime archives and five legal/header metadata files compared to darwin_arm64",
+      "path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/linux_x86_64/distribution.json",
+      "role": "provenance-metadata",
+      "sha256": "53ff3d008a98c7994584e3316d6515bc6e06a842768a359b87f729b102daf8c5",
+      "source_url": "https://dl.registry.platformio.org/download/espressif/tool/toolchain-xtensa-esp32s3/8.4.0+2021r2-patch5/toolchain-xtensa-esp32s3-linux_x86_64-8.4.0+2021r2-patch5.tar.gz"
+    },
+    {
+      "component": "Litch-Max original software",
+      "license": "MPL-2.0",
+      "origin": "Exact source snapshot bound to the reviewed Litch-Max commit and Git tree",
+      "path": "lib/litch-max/LICENSE",
+      "role": "license-text",
+      "sha256": "7ae01241a1c178658b7a703fd9412425fa784098c3b1ba4ee0fef25b452c5c4c",
+      "source_url": "https://github.com/foxieproducts/litch-max/tree/675933ed740663fdeb0ead3e1fcf3a68ba21900b"
+    },
+    {
+      "component": "Litch-Max exact source snapshot",
+      "license": "NOASSERTION",
+      "origin": "Exact source snapshot bound to the reviewed Litch-Max commit and Git tree",
+      "path": "lib/litch-max.snapshot.json",
+      "role": "provenance-metadata",
+      "sha256": "5207d0eb30020933f5ccb3dfeecf95da93de25056a00260437767a9bf2480f55",
+      "source_url": "https://github.com/foxieproducts/litch-max/tree/675933ed740663fdeb0ead3e1fcf3a68ba21900b"
+    }
+  ],
+  "notice_guidance": "The top-level firmware NOTICE must point to the License and attribution section of mcu_max_provenance.md and the License and attribution disposition section of sparkfun_veml6030.md. Preserve those exact reviewed grant and attribution records, not only mcu-max MIT. NeoPixelBus is LGPL-3.0-or-later and uses the carried full GPL3 text as well as its LGPL3 supplement; its source/relink/installation-information duties remain separate delivery gates. Litch-Max and foxie_embedded are MPL-covered first-party libraries; mcu-max/micro-Max remains separately attributed inside Litch-Max.",
+  "other_project_archive_components": {
+    "libNeoPixelBus.a": "makuna/NeoPixelBus (source/relink required)",
+    "libNimBLE-Arduino.a": "h2zero/NimBLE-Arduino",
+    "libSparkFun_Ambient_Light_Sensor_Arduino_Library.a": "SparkFun VEML6030",
+    "libfoxie_embedded.a": "first-party; no third-party notice assertion",
+    "liblitch-max.a": "Litch-Max (MPL-2.0), nested mcu-max and micro-Max"
+  },
+  "other_project_archives": [
+    ".pio/build/litch-esp32s3/libb46/liblitch-max.a",
+    ".pio/build/litch-esp32s3/lib28a/libNimBLE-Arduino.a",
+    ".pio/build/litch-esp32s3/lib7b5/libNeoPixelBus.a",
+    ".pio/build/litch-esp32s3/libc64/libSparkFun_Ambient_Light_Sensor_Arduino_Library.a",
+    ".pio/build/litch-esp32s3/libc70/libfoxie_embedded.a"
+  ],
+  "runtime_archives": 4,
+  "runtime_selection": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/selection.json",
+  "schema_version": 1,
+  "source_libraries": [
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/libb64/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE"
+      ],
+      "name": "core",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers. Core Udp.h additionally contains its own complete MIT notice, preserved with corresponding source.",
+      "source_path": "cores/esp32"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE"
+      ],
+      "name": "FS",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/FS"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE"
+      ],
+      "name": "Update",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/Update"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md"
+      ],
+      "name": "Wire",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/Wire"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE"
+      ],
+      "name": "LittleFS",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/LittleFS"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md"
+      ],
+      "name": "SPI",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/SPI"
+    }
+  ],
+  "target": "litch-esp32s3"
+}

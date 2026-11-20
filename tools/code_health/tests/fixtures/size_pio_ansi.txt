@@ -1,0 +1,14 @@
+{ESC}[1;36mProcessing litch-esp32c3 (platform: platformio/espressif32@6.12.0){ESC}[0m
+PLATFORM: Espressif 32 (6.12.0) > Litch C3
+PACKAGES:
+ - framework-arduinoespressif32 @ 3.20017.0 (2.0.17)
+ - toolchain-riscv32-esp @ 8.4.0+2021r2-patch5
+RAM:   [{ESC}[32m=====     {ESC}[0m]  50.0% (used 163,840 bytes from 327,680 bytes)
+Flash: [{ESC}[32m======    {ESC}[0m]  60.0% (used 786,432 bytes from 1,310,720 bytes)
+{ESC}[1;36mProcessing litch-esp32s3 (platform: platformio/espressif32@6.12.0){ESC}[0m
+PLATFORM: Espressif 32 (6.12.0) > Litch S3
+PACKAGES:
+ - framework-arduinoespressif32 @ 3.20017.0 (2.0.17)
+ - toolchain-xtensa-esp32s3 @ 8.4.0+2021r2-patch5
+RAM:   [{ESC}[32m======    {ESC}[0m]  55.3% (used 181212 bytes from 327680 bytes)
+Flash: [{ESC}[32m===       {ESC}[0m]  29.6% (used 988745 bytes from 3342336 bytes)

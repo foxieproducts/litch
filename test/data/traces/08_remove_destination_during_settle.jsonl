@@ -1,0 +1,13 @@
+{"type":"header","ver":1,"session":"remove_destination_during_settle"}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+{"type":"sensor","t_ms":0,"square":2,"occ":1}
+{"type":"sensor","t_ms":0,"square":3,"occ":0}
+{"type":"tick","t_ms":0}
+{"type":"sensor","t_ms":20,"square":2,"occ":0}
+{"type":"tick","t_ms":20}
+{"type":"sensor","t_ms":60,"square":3,"occ":1}
+{"type":"tick","t_ms":60}
+{"type":"sensor","t_ms":120,"square":3,"occ":0}
+{"type":"tick","t_ms":120}
+{"type":"tick","t_ms":900}
+{"type":"end","t_ms":950}

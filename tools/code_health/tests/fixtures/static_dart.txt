@@ -1,0 +1,1 @@
+WARNING|STATIC_WARNING|unused_local_variable|lib/example.dart|8|9|5|The value of the local variable 'unused' isn't used.

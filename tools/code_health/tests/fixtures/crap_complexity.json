@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "functions": [
+    {
+      "cyclomatic_complexity": 5,
+      "end_line": 14,
+      "long_name": "demo(int)",
+      "name": "demo",
+      "path": "src/demo.cpp",
+      "start_line": 10
+    },
+    {
+      "cyclomatic_complexity": 2,
+      "end_line": 24,
+      "long_name": "helper()",
+      "name": "helper",
+      "path": "src/demo.cpp",
+      "start_line": 20
+    },
+    {
+      "cyclomatic_complexity": 9,
+      "end_line": 9,
+      "long_name": "outside()",
+      "name": "outside",
+      "path": "src/outside.cpp",
+      "start_line": 1
+    }
+  ]
+}

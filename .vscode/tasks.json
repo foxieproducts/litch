@@ -1,0 +1,142 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Litch: Doctor (all)",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["doctor"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Bootstrap (all)",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["bootstrap", "all"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Check tools",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["check", "tools"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Test native suite",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["test", "native", "--filter", "${input:nativeSuite}"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Build S3",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["build", "s3"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: App test file",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["app", "test", "--", "${input:appTest}"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: App analyze",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["app", "analyze"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: App run (exact device)",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["app", "run", "--device", "${input:flutterDevice}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Release checks",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["release", "check"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: List worktrees",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["worktrees"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: List USB and BLE devices",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["devices", "--ble"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Flash S3 (verified exact device)",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["flash", "s3", "--device", "${input:usbSerial}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Flash S3 (BLE OTA)",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["flash", "s3", "--ble-device", "${input:bleAddress}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Flash remembered or auto",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["flash"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Litch: Monitor S3 (exact device)",
+      "type": "process",
+      "command": "${workspaceFolder}/litch",
+      "args": ["monitor", "s3", "--device", "${input:usbSerial}"],
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "nativeSuite",
+      "type": "promptString",
+      "description": "Existing native suite answering the current question (test_...)"
+    },
+    {
+      "id": "appTest",
+      "type": "promptString",
+      "description": "Existing app-relative test file (test/..._test.dart)"
+    },
+    {
+      "id": "usbSerial",
+      "type": "promptString",
+      "description": "Exact USB serial reported by ./litch devices"
+    },
+    {
+      "id": "bleAddress",
+      "type": "promptString",
+      "description": "Exact BLE address reported by ./litch devices --ble"
+    },
+    {
+      "id": "flutterDevice",
+      "type": "promptString",
+      "description": "Unique-short Flutter device ID reported by ./litch app install/run diagnostics"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{"type":"header","ver":1,"session":"simple_move_a_to_b"}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+{"type":"sensor","t_ms":0,"square":8,"occ":1}
+{"type":"sensor","t_ms":0,"square":16,"occ":0}
+{"type":"tick","t_ms":0}
+{"type":"sensor","t_ms":40,"square":8,"occ":0}
+{"type":"tick","t_ms":40}
+{"type":"sensor","t_ms":120,"square":16,"occ":1}
+{"type":"tick","t_ms":120}
+{"type":"tick","t_ms":800}
+{"type":"end","t_ms":900}

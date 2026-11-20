@@ -1,0 +1,126 @@
+name: litch_mobile
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# Native package version/build. Prepare this with tools/release/release_identity.py
+# before QA; the shared human identity (series-N) lives in AppReleaseIdentity.
+# Official packages use these values without --build-name/--build-number overrides.
+# Android versionName/versionCode and iOS CFBundleShortVersionString/CFBundleVersion
+# use the native values; N is independent of the monotonic native package code.
+version: 1.0.1+49
+
+environment:
+  sdk: ^3.11.0
+  flutter: 3.41.2
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  characters: 1.4.1
+  chess: 0.8.1
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+  flutter_reactive_ble: ^5.4.0
+  http: ^1.2.2
+  permission_handler: ^12.0.1
+  package_info_plus: ^8.0.2
+  path_provider: ^2.1.6
+  share_plus: 11.1.0
+  shared_preferences: ^2.5.3
+  sensors_plus: 6.1.2
+  crypto: ^3.0.7
+  image: 4.10.1
+  file_selector: 1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+  generate: true
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # Reviewed native runtime and font notices supplement Flutter's package notices.
+  licenses:
+    - assets/licenses/native_runtime_notices.txt
+
+  assets:
+    - assets/privacy/foxie_litch_privacy_policy.md
+    - assets/branding/foxie-app-icon.png
+    - assets/branding/foxie-litch-wordmark.png
+    - assets/branding/foxie-litchcraft-wordmark.png
+    - assets/branding/foxie-fox.png
+    - assets/images/foxie_planet.jpeg
+    - assets/chess_pieces/cameos_v3/pawn.png
+    - assets/chess_pieces/cameos_v3/rook.png
+    - assets/chess_pieces/cameos_v3/knight.png
+    - assets/chess_pieces/cameos_v3/bishop.png
+    - assets/chess_pieces/cameos_v3/queen.png
+    - assets/chess_pieces/cameos_v3/king.png
+    - assets/chess_pieces/cameos_v2/duck.png
+
+  # To add assets to your application, add an assets section, like this:
+  # assets:
+  #   - images/a_dot_burr.jpeg
+  #   - images/a_dot_ham.jpeg
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
+  #   - family: Trajan Pro
+  #     fonts:
+  #       - asset: fonts/TrajanPro.ttf
+  #       - asset: fonts/TrajanPro_Bold.ttf
+  #         weight: 700
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package
+
+# Pinned cancellation-boundary fix; see third_party/flutter_reactive_ble/LITCH_PATCH.md.
+dependency_overrides:
+  flutter_reactive_ble:
+    path: third_party/flutter_reactive_ble
+  reactive_ble_mobile:
+    path: third_party/reactive_ble_mobile

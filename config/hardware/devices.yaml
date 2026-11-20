@@ -1,0 +1,222 @@
+schema_version: 1
+default_variant: esp32s3
+
+variants:
+  esp32s3:
+    launch_revision: v3_3  # Includes the V3.31 production PCB.
+    legacy_revisions: [v2, v3]
+    devices:
+      - device_name: onboard_flash
+        type: onboard_flash
+        bus: integrated
+        address_or_pins: {partition_csv: tools/partitions/partitions-8MB-ota-spiffs.csv}
+        purpose: Firmware images, OTA slots, and LittleFS-backed settings storage.
+        init_notes: Use the explicit S3 partition layout with 3264 KiB ota_0 and ota_1 slots plus a 1600 KiB spiffs partition.
+        source_files: [platformio.ini, tools/partitions/partitions-8MB-ota-spiffs.csv]
+        confidence: confirmed
+      - device_name: littlefs_settings_partition
+        type: filesystem_partition
+        bus: integrated_flash
+        address_or_pins: {partition_label: spiffs, base_path: /littlefs}
+        purpose: Persistent settings and small files.
+        init_notes: Mount LittleFS with max_open_files=10. Auto-format only on explicit or erased-partition paths.
+        source_files: [lib/foxie_embedded/src/settings_store_io.cpp]
+        confidence: confirmed
+      - device_name: board_led_strip
+        type: led_strip
+        bus: neopixel_rmt
+        address_or_pins: {data_gpio: 47, pixel_count_by_revision: {v3_3: 256, v3: 256, v2: 192}}
+        purpose: Board square rendering.
+        init_notes: RMT0 drives SK6812SIDE-A RGB in GRB order on V3.3/V3.31. V2/V3 use SK6805SIDE-FRGBW in GRBW order.
+        source_files: [include/hardware/board_hardware_profile.hpp, include/hardware/board_led_output_mapping.hpp, include/hardware/neopixel_led_renderer.hpp]
+        confidence: confirmed
+      - device_name: edge_led_strip
+        type: led_strip
+        bus: neopixel_rmt
+        address_or_pins: {data_gpio: 33, pixel_count_by_revision: {v3_3: 44, v3: 32, v2: 32}}
+        purpose: Perimeter status and, on V3.3/V3.31, dedicated illumination for both six-button banks.
+        init_notes: RMT1 uses the same emitter and byte order as the board chain. The launch chain interleaves 32 perimeter and 12 button LEDs.
+        source_files: [include/hardware/board_hardware_profile.hpp, include/hardware/status_led_chain_profile.hpp, include/hardware/neopixel_led_renderer.hpp]
+        confidence: confirmed
+      - device_name: hall_switch_array
+        type: magnetic_switch_array
+        bus: pca9555_inputs
+        part_verified_on: "V3.31"
+        address_or_pins: {quantity: 64, power_domain: "+3.3V"}
+        purpose: One TMAG5231 Hall switch per launch-board square.
+        init_notes: The four expanders read the switches independently of the switched LED rail.
+        source_files: [docs/hardware/components/README.md, include/hardware/pca9555_occupancy_decode.hpp]
+        confidence: confirmed
+      - device_name: pca9555_0
+        type: i2c_expander
+        bus: i2c
+        address_or_pins: {address: "0x20", int_signal: pca9555_int0}
+        purpose: Hall sensor bank 0.
+        init_notes: Configure all pins as inputs and invert polarity.
+        source_files: [include/hardware/pca9555_occupancy_decode.hpp, src/pca9555_input_scan.cpp]
+        confidence: confirmed
+      - device_name: pca9555_1
+        type: i2c_expander
+        bus: i2c
+        address_or_pins: {address: "0x21", int_signal: pca9555_int1}
+        purpose: Hall sensor bank 1.
+        init_notes: Configure all pins as inputs and invert polarity.
+        source_files: [include/hardware/pca9555_occupancy_decode.hpp, src/pca9555_input_scan.cpp]
+        confidence: confirmed
+      - device_name: pca9555_2
+        type: i2c_expander
+        bus: i2c
+        address_or_pins: {address: "0x22", int_signal: pca9555_int2}
+        purpose: Hall sensor bank 2.
+        init_notes: Configure all pins as inputs and invert polarity.
+        source_files: [include/hardware/pca9555_occupancy_decode.hpp, src/pca9555_input_scan.cpp]
+        confidence: confirmed
+      - device_name: pca9555_3
+        type: i2c_expander
+        bus: i2c
+        address_or_pins: {address: "0x23", int_signal: pca9555_int3}
+        purpose: Hall sensor bank 3.
+        init_notes: Configure all pins as inputs and invert polarity.
+        source_files: [include/hardware/pca9555_occupancy_decode.hpp, src/pca9555_input_scan.cpp]
+        confidence: confirmed
+      - device_name: ambient_sensor_0
+        type: ambient_light_sensor
+        bus: i2c
+        address_or_pins: {address: "0x10"}
+        purpose: Ambient light input beside H8 on the launch board (driver index 0, U5).
+        init_notes: VEML6030 alternate address, integration_time_ms=50, gain=0.25.
+        source_files: [src/ambient_light_sensors.cpp, include/hardware/ambient_light_sensors.hpp, docs/hardware/components/README.md]
+        confidence: confirmed
+      - device_name: ambient_sensor_1
+        type: ambient_light_sensor
+        bus: i2c
+        address_or_pins: {address: "0x48"}
+        purpose: Ambient light input beside A1 on the launch board (driver index 1, U4).
+        init_notes: VEML6030 default address, integration_time_ms=50, gain=0.25.
+        source_files: [src/ambient_light_sensors.cpp, include/hardware/ambient_light_sensors.hpp, docs/hardware/components/README.md]
+        confidence: confirmed
+      - device_name: lis2dw12_motion_sensor
+        type: low_power_accelerometer
+        availability: [v3_3, v3]
+        bus: i2c
+        address_or_pins: {address: "0x19", int1_gpio: 21, int2: not_connected, power_domain: "+3V3"}
+        purpose: Motion sensing, motion/tap wake, and launch factory sensor checks.
+        init_notes: Configure the fitted accelerometer after checking WHO_AM_I (0x44). Clear the latched, active-low INT1 source and require a high line before sleep.
+        source_files: [include/hardware/board_hardware_profile.hpp, include/hardware/lis2dw12.hpp, src/lis2dw12.cpp, src/motion_wake_controller.cpp]
+        confidence: confirmed
+      - device_name: usb_cc_source_detect
+        type: adc_front_end
+        bus: adc
+        address_or_pins: {cc1_gpio: 1, cc2_gpio: 2}
+        purpose: Detect advertised USB-C source capability.
+        init_notes: Bounded startup confirmation primes each channel and uses an 8-sample trimmed mean at 1 Hz. After authorization, only the active pin gets a three-sample median every 10 ms; downgrades are debounced for 20 ms. Default thresholds 320, 580, 850; strong entry 620.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/usb_cc_sense.cpp]
+        confidence: confirmed
+      - device_name: five_volt_rail_gate
+        type: power_switch
+        bus: gpio
+        address_or_pins: {enable_gpio_by_revision: {v3_3: 11, v3: 11, v2: 13}, led_data_gpios: [47, 33]}
+        purpose: Switch the LED 5 V supply. Launch Hall sensors use the independent 3.3 V supply.
+        init_notes: Hold data low. V3.3/V3.31 use hardware PWM precharge and 5 ms post-enable settling. V2/V3 retain pulsed GPIO precharge and 10 ms post-enable settling.
+        source_files: [include/hardware/board_hardware_profile.hpp, src/power_rail.cpp, docs/hardware/components/README.md]
+        confidence: confirmed
+      - device_name: usb_cdc_serial
+        type: serial_console
+        bus: usb
+        address_or_pins: {transport: usb_cdc, baud: 115200}
+        purpose: Console and diagnostics.
+        init_notes: S3 build explicitly enables Arduino USB CDC on boot.
+        source_files: [platformio.ini, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - device_name: ble_radio
+        type: ble_gatt_transport
+        bus: integrated_radio
+        address_or_pins: {device_name_default: "Foxie Litch"}
+        purpose: BLE console transport, settings service, and BLE OTA.
+        init_notes: Current stack prefers MTU 517, TX power 9 dBm, fast connection interval requests of 6 or 12 units, max OTA chunk 512 bytes.
+        source_files: [include/modules/ble_service.hpp, include/modules/ble_service_internal.hpp, src/ble_service_stack.cpp, src/ble_service_ota.cpp]
+        confidence: confirmed
+
+  esp32c3:
+    legacy_revisions: [v1]
+    devices:
+      - device_name: onboard_flash
+        type: onboard_flash
+        bus: integrated
+        address_or_pins: {partition_layout: board_default_unknown}
+        purpose: Firmware storage and shared settings filesystem.
+        init_notes: Current repo does not override the C3 partition table, so only the LittleFS mount contract is explicit.
+        source_files: [platformio.ini, lib/foxie_embedded/src/settings_store_io.cpp]
+        confidence: unknown
+      - device_name: littlefs_settings_partition
+        type: filesystem_partition
+        bus: integrated_flash
+        address_or_pins: {partition_label: spiffs, base_path: /littlefs}
+        purpose: Persistent settings and small files.
+        init_notes: Same shared LittleFS mount code is used, but the exact C3 partition layout is not declared in this repo.
+        source_files: [lib/foxie_embedded/src/settings_store_io.cpp]
+        confidence: inferred
+      - device_name: board_led_strip
+        type: led_strip
+        bus: neopixel
+        address_or_pins: {data_gpio: 2, pixel_count: 192}
+        purpose: Board square rendering.
+        init_notes: RGB-only WS2812x timing with GRB order.
+        source_files: [include/hardware/pins_esp32c3.hpp, include/hardware/neopixel_led_renderer.hpp]
+        confidence: confirmed
+      - device_name: virtual_edge_surface
+        type: virtual_led_surface
+        bus: board_led_overlay
+        address_or_pins: {backing_gpio: 2, logical_count: 32}
+        purpose: Edge and status UI without a dedicated physical edge strip.
+        init_notes: Blend virtual edge states into perimeter square LEDs with capped alpha.
+        source_files: [include/modules/status_led_frame_adapter.hpp, include/modules/edge_led_state_selection.hpp]
+        confidence: confirmed
+      - device_name: optional_appended_pixels
+        type: inferred_shared_chain_pixels
+        bus: neopixel
+        address_or_pins: {data_gpio: 2, clear_only_count: 32}
+        purpose: Clear any physically present extra pixels on legacy C3 boards.
+        init_notes: The logical contract still exposes zero physical edge LEDs.
+        source_files: [include/firmware/firmware_internal.hpp, src/neopixel_led_renderer.cpp]
+        confidence: inferred
+      - device_name: pca9555_0
+        type: i2c_expander
+        bus: i2c
+        address_or_pins: {address: "0x20"}
+        purpose: Hall sensor bank 0.
+        init_notes: Configure all pins as inputs and invert polarity. C3 does not wire interrupt lines in the current contract.
+        source_files: [include/hardware/pca9555_occupancy_decode.hpp, src/pca9555_input_scan.cpp]
+        confidence: confirmed
+      - device_name: pca9555_1
+        type: i2c_expander
+        bus: i2c
+        address_or_pins: {address: "0x21"}
+        purpose: Hall sensor bank 1.
+        init_notes: Configure all pins as inputs and invert polarity. C3 does not wire interrupt lines in the current contract.
+        source_files: [include/hardware/pca9555_occupancy_decode.hpp, src/pca9555_input_scan.cpp]
+        confidence: confirmed
+      - device_name: pca9555_2
+        type: i2c_expander
+        bus: i2c
+        address_or_pins: {address: "0x22"}
+        purpose: Hall sensor bank 2.
+        init_notes: Configure all pins as inputs and invert polarity. C3 does not wire interrupt lines in the current contract.
+        source_files: [include/hardware/pca9555_occupancy_decode.hpp, src/pca9555_input_scan.cpp]
+        confidence: confirmed
+      - device_name: pca9555_3
+        type: i2c_expander
+        bus: i2c
+        address_or_pins: {address: "0x23"}
+        purpose: Hall sensor bank 3.
+        init_notes: Configure all pins as inputs and invert polarity. C3 does not wire interrupt lines in the current contract.
+        source_files: [include/hardware/pca9555_occupancy_decode.hpp, src/pca9555_input_scan.cpp]
+        confidence: confirmed
+      - device_name: serial_console
+        type: serial_console
+        bus: usb_or_board_default
+        address_or_pins: {transport: Serial, baud: 115200}
+        purpose: Console and diagnostics.
+        init_notes: Current firmware starts Serial at 115200, but the exact board transport is not explicitly declared here.
+        source_files: [src/firmware_app_boot.cpp, platformio.ini]
+        confidence: inferred

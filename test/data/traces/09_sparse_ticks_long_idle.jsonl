@@ -1,0 +1,7 @@
+{"type":"header","ver":1,"session":"sparse_ticks_long_idle"}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+{"type":"tick","t_ms":0}
+{"type":"tick","t_ms":500}
+{"type":"tick","t_ms":2000}
+{"type":"tick","t_ms":5000}
+{"type":"end","t_ms":6000}

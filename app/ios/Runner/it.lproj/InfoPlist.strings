@@ -1,0 +1,4 @@
+// Native system prompt copy; app language selection does not override the OS prompt language.
+"NSBluetoothAlwaysUsageDescription" = "Foxie Litch usa Bluetooth per trovare la tua scacchiera Foxie_Litch e connettersi.";
+"NSBluetoothPeripheralUsageDescription" = "Foxie Litch usa Bluetooth per comunicare con la tua scacchiera Foxie_Litch.";
+"NSMotionUsageDescription" = "Foxie Litch usa i sensori di movimento per rilevare quando scuoti questo dispositivo per cancellare i colori del fotogramma selezionato in Litchcraft.";

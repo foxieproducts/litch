@@ -1,0 +1,7 @@
+Language:        Cpp
+BasedOnStyle:  Chromium
+IndentWidth: 4
+AccessModifierOffset: -2
+IncludeIsMainSourceRegex: '.*\.\(cpp\|hpp\|cc\|cxx\)'
+ColumnLimit: 0
+SpacesBeforeTrailingComments: 1

@@ -1,0 +1,5 @@
+include: ../../analysis_options.yaml
+linter:
+  rules:
+    # Unmodified upstream generic disposal implementation.
+    null_check_on_nullable_type_parameter: false

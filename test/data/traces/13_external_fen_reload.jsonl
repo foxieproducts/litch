@@ -1,0 +1,10 @@
+{"type":"header","ver":1}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+
+{"type":"cmd","t_ms":5,"cmd":"engine fen 8/8/8/8/8/8/8/8 w - - 0 1"}
+{"type":"checkpoint_engine","t_ms":5,"fen":"8/8/8/8/8/8/8/8 w - - 0 1"}
+{"type":"cmd","t_ms":10,"cmd":"persist reload"}
+{"type":"checkpoint_state","t_ms":10,"game_state":"Idle"}
+{"type":"checkpoint_engine","t_ms":10,"fen":"8/8/8/8/8/8/8/8 w - - 0 1"}
+
+{"type":"end","t_ms":10,"stats":{"events":2,"frames":0,"engine":2}}

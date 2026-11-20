@@ -1,0 +1,6 @@
+{"type":"header","ver":1}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+
+{"type":"checkpoint_frame","t_ms":0,"frame_hash":"0xe71ca72a685aaa99","kind":"all"}
+
+{"type":"end","t_ms":0,"stats":{"events":0,"frames":1,"engine":0}}

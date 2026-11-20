@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "vendors": {
+    "mcu-max": {
+      "repository": "https://github.com/Gissio/mcu-max.git",
+      "tag": "1.0.7",
+      "commit": "aa03caffce50729566b5db6965bf735c31f33eea",
+      "tree": "9e7a86265202318d2ad4f7e0cb57a515c80be21c",
+      "local_path": "lib/litch-max/vendor/mcu-max",
+      "files": {
+        ".gitignore": {
+          "status": "exact"
+        },
+        "LICENSE": {
+          "status": "exact"
+        },
+        "README.md": {
+          "status": "exact"
+        },
+        "docs/img/mcumax-media.png": {
+          "status": "exact"
+        },
+        "docs/img/mcumax-title.png": {
+          "status": "exact"
+        },
+        "examples/arduino/mcu-max-serial/mcu-max-serial.ino": {
+          "status": "modified",
+          "local_blob": "966f61b72c0e4c07deb50857ef9f467f9830cc3f",
+          "local_mode": "100644"
+        },
+        "examples/mcu-max-uci/.gitignore": {
+          "status": "exact"
+        },
+        "examples/mcu-max-uci/CMakeLists.txt": {
+          "status": "exact"
+        },
+        "examples/mcu-max-uci/main.c": {
+          "status": "exact"
+        },
+        "library.json": {
+          "status": "exact"
+        },
+        "library.properties": {
+          "status": "exact"
+        },
+        "ports/litch_esp32/mcu-max-litch-esp32-search-policy.h": {
+          "status": "local-only",
+          "local_blob": "9291bffa0cd71124909a784ef2560673bc3e4634",
+          "local_mode": "100644"
+        },
+        "src/mcu-max-downstream-config.h": {
+          "status": "local-only",
+          "local_blob": "0e451bb769e7352522c643ead0e64c9cbcfcb969",
+          "local_mode": "100644"
+        },
+        "src/mcu-max-platform.h": {
+          "status": "local-only",
+          "local_blob": "da897c8dfe4a9082efa796a54f528f399227bca4",
+          "local_mode": "100644"
+        },
+        "src/mcu-max-position.c": {
+          "status": "local-only",
+          "local_blob": "fb7ce14a2ce1652f6c8eae1da49e34ffae90837f",
+          "local_mode": "100644"
+        },
+        "src/mcu-max-position.h": {
+          "status": "local-only",
+          "local_blob": "c01ceadb02fffbccd5cb81aefa393a3e6061af0b",
+          "local_mode": "100644"
+        },
+        "src/mcu-max.c": {
+          "status": "modified",
+          "local_blob": "c50922842ea6edb6a2fa81b82853f8c1dd50aa0b",
+          "local_mode": "100644"
+        },
+        "src/mcu-max.h": {
+          "status": "modified",
+          "local_blob": "f70c0c1fbe6e17d39491ba1c857b7caa465bb1ee",
+          "local_mode": "100644"
+        },
+        "tests/fakes/freertos/FreeRTOS.h": {
+          "status": "local-only",
+          "local_blob": "f47121b35e0ecdb8b152584e0613c7aafb352cc6",
+          "local_mode": "100644"
+        },
+        "tests/fakes/freertos/task.h": {
+          "status": "local-only",
+          "local_blob": "2563704f4bb3395f67a8357bffc0d54f5822e4ed",
+          "local_mode": "100644"
+        },
+        "tests/test_litch_esp32_search_policy.c": {
+          "status": "local-only",
+          "local_blob": "cb063f81c0ee5c4f962055970038526b9ab78ce8",
+          "local_mode": "100644"
+        },
+        "tests/test_position_rules.c": {
+          "status": "local-only",
+          "local_blob": "b61f69fa95fd8bb07c65d7813657e1584632d9cb",
+          "local_mode": "100644"
+        },
+        "tests/test_upstream_fen_castling.c": {
+          "status": "local-only",
+          "local_blob": "1f44f0f7e1653a3fc84aecd9d90c2e46f9475b35",
+          "local_mode": "100644"
+        },
+        "tests/test_upstream_live_candidates.c": {
+          "status": "local-only",
+          "local_blob": "91196bccdae8d79b2e2d33c2e5736214fa87f077",
+          "local_mode": "100644"
+        },
+        "tests/test_upstream_platform_hook.c": {
+          "status": "local-only",
+          "local_blob": "35e446bf94dee936fc48ede341771ee5febba7a7",
+          "local_mode": "100644"
+        },
+        "tests/test_upstream_platform_hook_config.h": {
+          "status": "local-only",
+          "local_blob": "5c17d52a6bef46be49424e83679ab2dfb2136afb",
+          "local_mode": "100644"
+        },
+        "tests/test_upstream_query_purity.c": {
+          "status": "local-only",
+          "local_blob": "9698111f131107d3b6a2d42ba53e6b0d1744fe3e",
+          "local_mode": "100644"
+        },
+        "tests/test_upstream_root_candidates.c": {
+          "status": "local-only",
+          "local_blob": "2da659e28701c07f90cf8a8a45743a0b9442ffbc",
+          "local_mode": "100644"
+        },
+        "tests/upstream_test.h": {
+          "status": "local-only",
+          "local_blob": "4f565f8cb2ff87ddeda8a8613880f3f067500484",
+          "local_mode": "100644"
+        }
+      }
+    },
+    "pca95x5": {
+      "repository": "https://github.com/hideakitai/PCA95x5.git",
+      "tag": "v0.1.3",
+      "commit": "8b854a832e9cb98fa1fba6c145768696560658f2",
+      "tree": "5ce38dad4c1816569bd2df331065cd487c7f2096",
+      "local_path": "lib/PCA95x5",
+      "license_sha256": "e38a878eb6e9a21413bca755242c8a239e70a96e96c0e978009a381cdabadeef",
+      "files": {
+        "LICENSE": {
+          "status": "exact"
+        },
+        "PCA95x5.h": {
+          "status": "modified",
+          "local_blob": "9ffc873188e825d275ed7b9771587e38a107a44b",
+          "local_mode": "100644"
+        },
+        "README.md": {
+          "status": "upstream-only"
+        },
+        "examples/input/input.ino": {
+          "status": "upstream-only"
+        },
+        "examples/output/output.ino": {
+          "status": "upstream-only"
+        },
+        "library.json": {
+          "status": "upstream-only"
+        },
+        "library.properties": {
+          "status": "upstream-only"
+        }
+      }
+    },
+    "sparkfun-veml6030": {
+      "repository": "https://github.com/sparkfun/SparkFun_Ambient_Light_Sensor_Arduino_Library.git",
+      "tag": "1.0.4",
+      "commit": "efde0817bd6857863067bd1653a2cfafe6c68732",
+      "tree": "ab4a6cd645577c423f0cc807670bf1c8f1951028",
+      "local_path": "lib/SparkFun_Ambient_Light_Sensor_Arduino_Library",
+      "files": {
+        ".gitignore": {
+          "status": "exact"
+        },
+        "Examples/Example1_Read_Ambient_Basics/Example1_Read_Ambient_Basics.ino": {
+          "status": "exact"
+        },
+        "Examples/Example2_Light_Interrupt_Hardware/Example2_Light_Interrupt_Hardware.ino": {
+          "status": "exact"
+        },
+        "Examples/Example3_Light_Interrupt_Software/Example3_Light_Interrupt_Software.ino": {
+          "status": "exact"
+        },
+        "Examples/Example4_Power_Save_Mode/Example4_Power_Save_Mode.ino": {
+          "status": "exact"
+        },
+        "README.MD": {
+          "status": "exact"
+        },
+        "keywords.txt": {
+          "status": "exact"
+        },
+        "library.properties": {
+          "status": "exact"
+        },
+        "src/SparkFun_VEML6030_Ambient_Light_Sensor.cpp": {
+          "status": "modified",
+          "local_blob": "4ab7e2d87b4ac77ac279211902d7e00209f49aae",
+          "local_mode": "100644"
+        },
+        "src/SparkFun_VEML6030_Ambient_Light_Sensor.h": {
+          "status": "modified",
+          "local_blob": "cdfe643afca2ac83c04f963c60cf005363489959",
+          "local_mode": "100644"
+        }
+      }
+    }
+  }
+}

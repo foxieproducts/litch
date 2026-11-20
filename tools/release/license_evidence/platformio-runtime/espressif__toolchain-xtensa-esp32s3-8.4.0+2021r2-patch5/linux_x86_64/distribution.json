@@ -1,0 +1,93 @@
+{
+  "members": [
+    {
+      "equal": false,
+      "kind": "runtime-archive",
+      "linux_bytes": 1144194,
+      "linux_sha256": "6006c286cf0554033bab453f5792ab3ed13c282d921d94daca59627f887244ea",
+      "macos_bytes": 1172470,
+      "macos_sha256": "c07c00fdc56ce449f8051f3bbaa4e5b870e7dea7bf433b67609e0d06edaa6150",
+      "package_path": "lib/gcc/xtensa-esp32s3-elf/8.4.0/no-rtti/libgcc.a"
+    },
+    {
+      "equal": true,
+      "kind": "legal-or-header-metadata",
+      "linux_bytes": 3324,
+      "linux_sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "macos_bytes": 3324,
+      "macos_sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "package_path": "share/licenses/gcc/COPYING.RUNTIME"
+    },
+    {
+      "equal": true,
+      "kind": "legal-or-header-metadata",
+      "linux_bytes": 35147,
+      "linux_sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "macos_bytes": 35147,
+      "macos_sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "package_path": "share/licenses/gcc/COPYING3"
+    },
+    {
+      "equal": true,
+      "kind": "legal-or-header-metadata",
+      "linux_bytes": 59777,
+      "linux_sha256": "dec5d419a7a4b27c064c8367a21e5d7b58aefc162719dc169bc4f82a88994859",
+      "macos_bytes": 59777,
+      "macos_sha256": "dec5d419a7a4b27c064c8367a21e5d7b58aefc162719dc169bc4f82a88994859",
+      "package_path": "share/licenses/newlib/COPYING.NEWLIB"
+    },
+    {
+      "equal": true,
+      "kind": "legal-or-header-metadata",
+      "linux_bytes": 337,
+      "linux_sha256": "93a397574a25b9c143cee7fcb86d8fc9a0c9ba418e4710a30d2d19ba1e4120db",
+      "macos_bytes": 337,
+      "macos_sha256": "93a397574a25b9c143cee7fcb86d8fc9a0c9ba418e4710a30d2d19ba1e4120db",
+      "package_path": "xtensa-esp32s3-elf/include/_newlib_version.h"
+    },
+    {
+      "equal": true,
+      "kind": "legal-or-header-metadata",
+      "linux_bytes": 57771,
+      "linux_sha256": "c02281218d95237cb9caa90957cbc210c997bbf29b745f1e58d2297ae03d2379",
+      "macos_bytes": 57771,
+      "macos_sha256": "c02281218d95237cb9caa90957cbc210c997bbf29b745f1e58d2297ae03d2379",
+      "package_path": "xtensa-esp32s3-elf/include/c++/8.4.0/xtensa-esp32s3-elf/no-rtti/bits/c++config.h"
+    },
+    {
+      "equal": false,
+      "kind": "runtime-archive",
+      "linux_bytes": 10718048,
+      "linux_sha256": "1841b5a27179228f72d2010844869c1df6a29ce7ef6d86321230f9fc7cfe0146",
+      "macos_bytes": 10897852,
+      "macos_sha256": "b8b1e4a6c23f42c32bbf48dbc50b35cbd8e7d62afdcbb497096280b2c6826d58",
+      "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libc.a"
+    },
+    {
+      "equal": false,
+      "kind": "runtime-archive",
+      "linux_bytes": 4538484,
+      "linux_sha256": "785c2fb14817d1504c4e3aaf8caa9c6745bde35f41958590191d3bb2d0866e47",
+      "macos_bytes": 4642848,
+      "macos_sha256": "64ced61f0cb9cd94f60f6a2bf307284e6e6a1de0dd99a4e18c579dd645dba178",
+      "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libm.a"
+    },
+    {
+      "equal": false,
+      "kind": "runtime-archive",
+      "linux_bytes": 20521608,
+      "linux_sha256": "8851afb05a57ab0941cbca86f4330e26944e2b35f76176d2a63b355264cac4d2",
+      "macos_bytes": 20592856,
+      "macos_sha256": "46cbd877255439cee2b048b42b1fda0612e54180d88ede86f489e61a5cec103c",
+      "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libstdc++.a"
+    }
+  ],
+  "metadata_encoding": "Canonical JSON serialization of the package.json object parsed from the checksum-verified distribution; original JSON whitespace is not asserted.",
+  "package_bytes": 67385729,
+  "package_metadata_path": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/linux_x86_64/package.json",
+  "package_metadata_sha256": "1399421eebbf5831580e75e8111fa8a24040f8b9826cd4239e40f874aa04548a",
+  "package_sha256": "6618e8a91fca47da09c840a61bf008b1f06698553389c01c8788e595d8e84da9",
+  "package_url": "https://dl.registry.platformio.org/download/espressif/tool/toolchain-xtensa-esp32s3/8.4.0+2021r2-patch5/toolchain-xtensa-esp32s3-linux_x86_64-8.4.0+2021r2-patch5.tar.gz",
+  "schema_version": 1,
+  "scope": "Read-only streamed Linux package via supported PlatformIO Core redirect; no extraction, installation, compiler execution or retained archive. Compared four selected runtime archives and five legal/header metadata files to installed darwin_arm64 package."
+}

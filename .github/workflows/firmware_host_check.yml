@@ -1,0 +1,110 @@
+name: Read-only firmware host check
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full reviewed main commit
+        type: string
+        required: true
+      identity_only:
+        description: Show the GitHub identity for AWS configuration and skip bucket access
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  check-host:
+    if: github.repository == 'foxieproducts/litch' && github.ref == 'refs/heads/main' && github.event.repository.default_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: firmware-publishing
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FIRMWARE_AWS_REGION: ${{ vars.FIRMWARE_AWS_REGION }}
+      FIRMWARE_S3_BUCKET: ${{ secrets.FIRMWARE_S3_BUCKET }}
+      FIRMWARE_S3_PREFIX: ${{ vars.FIRMWARE_S3_PREFIX }}
+      FIRMWARE_S3_LOCK_KEY: ${{ secrets.FIRMWARE_S3_LOCK_KEY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the protected configuration and exact checkout
+        env:
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+          ROLE: ${{ secrets.FIRMWARE_AWS_ROLE_ARN }}
+          IDENTITY_ONLY: ${{ inputs.identity_only }}
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          if [[ "$IDENTITY_ONLY" == true ]]; then exit 0; fi
+          test -n "$ROLE"
+          python3 -c 'import sys; sys.path.insert(0, "tools/release"); from publish_aws import S3FirmwareHost; S3FirmwareHost()'
+      - name: Report the GitHub identity the AWS trust policy must match
+        run: |
+          python3 - <<'PYTHON'
+          import base64, json, os
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+          from urllib.request import Request, urlopen
+
+          url = urlsplit(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'])
+          query = dict(parse_qsl(url.query))
+          query['audience'] = 'sts.amazonaws.com'
+          request = Request(urlunsplit(url._replace(query=urlencode(query))), headers={
+              'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN'],
+          })
+          with urlopen(request, timeout=15) as response:
+              token = json.load(response)['value']
+          payload = token.split('.')[1]
+          claims = json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)))
+          for key in ('aud', 'sub', 'ref'):
+              print(f'GitHub OIDC {key} = {claims[key]}')
+          PYTHON
+      - name: Assume a session restricted to reading the two channel manifests
+        if: ${{ !inputs.identity_only }}
+        id: aws
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.FIRMWARE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.FIRMWARE_AWS_REGION }}
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+          output-env-credentials: false
+          output-credentials: true
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject",
+            "Resource":["arn:aws:s3:::${{ secrets.FIRMWARE_S3_BUCKET }}/${{ vars.FIRMWARE_S3_PREFIX }}manifest.json",
+            "arn:aws:s3:::${{ secrets.FIRMWARE_S3_BUCKET }}/${{ vars.FIRMWARE_S3_PREFIX }}manifest_beta.json"]}]}
+      - name: Compare the private bucket read against public app delivery
+        if: ${{ !inputs.identity_only }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        run: |
+          for name in manifest.json manifest_beta.json; do
+            aws s3api get-object --bucket "$FIRMWARE_S3_BUCKET" --region "$FIRMWARE_AWS_REGION" \
+              --key "$FIRMWARE_S3_PREFIX$name" --range bytes=0-32768 "$RUNNER_TEMP/$name" > /dev/null
+          done
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools/release')
+          from firmware_publication import public_read
+          from official_candidate import sha256
+          for name, channel in [('manifest.json', 'stable'), ('manifest_beta.json', 'beta')]:
+              data = public_read(name, 32768)
+              manifest = json.loads(data)
+              if (data != (Path(os.environ['RUNNER_TEMP']) / name).read_bytes()
+                      or manifest.get('channel') != channel or manifest.get('target') != 'esp32s3'):
+                  raise SystemExit('Unexpected bucket/public catalog for ' + channel)
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+                  print(f"{channel} {manifest['version']} — manifest SHA-256 `{sha256(data)}`", file=out)
+          PY

@@ -1,0 +1,7 @@
+AndroidX DataStore Preferences External Protobuf 1.1.7 includes Protobuf Java Lite 4.28.2.
+The AndroidX build relocates com.google.protobuf to androidx.datastore.preferences.protobuf.
+
+https://developer.android.com/jetpack/androidx/releases/datastore#1.1.7
+https://android.googlesource.com/platform/frameworks/support/+/420da5f291449f11801e378c6789a328a06ec6cb/datastore/datastore-preferences-external-protobuf/build.gradle
+https://android.googlesource.com/platform/frameworks/support/+/420da5f291449f11801e378c6789a328a06ec6cb/gradle/libs.versions.toml
+https://github.com/protocolbuffers/protobuf/blob/v28.2/LICENSE

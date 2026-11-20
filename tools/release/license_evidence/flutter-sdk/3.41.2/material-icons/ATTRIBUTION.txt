@@ -1,0 +1,13 @@
+Material Icons
+
+Copyright 2019 Google LLC. All Rights Reserved.
+
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
+License: https://creativecommons.org/licenses/by/4.0/
+
+Source: https://storage.googleapis.com/flutter_infra_release/flutter/fonts/3012db47f3130e62f7cc0beabff968a33cbec8d8/fonts.zip
+
+The original font is supplied with Flutter 3.41.2. Release builds use a glyph
+subset produced by Flutter icon tree shaking; unused glyphs are removed.
+The complete license and its disclaimer of warranties are included with this
+attribution.

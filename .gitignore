@@ -1,0 +1,28 @@
+.venv/
+.pio/
+.pioenvs/
+.piolibdeps/
+__pycache__/
+*.py[cod]
+.vscode/*
+!.vscode/
+!.vscode/tasks.json
+!.vscode/settings.json
+.DS_Store
+logs/
+**/*.log
+
+# Generated aggregated-native-test wrappers
+test/test_all_native/generated/
+
+# CMake build artifacts
+build/
+!build/
+build/**
+cmake-build-*/
+
+# Local-only firmware website upload secrets
+tools/release/site_upload.local.env
+
+.cache/ble_update_firmware_device.json
+.cache/dev-local-state.json

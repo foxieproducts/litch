@@ -1,0 +1,8 @@
+{"type":"header","ver":1,"session":"idle_ticks"}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+{"type":"sensor","t_ms":0,"square":0,"occ":0}
+{"type":"tick","t_ms":0}
+{"type":"tick","t_ms":16}
+{"type":"tick","t_ms":32}
+{"type":"tick","t_ms":48}
+{"type":"end","t_ms":64}

@@ -1,0 +1,9 @@
+# Canonical one-frame schema-3 body. All omitted bytes are zero.
+length,1570
+crc32,4d887923
+0,0301030112345678
+8,ff7430ff3452ffcf2d37d76922c3e23f6affae53ffffffffff
+32,f401
+34,11223301f401
+40,000000081027
+1564,abcdef04d007

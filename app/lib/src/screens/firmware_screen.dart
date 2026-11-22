@@ -865,7 +865,7 @@ class _FirmwareScreenState extends State<FirmwareScreen>
       _uploadFlowActive = false;
       if (mounted) {
         setState(() {});
-        if (!_verifyingFirmware) widget.onUpdateActivityChanged(false);
+        if (!_verifyingFirmware) _releaseUpdateActivity();
       }
     }
   }
@@ -887,6 +887,7 @@ class _FirmwareScreenState extends State<FirmwareScreen>
         _resetTransferPresentation();
         _uploadingFirmware = false;
         _verifyingFirmware = true;
+        _provenance = _unverifiedProvenanceFor(target.deviceId);
         _hasVerificationStatus = true;
         _status = (strings) => strings.waitingUpdateVerification;
       });
@@ -925,6 +926,7 @@ class _FirmwareScreenState extends State<FirmwareScreen>
       if (!mounted) return;
       setState(() {
         _verifyingFirmware = false;
+        _provenance = _unverifiedProvenanceFor(target.deviceId);
         _status = (strings) => localizedVerification(strings, verification);
         if (verification is OtaPostRebootVerified) {
           _uploadProgress = 1;
@@ -942,10 +944,20 @@ class _FirmwareScreenState extends State<FirmwareScreen>
       }
       unawaited(_loadVersionDetails());
     } finally {
-      if (mounted && !_uploadFlowActive) {
-        widget.onUpdateActivityChanged(false);
-      }
+      if (mounted && !_uploadFlowActive) _releaseUpdateActivity();
     }
+  }
+
+  FirmwareProvenance _unverifiedProvenanceFor(String boardId) =>
+      _isVerificationBoardConnected(boardId)
+      ? FirmwareProvenance.unverified
+      : FirmwareProvenance.offline;
+
+  void _releaseUpdateActivity() {
+    widget.onUpdateActivityChanged(false);
+    // The upload or the reconnect verifier can be the last owner to finish.
+    // Resume the visible board's lookup only after both have released it.
+    unawaited(_refreshProvenance());
   }
 
   Future<OtaPostRebootVerification> _verifyPendingTarget(

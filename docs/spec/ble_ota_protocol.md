@@ -1325,8 +1325,12 @@ origin recognition end that automatic cycle. Leaving the page, changing the
 connection or target, or starting update verification cancels queued refreshes.
 An already-issued bounded read may finish, but its retired view cannot apply the
 result. One in-flight read serves the current page, with at most one replacement
-queued for a new view/connection. Ordinary refresh preserves pending and resolved
-OTA verification outcomes.
+queued for a new view/connection. When update verification starts, the page
+clears the previous image's recognition result. After the upload and verification
+both finish and the pending target is resolved, the visible foreground page checks
+the running image's origin again. This includes same-version reinstalls and
+restored updates. Ordinary refresh preserves pending and resolved OTA verification
+outcomes.
 
 This is friendly firmware provenance, not hardware-backed attestation: custom firmware can report another digest. It must not be used as an anti-cheat guarantee. A verified non-release digest gets empowering, non-punitive guidance and firmware update remains available.
 

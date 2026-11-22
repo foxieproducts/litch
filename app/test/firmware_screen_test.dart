@@ -217,6 +217,8 @@ class FakeFirmwareBleService extends LitchBleService {
     explicitlyReported: true,
   );
   LitchDeviceCapabilities capabilities = updateCapabilities;
+  FirmwareProvenance connectedProvenance = FirmwareProvenance.custom('a' * 64);
+  int provenanceReads = 0;
   String? boardVersion;
 
   @override
@@ -234,9 +236,8 @@ class FakeFirmwareBleService extends LitchBleService {
   Future<FirmwareProvenance> fetchFirmwareProvenance({
     required String deviceId,
   }) async {
-    return isConnected
-        ? FirmwareProvenance.custom('a' * 64)
-        : FirmwareProvenance.offline;
+    provenanceReads += 1;
+    return isConnected ? connectedProvenance : FirmwareProvenance.offline;
   }
 
   @override
@@ -1331,7 +1332,11 @@ void main() {
     (tester) async {
       // The production service transfer/verification seam is covered by
       // ota_reconnect_service_test; here its typed results drive the actual UI.
+      final verified = Completer<OtaPostRebootVerification>();
+      final download = OtaFirmwareDownloadService();
       final service = OtaFirmwareBleService()
+        ..connectedProvenance = FirmwareProvenance.unverified
+        ..verificationCompleter = verified
         ..initialInstalledVersion = '1.2.3'
         ..uploadResult = const OtaUploadPendingVerification(
           'Board disconnected after the update was sent; verification is pending.',
@@ -1341,9 +1346,19 @@ void main() {
       await startOtaUpdate(
         tester,
         service,
-        OtaFirmwareDownloadService(),
+        download,
         buttonLabel: 'Reinstall',
+        settleAfterUpload: false,
       );
+      final previousReads = service.provenanceReads;
+      expect(previousReads, greaterThan(0));
+      service.connectedProvenance = FirmwareProvenance.official(
+        download.snapshot.manifest.artifact.imageSha256,
+      );
+      verified.complete(const OtaPostRebootVerified());
+      await tester.pumpAndSettle();
+      expect(service.provenanceReads, previousReads + 1);
+      expect(find.text('Official firmware'), findsOneWidget);
       expect(service.reconnectAttempts, 1);
       expect(
         find.text('Selected firmware verified on this board.'),
@@ -1624,6 +1639,7 @@ void main() {
     final service = OtaFirmwareBleService()
       ..initialInstalledVersion = '1.2.2'
       ..uploadCompleter = upload
+      ..connectedProvenance = FirmwareProvenance.official('a' * 64)
       ..verificationCompleter = verify
       ..capabilities = const LitchDeviceCapabilities(
         contractVersion: 3,
@@ -1651,9 +1667,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.text('Official firmware'), findsOneWidget);
+    final previousReads = service.provenanceReads;
     await tester.tap(find.widgetWithText(FilledButton, 'Update Board'));
     await tester.pumpAndSettle();
     expect(service.pendingOtaVerification, isNotNull);
+    service.connectedProvenance = FirmwareProvenance.unverified;
     service.connected = true;
     service.currentConnectedId = 'board-1';
     service.connectionEvents.add(
@@ -1674,9 +1693,33 @@ void main() {
       isTrue,
       reason: 'Verification still owns the shell',
     );
+    service.connected = false;
+    service.currentConnectedId = null;
+    service.connectionEvents.add(
+      const ConnectionStateUpdate(
+        deviceId: 'board-1',
+        connectionState: DeviceConnectionState.disconnected,
+        failure: null,
+      ),
+    );
     verify.complete(const OtaPostRebootPending('Keep this update pending.'));
     await tester.pumpAndSettle();
     expect(activities.last, isFalse);
     expect(service.pendingOtaVerification, isNotNull);
+    expect(find.text('Firmware status offline'), findsOneWidget);
+    expect(find.text('Official firmware'), findsNothing);
+    expect(service.provenanceReads, previousReads);
+
+    service.verificationCompleter = null;
+    await tester.ensureVisible(find.text('Verify installed update'));
+    await tester.tap(find.text('Verify installed update'));
+    await tester.pumpAndSettle();
+    expect(service.pendingOtaVerification, isNull);
+    expect(service.provenanceReads, previousReads + 1);
+    expect(
+      find.text('Selected firmware verified on this board.'),
+      findsOneWidget,
+    );
+    expect(find.text('Firmware not verified'), findsOneWidget);
   });
 }

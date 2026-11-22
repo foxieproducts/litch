@@ -1,0 +1,199 @@
+schema_version: 1
+default_variant: esp32s3
+
+variants:
+  esp32s3:
+    launch_revision: v3_3
+    launch_pcb_revision: "3.31"
+    older_revisions_with_same_square_map: [v2, v3]
+    sensor_count: 64
+    read_path:
+      driver_chain: Pca9555InputScan_to_Pca9555BoardInput
+      bus: i2c
+      i2c_default_clock_hz: 100000
+      i2c_gpio: {sda: 3, scl: 4}
+      interrupt_driven_supported: true
+      interrupt_signals: [pca9555_int0, pca9555_int1, pca9555_int2, pca9555_int3]
+      interrupt_gpios_by_revision:
+        v3_3: [34, 38, 48, 39]
+        v3: [34, 38, 48, 39]
+        v2: [34, 12, 48, 11]
+      full_read_on_boot: true
+      full_read_on_resync: true
+      expanders_per_successful_scan: 4
+      full_read_on_any_expander_interrupt: true
+      reconciliation_interval_after_success_ms: 50
+      max_read_attempts: 4
+      reset_after_consecutive_failures: 2
+      normal_runtime_sensor_period_ms: {ordinary: 5, cpu_thinking: 10, ota: 20}
+    expander_addresses: ["0x20", "0x21", "0x22", "0x23"]
+    raw_square_index_basis: 0=a8_to_63=h1
+    polarity:
+      expander_direction: inputs_all
+      expander_polarity: inverted_all
+      occupied_condition: bit_(15-pin)_set_after_read
+    square_to_device_bit_mapping:
+      "0": {address: "0x20", expander_index: 0, pin: 0, bit_index: 15}
+      "1": {address: "0x20", expander_index: 0, pin: 1, bit_index: 14}
+      "2": {address: "0x20", expander_index: 0, pin: 2, bit_index: 13}
+      "3": {address: "0x20", expander_index: 0, pin: 3, bit_index: 12}
+      "4": {address: "0x21", expander_index: 1, pin: 12, bit_index: 3}
+      "5": {address: "0x21", expander_index: 1, pin: 13, bit_index: 2}
+      "6": {address: "0x21", expander_index: 1, pin: 14, bit_index: 1}
+      "7": {address: "0x21", expander_index: 1, pin: 15, bit_index: 0}
+      "8": {address: "0x20", expander_index: 0, pin: 7, bit_index: 8}
+      "9": {address: "0x20", expander_index: 0, pin: 6, bit_index: 9}
+      "10": {address: "0x20", expander_index: 0, pin: 5, bit_index: 10}
+      "11": {address: "0x20", expander_index: 0, pin: 4, bit_index: 11}
+      "12": {address: "0x21", expander_index: 1, pin: 11, bit_index: 4}
+      "13": {address: "0x21", expander_index: 1, pin: 10, bit_index: 5}
+      "14": {address: "0x21", expander_index: 1, pin: 9, bit_index: 6}
+      "15": {address: "0x21", expander_index: 1, pin: 8, bit_index: 7}
+      "16": {address: "0x20", expander_index: 0, pin: 8, bit_index: 7}
+      "17": {address: "0x20", expander_index: 0, pin: 9, bit_index: 6}
+      "18": {address: "0x20", expander_index: 0, pin: 10, bit_index: 5}
+      "19": {address: "0x20", expander_index: 0, pin: 11, bit_index: 4}
+      "20": {address: "0x21", expander_index: 1, pin: 4, bit_index: 11}
+      "21": {address: "0x21", expander_index: 1, pin: 5, bit_index: 10}
+      "22": {address: "0x21", expander_index: 1, pin: 6, bit_index: 9}
+      "23": {address: "0x21", expander_index: 1, pin: 7, bit_index: 8}
+      "24": {address: "0x20", expander_index: 0, pin: 15, bit_index: 0}
+      "25": {address: "0x20", expander_index: 0, pin: 14, bit_index: 1}
+      "26": {address: "0x20", expander_index: 0, pin: 13, bit_index: 2}
+      "27": {address: "0x20", expander_index: 0, pin: 12, bit_index: 3}
+      "28": {address: "0x21", expander_index: 1, pin: 3, bit_index: 12}
+      "29": {address: "0x21", expander_index: 1, pin: 2, bit_index: 13}
+      "30": {address: "0x21", expander_index: 1, pin: 1, bit_index: 14}
+      "31": {address: "0x21", expander_index: 1, pin: 0, bit_index: 15}
+      "32": {address: "0x22", expander_index: 2, pin: 0, bit_index: 15}
+      "33": {address: "0x22", expander_index: 2, pin: 1, bit_index: 14}
+      "34": {address: "0x22", expander_index: 2, pin: 2, bit_index: 13}
+      "35": {address: "0x22", expander_index: 2, pin: 3, bit_index: 12}
+      "36": {address: "0x23", expander_index: 3, pin: 12, bit_index: 3}
+      "37": {address: "0x23", expander_index: 3, pin: 13, bit_index: 2}
+      "38": {address: "0x23", expander_index: 3, pin: 14, bit_index: 1}
+      "39": {address: "0x23", expander_index: 3, pin: 15, bit_index: 0}
+      "40": {address: "0x22", expander_index: 2, pin: 7, bit_index: 8}
+      "41": {address: "0x22", expander_index: 2, pin: 6, bit_index: 9}
+      "42": {address: "0x22", expander_index: 2, pin: 5, bit_index: 10}
+      "43": {address: "0x22", expander_index: 2, pin: 4, bit_index: 11}
+      "44": {address: "0x23", expander_index: 3, pin: 11, bit_index: 4}
+      "45": {address: "0x23", expander_index: 3, pin: 10, bit_index: 5}
+      "46": {address: "0x23", expander_index: 3, pin: 9, bit_index: 6}
+      "47": {address: "0x23", expander_index: 3, pin: 8, bit_index: 7}
+      "48": {address: "0x22", expander_index: 2, pin: 8, bit_index: 7}
+      "49": {address: "0x22", expander_index: 2, pin: 9, bit_index: 6}
+      "50": {address: "0x22", expander_index: 2, pin: 10, bit_index: 5}
+      "51": {address: "0x22", expander_index: 2, pin: 11, bit_index: 4}
+      "52": {address: "0x23", expander_index: 3, pin: 4, bit_index: 11}
+      "53": {address: "0x23", expander_index: 3, pin: 5, bit_index: 10}
+      "54": {address: "0x23", expander_index: 3, pin: 6, bit_index: 9}
+      "55": {address: "0x23", expander_index: 3, pin: 7, bit_index: 8}
+      "56": {address: "0x22", expander_index: 2, pin: 15, bit_index: 0}
+      "57": {address: "0x22", expander_index: 2, pin: 14, bit_index: 1}
+      "58": {address: "0x22", expander_index: 2, pin: 13, bit_index: 2}
+      "59": {address: "0x22", expander_index: 2, pin: 12, bit_index: 3}
+      "60": {address: "0x23", expander_index: 3, pin: 3, bit_index: 12}
+      "61": {address: "0x23", expander_index: 3, pin: 2, bit_index: 13}
+      "62": {address: "0x23", expander_index: 3, pin: 1, bit_index: 14}
+      "63": {address: "0x23", expander_index: 3, pin: 0, bit_index: 15}
+    debounce_notes:
+      live_runtime_path: Snapshot diff only. No extra debounce layer is applied on top of the sensor reads.
+      unused_helper: HallSensorButtonManager exists with debounceMs=5 but is not wired into FirmwareSystem.
+    confidence_notes:
+      mapping_source: Confirmed by include/hardware/pca9555_occupancy_decode.hpp and test/test_pca9555_occupancy_decode/test_main.cpp.
+      launch_wiring: V3.31 PCB and firmware agree on all 64 squares. Both Hall switches and expanders use the 3.3 V rail.
+
+  esp32c3:
+    runtime_revision: v1
+    sensor_count: 64
+    read_path:
+      driver_chain: Pca9555InputScan_to_Pca9555BoardInput
+      bus: i2c
+      i2c_default_clock_hz: 100000
+      i2c_gpio_from_arduino_variant: {sda: 5, scl: 6}
+      interrupt_driven_supported: false
+      interrupt_signals: []
+      full_read_on_boot: true
+      full_read_on_resync: true
+      expanders_per_successful_scan: 4
+      max_read_attempts: 4
+      reset_after_consecutive_failures: 2
+      normal_runtime_sensor_period_ms: {ordinary: 5, cpu_thinking: 10}
+    expander_addresses: ["0x20", "0x21", "0x22", "0x23"]
+    raw_square_index_basis: 0=a8_to_63=h1
+    polarity:
+      expander_direction: inputs_all
+      expander_polarity: inverted_all
+      occupied_condition: bit_(15-pin)_set_after_read
+    square_to_device_bit_mapping:
+      "0": {address: "0x20", expander_index: 0, pin: 8, bit_index: 7}
+      "1": {address: "0x20", expander_index: 0, pin: 9, bit_index: 6}
+      "2": {address: "0x20", expander_index: 0, pin: 10, bit_index: 5}
+      "3": {address: "0x20", expander_index: 0, pin: 11, bit_index: 4}
+      "4": {address: "0x21", expander_index: 1, pin: 12, bit_index: 3}
+      "5": {address: "0x21", expander_index: 1, pin: 13, bit_index: 2}
+      "6": {address: "0x21", expander_index: 1, pin: 14, bit_index: 1}
+      "7": {address: "0x21", expander_index: 1, pin: 15, bit_index: 0}
+      "8": {address: "0x20", expander_index: 0, pin: 12, bit_index: 3}
+      "9": {address: "0x20", expander_index: 0, pin: 13, bit_index: 2}
+      "10": {address: "0x20", expander_index: 0, pin: 14, bit_index: 1}
+      "11": {address: "0x20", expander_index: 0, pin: 15, bit_index: 0}
+      "12": {address: "0x21", expander_index: 1, pin: 8, bit_index: 7}
+      "13": {address: "0x21", expander_index: 1, pin: 9, bit_index: 6}
+      "14": {address: "0x21", expander_index: 1, pin: 10, bit_index: 5}
+      "15": {address: "0x21", expander_index: 1, pin: 11, bit_index: 4}
+      "16": {address: "0x20", expander_index: 0, pin: 3, bit_index: 12}
+      "17": {address: "0x20", expander_index: 0, pin: 2, bit_index: 13}
+      "18": {address: "0x20", expander_index: 0, pin: 1, bit_index: 14}
+      "19": {address: "0x20", expander_index: 0, pin: 0, bit_index: 15}
+      "20": {address: "0x21", expander_index: 1, pin: 7, bit_index: 8}
+      "21": {address: "0x21", expander_index: 1, pin: 6, bit_index: 9}
+      "22": {address: "0x21", expander_index: 1, pin: 5, bit_index: 10}
+      "23": {address: "0x21", expander_index: 1, pin: 4, bit_index: 11}
+      "24": {address: "0x20", expander_index: 0, pin: 7, bit_index: 8}
+      "25": {address: "0x20", expander_index: 0, pin: 6, bit_index: 9}
+      "26": {address: "0x20", expander_index: 0, pin: 5, bit_index: 10}
+      "27": {address: "0x20", expander_index: 0, pin: 4, bit_index: 11}
+      "28": {address: "0x21", expander_index: 1, pin: 3, bit_index: 12}
+      "29": {address: "0x21", expander_index: 1, pin: 2, bit_index: 13}
+      "30": {address: "0x21", expander_index: 1, pin: 1, bit_index: 14}
+      "31": {address: "0x21", expander_index: 1, pin: 0, bit_index: 15}
+      "32": {address: "0x22", expander_index: 2, pin: 8, bit_index: 7}
+      "33": {address: "0x22", expander_index: 2, pin: 9, bit_index: 6}
+      "34": {address: "0x22", expander_index: 2, pin: 10, bit_index: 5}
+      "35": {address: "0x22", expander_index: 2, pin: 11, bit_index: 4}
+      "36": {address: "0x23", expander_index: 3, pin: 12, bit_index: 3}
+      "37": {address: "0x23", expander_index: 3, pin: 13, bit_index: 2}
+      "38": {address: "0x23", expander_index: 3, pin: 14, bit_index: 1}
+      "39": {address: "0x23", expander_index: 3, pin: 15, bit_index: 0}
+      "40": {address: "0x22", expander_index: 2, pin: 12, bit_index: 3}
+      "41": {address: "0x22", expander_index: 2, pin: 13, bit_index: 2}
+      "42": {address: "0x22", expander_index: 2, pin: 14, bit_index: 1}
+      "43": {address: "0x22", expander_index: 2, pin: 15, bit_index: 0}
+      "44": {address: "0x23", expander_index: 3, pin: 8, bit_index: 7}
+      "45": {address: "0x23", expander_index: 3, pin: 9, bit_index: 6}
+      "46": {address: "0x23", expander_index: 3, pin: 10, bit_index: 5}
+      "47": {address: "0x23", expander_index: 3, pin: 11, bit_index: 4}
+      "48": {address: "0x22", expander_index: 2, pin: 3, bit_index: 12}
+      "49": {address: "0x22", expander_index: 2, pin: 2, bit_index: 13}
+      "50": {address: "0x22", expander_index: 2, pin: 1, bit_index: 14}
+      "51": {address: "0x22", expander_index: 2, pin: 0, bit_index: 15}
+      "52": {address: "0x23", expander_index: 3, pin: 7, bit_index: 8}
+      "53": {address: "0x23", expander_index: 3, pin: 6, bit_index: 9}
+      "54": {address: "0x23", expander_index: 3, pin: 5, bit_index: 10}
+      "55": {address: "0x23", expander_index: 3, pin: 4, bit_index: 11}
+      "56": {address: "0x22", expander_index: 2, pin: 7, bit_index: 8}
+      "57": {address: "0x22", expander_index: 2, pin: 6, bit_index: 9}
+      "58": {address: "0x22", expander_index: 2, pin: 5, bit_index: 10}
+      "59": {address: "0x22", expander_index: 2, pin: 4, bit_index: 11}
+      "60": {address: "0x23", expander_index: 3, pin: 3, bit_index: 12}
+      "61": {address: "0x23", expander_index: 3, pin: 2, bit_index: 13}
+      "62": {address: "0x23", expander_index: 3, pin: 1, bit_index: 14}
+      "63": {address: "0x23", expander_index: 3, pin: 0, bit_index: 15}
+    debounce_notes:
+      live_runtime_path: Snapshot diff only. No extra debounce layer is applied on top of the sensor reads.
+      unused_helper: HallSensorButtonManager exists with debounceMs=5 but is not wired into FirmwareSystem.
+    confidence_notes:
+      mapping_source: Confirmed by include/hardware/pca9555_occupancy_decode.hpp and test/test_pca9555_occupancy_decode/test_main.cpp.
+      i2c_wiring: The Arduino board variant selects SDA on GPIO5 and SCL on GPIO6. Physical wiring has not been reverified.

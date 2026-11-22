@@ -1,0 +1,2 @@
+The main native aggregate already runs each Foxie suite individually.
+Keep this aggregate available for isolated runs without running every suite twice.

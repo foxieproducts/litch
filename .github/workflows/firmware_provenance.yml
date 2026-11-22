@@ -1,0 +1,82 @@
+name: Register official firmware recognition
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Published firmware channel
+        type: choice
+        options: [stable, beta]
+        default: stable
+      version:
+        description: Published version; leave empty for the current channel
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  register-provenance:
+    if: github.repository == 'foxieproducts/litch' && github.ref == 'refs/heads/main' && github.event.repository.default_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency: firmware-publication
+    environment: firmware-publishing
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FIRMWARE_AWS_REGION: ${{ vars.FIRMWARE_AWS_REGION }}
+      FIRMWARE_S3_BUCKET: ${{ secrets.FIRMWARE_S3_BUCKET }}
+      FIRMWARE_S3_PREFIX: ${{ vars.FIRMWARE_S3_PREFIX }}
+      FIRMWARE_S3_LOCK_KEY: ${{ secrets.FIRMWARE_S3_LOCK_KEY }}
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require protected publishing configuration
+        env:
+          ENABLED: ${{ vars.FIRMWARE_PUBLISH_ENABLED }}
+          ROLE: ${{ secrets.FIRMWARE_AWS_ROLE_ARN }}
+        run: |
+          test "$ENABLED" = true
+          test -n "$ROLE"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -c 'import sys; sys.path.insert(0, "tools/release"); from publish_aws import S3FirmwareHost; S3FirmwareHost()'
+      - name: Get short-lived catalog and recognition credentials
+        id: aws
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.FIRMWARE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.FIRMWARE_AWS_REGION }}
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+          output-env-credentials: false
+          output-credentials: true
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[
+            {"Effect":"Allow","Action":"s3:PutObject","Resource":[
+            "arn:aws:s3:::${{ secrets.FIRMWARE_S3_BUCKET }}/${{ vars.FIRMWARE_S3_PREFIX }}provenance_*.json",
+            "arn:aws:s3:::${{ secrets.FIRMWARE_S3_BUCKET }}/${{ secrets.FIRMWARE_S3_LOCK_KEY }}"]},
+            {"Effect":"Allow","Action":["s3:DeleteObject","s3:DeleteObjectVersion"],"Resource":
+            "arn:aws:s3:::${{ secrets.FIRMWARE_S3_BUCKET }}/${{ secrets.FIRMWARE_S3_LOCK_KEY }}"},
+            {"Effect":"Allow","Action":"s3:GetObjectVersion","Resource":[
+            "arn:aws:s3:::${{ secrets.FIRMWARE_S3_BUCKET }}/${{ vars.FIRMWARE_S3_PREFIX }}manifest.json",
+            "arn:aws:s3:::${{ secrets.FIRMWARE_S3_BUCKET }}/${{ vars.FIRMWARE_S3_PREFIX }}manifest_beta.json"]},
+            {"Effect":"Allow","Action":"s3:ListBucketVersions",
+            "Resource":"arn:aws:s3:::${{ secrets.FIRMWARE_S3_BUCKET }}",
+            "Condition":{"StringEquals":{"s3:prefix":[
+            "${{ vars.FIRMWARE_S3_PREFIX }}manifest.json",
+            "${{ vars.FIRMWARE_S3_PREFIX }}manifest_beta.json"]}}}]}
+      - name: Recognize the validated published server image
+        env:
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        run: |
+          args=(--channel "$RELEASE_CHANNEL")
+          if test -n "$RELEASE_VERSION"; then args+=(--version "$RELEASE_VERSION"); fi
+          python3 tools/release/firmware_provenance.py "${args[@]}"

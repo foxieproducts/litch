@@ -1,0 +1,3 @@
+[submodule "lib/litch-max"]
+	path = lib/litch-max
+	url = https://github.com/foxieproducts/litch-max.git

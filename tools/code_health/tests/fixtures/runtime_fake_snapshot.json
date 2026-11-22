@@ -1,0 +1,17 @@
+{
+  "physical_frame": {
+    "estimated_led_current_ma": 820,
+    "applied_led_current_ma": 700,
+    "applied_brightness_scale_65535": 55923,
+    "power_limited": true,
+    "min_free_heap": 0,
+    "stack_high_water_words": 0,
+    "queue_highwater": 0,
+    "dropped_frames": 0
+  },
+  "runtime_health": {
+    "revision": 1,
+    "state": 2,
+    "causes": 4
+  }
+}

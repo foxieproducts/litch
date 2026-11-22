@@ -1,0 +1,14 @@
+{"type":"header","ver":1}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+
+{"type":"sensor","t_ms":10,"square":52,"occ":0}
+{"type":"checkpoint_state","t_ms":10,"game_state":"PickedUp"}
+
+{"type":"sensor","t_ms":20,"square":44,"occ":1}
+{"type":"checkpoint_state","t_ms":20,"game_state":"Settling"}
+
+{"type":"tick","t_ms":120}
+{"type":"checkpoint_state","t_ms":120,"game_state":"Idle"}
+{"type":"checkpoint_engine","t_ms":120,"fen":"rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR b KQkq - 0 1"}
+
+{"type":"end","t_ms":120,"stats":{"events":0,"frames":0,"engine":1}}

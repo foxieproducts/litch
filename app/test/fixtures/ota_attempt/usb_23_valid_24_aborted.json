@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "device_id": "00000000-0000-4000-8000-000000000012",
+  "artifact": {
+    "version": "0.9.0-5",
+    "image_sha256": "87c57a906c19451a04113511708eac96831d92b913bef89474504e92aa8b8610",
+    "sha256": "3e96aa8c0aa27466e73498df8e4654dee2a8f64f1a9c646c57fc37482fd92c39"
+  },
+  "native_lifecycle_model": {
+    "upload_connection_token": 4,
+    "post_connection_token": 5
+  },
+  "admission": {
+    "source_slot": 0,
+    "target_slot": 1,
+    "source_sector": 0,
+    "target_sector": 1,
+    "source_sequence": 23,
+    "expected_sequence": 24
+  },
+  "before": {
+    "version": "0.9.0-5",
+    "image_sha256": "87c57a906c19451a04113511708eac96831d92b913bef89474504e92aa8b8610",
+    "accepted": true,
+    "boot_nonce": "00000000000000a1",
+    "active_slot": 0,
+    "running_address": 65536,
+    "selected_sector": 0,
+    "selected_sequence": 23,
+    "raw_selectors": [
+      "17000000ffffffffffffffffffffffffffffffffffffffff02000000d9903132",
+      "160000004c555342fc2731a54d5c04726a56cfa91f655ebe02000000bcf78d8a"
+    ],
+    "captured_version_lines": [
+      "> version",
+      "firmware: 0.9.0-5",
+      "image_sha256: 87c57a906c19451a04113511708eac96831d92b913bef89474504e92aa8b8610",
+      "ota_accepted: 1",
+      "boot_nonce: 00000000000000a1",
+      "ota_boot: available=1 sample=11 age_ms=879867",
+      "ota_sdk: running=00010000 selected=00010000 sector=0 sequence=23 running_state=2",
+      "ota_selector0: 17000000ffffffffffffffffffffffffffffffffffffffff02000000d9903132",
+      "ota_selector1: 160000004c555342fc2731a54d5c04726a56cfa91f655ebe02000000bcf78d8a",
+      "ota_admission: available=1 attempt=0 phase=0 source=00000000 target=00000000 source_sequence=0 expected_sequence=0"
+    ]
+  },
+  "post": {
+    "version": "0.9.0-5",
+    "image_sha256": "87c57a906c19451a04113511708eac96831d92b913bef89474504e92aa8b8610",
+    "accepted": true,
+    "boot_nonce": "00000000000000a2",
+    "active_slot": 0,
+    "running_address": 65536,
+    "selected_sector": 0,
+    "selected_sequence": 23,
+    "raw_selectors": [
+      "17000000ffffffffffffffffffffffffffffffffffffffff02000000d9903132",
+      "18000000ffffffffffffffffffffffffffffffffffffffff040000008f80526a"
+    ],
+    "captured_version_lines": [
+      "> version",
+      "firmware: 0.9.0-5",
+      "image_sha256: 87c57a906c19451a04113511708eac96831d92b913bef89474504e92aa8b8610",
+      "ota_accepted: 1",
+      "boot_nonce: 00000000000000a2",
+      "ota_boot: available=1 sample=7 age_ms=5949",
+      "ota_sdk: running=00010000 selected=00010000 sector=0 sequence=23 running_state=2",
+      "ota_selector0: 17000000ffffffffffffffffffffffffffffffffffffffff02000000d9903132",
+      "ota_selector1: 18000000ffffffffffffffffffffffffffffffffffffffff040000008f80526a",
+      "ota_admission: available=1 attempt=0 phase=0 source=00000000 target=00000000 source_sequence=0 expected_sequence=0"
+    ]
+  },
+  "expected_outcome": "same_image_fallback"
+}

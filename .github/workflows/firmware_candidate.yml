@@ -1,0 +1,320 @@
+name: Official firmware candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Build, prepare notes, promote, verify delivery, or amend initial public notes
+        type: choice
+        required: true
+        options: [build, prepare-notes, promote, verify, verify-archive, amend-notes]
+      source_sha:
+        description: Full source SHA (build requires the selected main commit)
+        type: string
+        required: true
+      channel:
+        description: Firmware channel (stable is Release)
+        type: choice
+        required: true
+        options: [beta, stable]
+      local_validation_ref:
+        description: Build only - public reference to reviewed local checks for this source
+        type: string
+      candidate_run_id:
+        description: Original successful candidate build run ID
+        type: string
+      candidate_run_attempt:
+        description: Original successful candidate build attempt
+        type: string
+      receipt_sha256:
+        description: Original build receipt SHA-256
+        type: string
+      notes_sha256:
+        description: Promote or amend-notes - exact approved customer body SHA-256
+        type: string
+      previous_manifest_sha256:
+        description: Promote or amend-notes - exact SHA-256 of the approved current channel manifest
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_SHA: ${{ inputs.source_sha }}
+  RELEASE_CHANNEL: ${{ inputs.channel }}
+  OPERATION: ${{ inputs.operation }}
+  CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+  CANDIDATE_RUN_ATTEMPT: ${{ inputs.candidate_run_attempt }}
+  RECEIPT_SHA: ${{ inputs.receipt_sha256 }}
+  NOTES_SHA256: ${{ inputs.notes_sha256 }}
+  DEFAULT_BRANCH: main
+
+jobs:
+  candidate:
+    if: inputs.operation == 'build' && github.repository == 'foxieproducts/litch' && github.ref == 'refs/heads/main' && github.event.repository.default_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      PLATFORMIO_RUN_JOBS: '2'
+      GIT_ATTR_NOSYSTEM: '1'
+      LOCAL_VALIDATION_REF: ${{ inputs.local_validation_ref }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      - name: Check source, local validation reference and release inventory
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 - <<'PY'
+          import os
+          ref = os.environ['LOCAL_VALIDATION_REF']
+          if not ref.strip() or len(ref.encode()) > 2048 or any(ord(c) < 32 or ord(c) == 127 for c in ref):
+              raise SystemExit('Supply a public, single-line reference to local validation.')
+          PY
+          python3 tools/release/release_identity.py check
+          python3 tools/release/verify_release_artifacts.py
+          python3 - <<'PY'
+          from pathlib import Path
+          from tools.release.scan_tracked_secrets import build_report
+          for repository in (Path.cwd(), Path.cwd() / 'lib/litch-max'):
+              if build_report(repository)['summary']['high_confidence_count']:
+                  raise SystemExit(f'High-confidence secret findings in {repository.name}. Review locally.')
+          PY
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11.11'
+      - name: Install pinned S3 build tools
+        run: |
+          python -m pip install platformio==6.1.19 PyYAML==6.0.2
+          python -c 'import subprocess,sys; from tools.dev.tool_requirements import ESPTOOL_REQUIREMENT; subprocess.run([sys.executable, "-m", "pip", "install", ESPTOOL_REQUIREMENT], check=True)'
+      - name: Build S3 and capture the exact relink inputs
+        run: |
+          ./litch build s3 --compile-only
+          pio run -e litch-esp32s3 -t relink-info
+      - name: Admit the exact candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          base=$(python tools/release/official_candidate.py notes-base --channel "$RELEASE_CHANNEL" --releases "$RUNNER_TEMP/releases.json")
+          bundle=$(python tools/release/firmware_compliance.py prepare --root . --build-dir .pio/build/litch-esp32s3 --source-sha "$EXPECTED_SHA" --output "$RUNNER_TEMP/compliance")
+          receipt=$(python tools/release/official_candidate.py prepare \
+            --source-sha "$EXPECTED_SHA" --channel "$RELEASE_CHANNEL" --notes-base-sha "$base" \
+            --firmware .pio/build/litch-esp32s3/firmware.bin --compliance-bundle "$bundle" \
+            --local-validation-ref "$LOCAL_VALIDATION_REF" --output "$RUNNER_TEMP/firmware-candidate")
+          printf 'Retained candidate for `%s`, run `%s`, attempt `%s`, receipt `%s`.\n' \
+            "$EXPECTED_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$receipt" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: firmware-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/firmware-candidate/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          overwrite: false
+
+  admit:
+    if: inputs.operation != 'build' && github.repository == 'foxieproducts/litch' && github.ref == 'refs/heads/main' && github.event.repository.default_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the original successful candidate attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release/github_promotion.py admit-build
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: inputs.operation != 'verify' && inputs.operation != 'verify-archive' && inputs.operation != 'amend-notes'
+        with:
+          name: firmware-candidate-${{ inputs.candidate_run_id }}-${{ inputs.candidate_run_attempt }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          repository: foxieproducts/litch
+          path: ${{ runner.temp }}/firmware-candidate
+      - name: Verify the retained bytes
+        if: inputs.operation != 'verify' && inputs.operation != 'verify-archive' && inputs.operation != 'amend-notes'
+        run: |
+          python3 tools/release/official_candidate.py verify --candidate "$RUNNER_TEMP/firmware-candidate" \
+            --source-sha "$EXPECTED_SHA" --receipt-sha256 "$RECEIPT_SHA"
+      - name: Verify active delivery or archived immutable release
+        if: inputs.operation == 'verify' || inputs.operation == 'verify-archive'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release/github_promotion.py prepare
+
+  draft:
+    needs: admit
+    if: inputs.operation == 'prepare-notes'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    environment: firmware-publishing
+    concurrency: firmware-publication
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firmware-candidate-${{ inputs.candidate_run_id }}-${{ inputs.candidate_run_attempt }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          repository: foxieproducts/litch
+          path: ${{ runner.temp }}/firmware-candidate
+      - name: Resolve reviewed notes or recover the exact frozen promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/release/github_promotion.py prepare
+
+  promote:
+    needs: admit
+    if: inputs.operation == 'promote'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    concurrency: firmware-publication
+    environment: firmware-publishing
+    env:
+      FIRMWARE_AWS_REGION: ${{ vars.FIRMWARE_AWS_REGION }}
+      FIRMWARE_S3_BUCKET: ${{ secrets.FIRMWARE_S3_BUCKET }}
+      FIRMWARE_S3_PREFIX: ${{ vars.FIRMWARE_S3_PREFIX }}
+      FIRMWARE_S3_LOCK_KEY: ${{ secrets.FIRMWARE_S3_LOCK_KEY }}
+      PREVIOUS_MANIFEST_SHA: ${{ inputs.previous_manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require publisher configuration and approvals
+        env:
+          ENABLED: ${{ vars.FIRMWARE_PUBLISH_ENABLED }}
+          ROLE: ${{ secrets.FIRMWARE_AWS_ROLE_ARN }}
+        run: |
+          test "$ENABLED" = true
+          test -n "$ROLE"
+          [[ "$NOTES_SHA256" =~ ^[0-9a-f]{64}$ && "$PREVIOUS_MANIFEST_SHA" =~ ^[0-9a-f]{64}$ ]]
+          python3 -c 'import sys; sys.path.insert(0, "tools/release"); from publish_aws import S3FirmwareHost; S3FirmwareHost()'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firmware-candidate-${{ inputs.candidate_run_id }}-${{ inputs.candidate_run_attempt }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          repository: foxieproducts/litch
+          path: ${{ runner.temp }}/firmware-candidate
+      - name: Resolve reviewed notes or recover the exact frozen promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/release/github_promotion.py prepare
+      - name: Archive frozen assets before app publication
+        if: env.PROMOTION_COMPLETE != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/release/github_promotion.py archive
+      - name: Require supported final release before app publication
+        if: env.PROMOTION_COMPLETE != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/release/github_promotion.py ready
+      - name: Get short-lived publishing credentials
+        if: env.PROMOTION_COMPLETE != 'true'
+        id: aws
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.FIRMWARE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.FIRMWARE_AWS_REGION }}
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+          output-env-credentials: false
+          output-credentials: true
+      - name: Publish assets and verify the app manifests
+        if: env.PROMOTION_COMPLETE != 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        run: |
+          python3 tools/release/publish_aws.py --candidate "$RUNNER_TEMP/firmware-final" \
+            --source-sha "$EXPECTED_SHA" --receipt-sha256 "$FINAL_RECEIPT_SHA" \
+            --previous-manifest-sha256 "$PREVIOUS_MANIFEST_SHA"
+      - name: Record the official release after verified app delivery
+        if: env.PROMOTION_COMPLETE != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/release/github_promotion.py finish
+
+  release_metadata:
+    needs: admit
+    if: inputs.operation == 'amend-notes'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    concurrency: firmware-publication
+    environment: firmware-publishing
+    env:
+      FIRMWARE_AWS_REGION: ${{ vars.FIRMWARE_AWS_REGION }}
+      FIRMWARE_S3_BUCKET: ${{ secrets.FIRMWARE_S3_BUCKET }}
+      FIRMWARE_S3_PREFIX: ${{ vars.FIRMWARE_S3_PREFIX }}
+      FIRMWARE_S3_LOCK_KEY: ${{ secrets.FIRMWARE_S3_LOCK_KEY }}
+      PREVIOUS_MANIFEST_SHA: ${{ inputs.previous_manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the authorized publisher and notes approval
+        env:
+          ENABLED: ${{ vars.FIRMWARE_PUBLISH_ENABLED }}
+          ROLE: ${{ secrets.FIRMWARE_AWS_ROLE_ARN }}
+        run: |
+          test "$ENABLED" = true
+          test -n "$ROLE"
+          if test "$OPERATION" = amend-notes; then
+            [[ "$NOTES_SHA256" =~ ^[0-9a-f]{64}$ && "$PREVIOUS_MANIFEST_SHA" =~ ^[0-9a-f]{64}$ ]]
+          fi
+          python3 -c 'import sys; sys.path.insert(0, "tools/release"); from publish_aws import S3FirmwareHost; S3FirmwareHost()'
+      - name: Get short-lived publishing credentials
+        id: aws
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.FIRMWARE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.FIRMWARE_AWS_REGION }}
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+          output-env-credentials: false
+          output-credentials: true
+      - name: Update approved release metadata and verify public delivery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        run: |
+          python3 tools/release/github_promotion.py amend-notes

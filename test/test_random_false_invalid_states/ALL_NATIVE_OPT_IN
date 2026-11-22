@@ -1,0 +1,4 @@
+This suite is intentionally exhaustive and is excluded from the default
+test_all_native aggregate. Run it explicitly with:
+
+pio test -e native -f test_random_false_invalid_states

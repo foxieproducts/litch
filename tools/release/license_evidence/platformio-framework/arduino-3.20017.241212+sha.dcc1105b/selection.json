@@ -1,0 +1,804 @@
+{
+  "archives": [
+    {
+      "bytes": 19818,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libbtbb.a",
+      "package_path": "tools/sdk/esp32s3/ld/libbtbb.a",
+      "sha256": "9ce018fb5d7753318ccf1e8386ced5d45a0b0d90f07352946a03c8689539073f",
+      "source_identity": "esp-phy-lib@dcfdccf6cc2fc02d0886624b7998c890d1a19b28"
+    },
+    {
+      "bytes": 541800,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libbtdm_app.a",
+      "package_path": "tools/sdk/esp32s3/ld/libbtdm_app.a",
+      "sha256": "3a766cbdf78cde3d2d0eee40bf601c09be88c6589a629815e8d59b91b271d1dc",
+      "source_identity": "esp32c3-bt-lib@e5c0f7256ecf5b5f8eb28c1793051a6b88f95124"
+    },
+    {
+      "bytes": 241614,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libphy.a",
+      "package_path": "tools/sdk/esp32s3/ld/libphy.a",
+      "sha256": "c8f6c6821c7e8e28c97f3a797e322d9987a0f3fd5f5da5e971ab0111ba513160",
+      "source_identity": "esp-phy-lib@dcfdccf6cc2fc02d0886624b7998c890d1a19b28"
+    },
+    {
+      "bytes": 146988,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libapp_update.a",
+      "package_path": "tools/sdk/esp32s3/lib/libapp_update.a",
+      "sha256": "63b0e765f044b9c4f58e8b4c5643daa902bb243210747e8b1df88c67c4520f9d",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 1066564,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/tinyusb/LICENSE"
+      ],
+      "name": "libarduino_tinyusb.a",
+      "package_path": "tools/sdk/esp32s3/lib/libarduino_tinyusb.a",
+      "sha256": "45aea2035b431e8278920806f6a4fdd59893f93a012de75c076ee3b7c7ebdb51",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 21780332,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libbt.a",
+      "package_path": "tools/sdk/esp32s3/lib/libbt.a",
+      "sha256": "48fe8a1427a6476e2a8671bc893bd0e346d1658f3714b97d25ca091487748365",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 85092,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libcoexist.a",
+      "package_path": "tools/sdk/esp32s3/lib/libcoexist.a",
+      "sha256": "0c61713a461511973e0d4270bcf6c75587fb5da361f0636c8346c960516ef05a",
+      "source_identity": "esp32-wifi-lib@f2aae4d44ec7908013066e69d29b9948846c335c"
+    },
+    {
+      "bytes": 4820,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libcore.a",
+      "package_path": "tools/sdk/esp32s3/lib/libcore.a",
+      "sha256": "193092d7be420934e1a865fccfa50f223e6829cd0f47ebbc6b0d4940c7bfb981",
+      "source_identity": "esp32-wifi-lib@f2aae4d44ec7908013066e69d29b9948846c335c"
+    },
+    {
+      "bytes": 59530,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libcxx.a",
+      "package_path": "tools/sdk/esp32s3/lib/libcxx.a",
+      "sha256": "295951e87b7152a7364d45f5435ac24408a80dbe32fedf326e97edda8fc60412",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 5359990,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libdriver.a",
+      "package_path": "tools/sdk/esp32s3/lib/libdriver.a",
+      "sha256": "b8ab992d477263dba3306c057af7cb08f2808a22bc6aeec668c3a0d20e189773",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 505220,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libefuse.a",
+      "package_path": "tools/sdk/esp32s3/lib/libefuse.a",
+      "sha256": "c65c8266bfa4170e534f9e3a9c744566f09f1f8e71da6bdf60ce9488be5a1ff2",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 63256,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_adc_cal.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_adc_cal.a",
+      "sha256": "36de51bcb789367a734fc0bec4ffc1fc375efeb94382a6c420bf239654d6128e",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 57798,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_common.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_common.a",
+      "sha256": "aa3b7a5f964bc7c7bfae623e64b15b695db268dd704b1fa7f967dad519f67b5f",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 361766,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp_insights/LICENSE"
+      ],
+      "name": "libesp_diagnostics.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_diagnostics.a",
+      "sha256": "69f28fb584e5a44cab0739d53679e78304e45d42ebd76f3e12eb8cf5d973007a",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 812314,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_eth.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_eth.a",
+      "sha256": "ae4966a227553730bd9ab1bf19bfc5179aa1c13ae09374670c2b831215d9b3d1",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 268676,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_event.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_event.a",
+      "sha256": "32b0bdae4f59c6f09fab85c221cd459b4a44567ca4ad753807f9f7172eac70b2",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 90608,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_ipc.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_ipc.a",
+      "sha256": "2bdbbe5e2669143738b2bbd89203eda25476960b5d4f6ce15c512513ae36fcc5",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 793140,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp_littlefs/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/littlefs/LICENSE.md"
+      ],
+      "name": "libesp_littlefs.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_littlefs.a",
+      "sha256": "74c97ecd4b9f2763d7a888b1947638b9188c7310b3815641fcf16fd548342199",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 445516,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_netif.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_netif.a",
+      "sha256": "0d67fa2f45582ae11364fce8237146c9db9ead20cf5bf19cb15cd47d93a9c4de",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 151588,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_phy.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_phy.a",
+      "sha256": "b63a6ce02ad6490c3351964f2d901c2d468f3865a7d64187a287ae66eba7b3e1",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 171180,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_pm.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_pm.a",
+      "sha256": "60529aeaf1cd94b41983383ceec240d1f43256f86faf8d9357f9e7d6050d9191",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 154618,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_ringbuf.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_ringbuf.a",
+      "sha256": "71dedf0f14aa64031c973b73279a88f9c4ec83ccfef331fe01e3532183cafc8c",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 113716,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_rom.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_rom.a",
+      "sha256": "fd3ad8b4552687a2722288fdf8069e43ab01440196dbf3cd6c77cb994be2fbd6",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 176508,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_timer.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_timer.a",
+      "sha256": "b09bd4231f011c0dc6f09900aa05f6df48f237d34b78965c746f777f5e9fc7bc",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 468002,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_wifi.a",
+      "package_path": "tools/sdk/esp32s3/lib/libesp_wifi.a",
+      "sha256": "cb06edb694b149bed9b9691be7942281549868e5e59624036da4ccaeb7d72175",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 478456,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libespcoredump.a",
+      "package_path": "tools/sdk/esp32s3/lib/libespcoredump.a",
+      "sha256": "8f8b9e9d1e7853232b113cff78c0e62f8939fc4026abd190512134d985695392",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 2792896,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libhal.a",
+      "package_path": "tools/sdk/esp32s3/lib/libhal.a",
+      "sha256": "ba8f1f141062b0b567029d0bf21ed4981426870f8ae2d33ba1bfd91d32bf5fc7",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 557948,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/tlsf/NOTICE.txt"
+      ],
+      "name": "libheap.a",
+      "package_path": "tools/sdk/esp32s3/lib/libheap.a",
+      "sha256": "8108f23266178230dc27c03ac62b538a990a2a90d638503e3a1f3c482ea41513",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 94876,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "liblog.a",
+      "package_path": "tools/sdk/esp32s3/lib/liblog.a",
+      "sha256": "6ebbc908c98f6dca8a03533e95877d217b21a8a7777bfe0cded98dc228f4a2fc",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 4288608,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/lwip/COPYING",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/lwip/SOURCE_NOTICES.txt"
+      ],
+      "name": "liblwip.a",
+      "package_path": "tools/sdk/esp32s3/lib/liblwip.a",
+      "sha256": "8d9f1c6ef5abcf086759e3032938ef8df2c06125c0735242a0a079d277ef593d",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 4302698,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/mbedtls/LICENSE"
+      ],
+      "name": "libmbedcrypto.a",
+      "package_path": "tools/sdk/esp32s3/lib/libmbedcrypto.a",
+      "sha256": "abdaf759ee17aa697468427b55a86c6c0082ac4cdeb643a63d8b3ac2df324633",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 1252150,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/mbedtls/LICENSE"
+      ],
+      "name": "libmbedtls_2.a",
+      "package_path": "tools/sdk/esp32s3/lib/libmbedtls_2.a",
+      "sha256": "9a580d2ff7c885e1bf59479a14422e3d10a485ae9083acb5db943df714c0ac35",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 676590,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/mbedtls/LICENSE"
+      ],
+      "name": "libmbedx509.a",
+      "package_path": "tools/sdk/esp32s3/lib/libmbedx509.a",
+      "sha256": "3d56277224b066118b6c48a973ae18fdf8078448bf54b482ac5557699e52f223",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 971720,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libmesh.a",
+      "package_path": "tools/sdk/esp32s3/lib/libmesh.a",
+      "sha256": "48a17163c2234af955f7d93f21ad219baf11c1353ecb41ca36323db34e3164a6",
+      "source_identity": "esp32-wifi-lib@f2aae4d44ec7908013066e69d29b9948846c335c"
+    },
+    {
+      "bytes": 1150738,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/net80211/FAMILY_NOTICES.txt"
+      ],
+      "name": "libnet80211.a",
+      "package_path": "tools/sdk/esp32s3/lib/libnet80211.a",
+      "sha256": "6aae206c85e9009a24cd1f28ce535e2a2d578d9687fe2dc77d4697d45ebc8d0f",
+      "source_identity": "esp32-wifi-lib@f2aae4d44ec7908013066e69d29b9948846c335c"
+    },
+    {
+      "bytes": 428740,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYING.NEWLIB"
+      ],
+      "name": "libnewlib.a",
+      "package_path": "tools/sdk/esp32s3/lib/libnewlib.a",
+      "sha256": "dbac7546c93c387a82f3a83cf6985468ad0c26177c391251bde37dac7725511f",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 1455040,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libnvs_flash.a",
+      "package_path": "tools/sdk/esp32s3/lib/libnvs_flash.a",
+      "sha256": "f4163a6e3bb66867d06c5e7f33226f1941f123b77f358cc02e30021b1a2bf983",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 601344,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libpp.a",
+      "package_path": "tools/sdk/esp32s3/lib/libpp.a",
+      "sha256": "369fa64aefd5d147062fd11288f3933b192dc5d9adfbefcafdd94ae9ac9de32e",
+      "source_identity": "esp32-wifi-lib@f2aae4d44ec7908013066e69d29b9948846c335c"
+    },
+    {
+      "bytes": 225166,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libpthread.a",
+      "package_path": "tools/sdk/esp32s3/lib/libpthread.a",
+      "sha256": "c99c47275fdf44c290e154b83b16cc0a62427a82d2875409e0eafe2945088ab1",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 604598,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libsoc.a",
+      "package_path": "tools/sdk/esp32s3/lib/libsoc.a",
+      "sha256": "a484ab659effaaecbd5fe75d20d4ef293e1a54de5034f10add071d597c7fae45",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 105660,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libtcpip_adapter.a",
+      "package_path": "tools/sdk/esp32s3/lib/libtcpip_adapter.a",
+      "sha256": "624b198973b01d0df08d758fd1911ab221f006650f40e46c955c8e394fa2c09a",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 54122,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libulp.a",
+      "package_path": "tools/sdk/esp32s3/lib/libulp.a",
+      "sha256": "38dccce6d6002008cc5f7bc40399a470f2f0a9f5a0e8eb9699b5f92e616262f8",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 639414,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libvfs.a",
+      "package_path": "tools/sdk/esp32s3/lib/libvfs.a",
+      "sha256": "b70865ab418f4f4cc516e234e0011e975164f70b3282df197fd325b061308ed9",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 4858426,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/wpa_supplicant/COPYING",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/fastpbkdf2/CC0-1.0.txt",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/fastpbkdf2/NOTICE.txt"
+      ],
+      "name": "libwpa_supplicant.a",
+      "package_path": "tools/sdk/esp32s3/lib/libwpa_supplicant.a",
+      "sha256": "fdef973bbfa85c926c5a8266c34cfe0f4aab83d6a835522b24356afe31f52b31",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 240506,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/xtensa/NOTICE.txt"
+      ],
+      "name": "libxt_hal.a",
+      "package_path": "tools/sdk/esp32s3/lib/libxt_hal.a",
+      "sha256": "4823e6c657199a6726f3163f15e1222edb85a8a33eeaafd2aad0cc06150cc4ec",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 52616,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/xtensa/NOTICE.txt"
+      ],
+      "name": "libxtensa.a",
+      "package_path": "tools/sdk/esp32s3/lib/libxtensa.a",
+      "sha256": "42eda0b774a63e71e4b3b4ea983aa2a45374779eae270786272d93cfc30f1293",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 769328,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libbootloader_support.a",
+      "package_path": "tools/sdk/esp32s3/qio_qspi/libbootloader_support.a",
+      "sha256": "569a073995d954de64877037de9f211c9f711d3bbe4755b316f8bcf6aab3fc6d",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 1863798,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libesp_hw_support.a",
+      "package_path": "tools/sdk/esp32s3/qio_qspi/libesp_hw_support.a",
+      "sha256": "b9b412df462a8eed8a4bd5e4ed6bf13c0c0271cec5fed97ff08bf9a0bf922308",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 1574894,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/ubsan/NOTICE.txt"
+      ],
+      "name": "libesp_system.a",
+      "package_path": "tools/sdk/esp32s3/qio_qspi/libesp_system.a",
+      "sha256": "2a58caf364f9417c0c81ed0509fc21b3db4a23b6bd75940937de8d10dc8d048a",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 1063058,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/freertos/LICENSE.md",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/xtensa/NOTICE.txt"
+      ],
+      "name": "libfreertos.a",
+      "package_path": "tools/sdk/esp32s3/qio_qspi/libfreertos.a",
+      "sha256": "258c4cc7c1d878cfb2a0a5a76344e4b4e8db326da95b4471f99430c8557c82f8",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    },
+    {
+      "bytes": 1465194,
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/COPYRIGHT.rst"
+      ],
+      "name": "libspi_flash.a",
+      "package_path": "tools/sdk/esp32s3/qio_qspi/libspi_flash.a",
+      "sha256": "82287e5db87de68cd2fac77d144607cf0af5a871f3c4a9c80865b7a1c98d5666",
+      "source_identity": "ESP-IDF 4.4.7 38eeba213aa695aabfd6d89aa9f5078dbe5a94c3; additional package revisions in sdk-versions.txt"
+    }
+  ],
+  "link_map_sha256": "39dfdb6a63f3e7a281a4bc9ea40dd05d5be704431952b2db33724e4eddca2bc2",
+  "net80211_family_sources": [
+    {
+      "notice_prefix_bytes": 1427,
+      "source_sha256": "f309d46f405902a9cde41c60b7880d1d53b12c92e1a6580037a8fb2b37835b8e",
+      "source_url": "https://raw.githubusercontent.com/freebsd/freebsd-src/5f438dd3acba47e54e63b13bfff31a49bcc6ddea/sys/net80211/ieee80211_crypto.c"
+    },
+    {
+      "notice_prefix_bytes": 1392,
+      "source_sha256": "d5af451314378a7da77dfad231aff9e69dfe7ce84252daa03b1dd466a40eb2b3",
+      "source_url": "https://raw.githubusercontent.com/freebsd/freebsd-src/5f438dd3acba47e54e63b13bfff31a49bcc6ddea/sys/net80211/ieee80211_hostap.c"
+    }
+  ],
+  "other_project_archives": [
+    ".pio/build/litch-esp32s3/lib26c/libmcu-max.a",
+    ".pio/build/litch-esp32s3/lib28a/libNimBLE-Arduino.a",
+    ".pio/build/litch-esp32s3/lib7b5/libNeoPixelBus.a",
+    ".pio/build/litch-esp32s3/libc64/libSparkFun_Ambient_Light_Sensor_Arduino_Library.a",
+    ".pio/build/litch-esp32s3/libc70/libfoxie_embedded.a"
+  ],
+  "package": "platformio/framework-arduinoespressif32",
+  "remaining_delivery": "Arduino LGPL corresponding source and recipient relink materials must be delivered; license text capture alone does not satisfy that gate. GCC/Newlib toolchain runtime is a separate evidence component.",
+  "sdk_revision": "38eeba213aa695aabfd6d89aa9f5078dbe5a94c3",
+  "selected_image_only": "Evidence covers the selected ESP32-S3 firmware and relink closure. It does not clear the complete mixed framework package, unused libraries, or prototype hardware targets.",
+  "selection": "Archives contributing members before the linker map Discarded input sections marker. Legal collection also covers the full selected archive containers for the relink deliverable; it does not assert coverage for all unselected SDK components or other hardware targets.",
+  "selection_candidate_note": "Selected archive closure was rechecked after the approved source-prefix-map rebuild; precompiled package archive bytes were unchanged.",
+  "source_binding_limit": "The precompiled open-source SDK archive source revisions are self-identified by the installed sdk-versions.txt; no SDK rebuild equivalence is asserted. The specified radio archive Git blob identities were separately verified against the exact upstream submodule trees.",
+  "source_candidate": "1d313a91cd27eb2e3e7516ab98c2fbc5598f61ee",
+  "source_libraries": [
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/libb64/LICENSE",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE"
+      ],
+      "name": "core",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers. Core Udp.h additionally contains its own complete MIT notice, preserved with corresponding source.",
+      "source_path": "cores/esp32"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE"
+      ],
+      "name": "FS",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/FS"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md",
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE"
+      ],
+      "name": "Update",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/Update"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md"
+      ],
+      "name": "Wire",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/Wire"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/esp-idf/LICENSE"
+      ],
+      "name": "LittleFS",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/LittleFS"
+    },
+    {
+      "license_paths": [
+        "tools/release/license_evidence/platformio-framework/arduino-3.20017.241212+sha.dcc1105b/arduino/LICENSE.md"
+      ],
+      "name": "SPI",
+      "scope": "Preserve the exact source-file copyright and license headers; they govern mixed file-scoped terms. Package-level LGPL and listed common texts do not replace those headers.",
+      "source_path": "libraries/SPI"
+    }
+  ],
+  "source_library_identity": "Source-library files and build commands are bound by the firmware relink capture at packaging time. Compiled Arduino archive hashes are not fixed license evidence because approved reproducible path mapping changes them.",
+  "source_records": [
+    {
+      "bytes": 26338,
+      "name": "arduino-LICENSE.md",
+      "sha256": "994ce1902a23c74519b5d118c6bbb657edabce91dd6b7cc825d86bb8f5c9780f",
+      "url": "https://raw.githubusercontent.com/espressif/arduino-esp32/dcc1105b/LICENSE.md"
+    },
+    {
+      "bytes": 11358,
+      "name": "idf-LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/LICENSE"
+    },
+    {
+      "bytes": 13075,
+      "name": "idf-COPYRIGHT.rst",
+      "sha256": "a1db55f6af33968650e8c53553fc58386bf3d871d740ccfe464c73c60779acc7",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/docs/en/COPYRIGHT.rst"
+    },
+    {
+      "bytes": 1036,
+      "name": "freertos-LICENSE.md",
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/freertos/LICENSE.md"
+    },
+    {
+      "bytes": 46295,
+      "name": "idf-COPYING.NEWLIB",
+      "sha256": "0681089a556e93791da82718d68011ba452de245f7f59c3846936304756ac0c0",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/newlib/COPYING.NEWLIB"
+    },
+    {
+      "bytes": 965,
+      "name": "wpa-COPYING",
+      "sha256": "e9f84e02bb9ba965464e21604014f13d0f3c9299a1b5f7882574a9b4a261abe7",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/wpa_supplicant/COPYING"
+    },
+    {
+      "bytes": 34416,
+      "name": "heap_tlsf.c",
+      "sha256": "008e2f4f868ab40ffe4c1dac4786e9d0f535633378fc89c3b558c816362be651",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/heap/heap_tlsf.c"
+    },
+    {
+      "bytes": 10042,
+      "name": "ubsan.c",
+      "sha256": "d66b60862f7299f01055c52809ed764a9f0158b9a43cc1ff49bd1fb453cb4aa5",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/esp_system/ubsan.c"
+    },
+    {
+      "bytes": 64919,
+      "name": "xtensa-hal.h",
+      "sha256": "2e54b026691b4c3b166500f011d99fec5f0824a08dff489dff75c43311010f89",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/xtensa/include/xtensa/hal.h"
+    },
+    {
+      "bytes": 1611,
+      "name": "lwip-COPYING",
+      "sha256": "8fb15ebdb19eb669e1d37fcd8e57a44c477fcc0e93a9ab0d181760965f94d5ed",
+      "url": "https://raw.githubusercontent.com/espressif/esp-lwip/a45be9e438f6cf9c54ec150581819c3b95d5af6b/COPYING"
+    },
+    {
+      "bytes": 29852,
+      "name": "mbedtls-LICENSE",
+      "sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b",
+      "url": "https://raw.githubusercontent.com/espressif/mbedtls/2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9/LICENSE"
+    },
+    {
+      "bytes": 11358,
+      "name": "phy-LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "url": "https://raw.githubusercontent.com/espressif/esp-phy-lib/dcfdccf6cc2fc02d0886624b7998c890d1a19b28/LICENSE"
+    },
+    {
+      "bytes": 11358,
+      "name": "wifi-LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "url": "https://raw.githubusercontent.com/espressif/esp32-wifi-lib/f2aae4d44ec7908013066e69d29b9948846c335c/LICENSE"
+    },
+    {
+      "bytes": 11358,
+      "name": "bt-LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "url": "https://raw.githubusercontent.com/espressif/esp32c3-bt-lib/e5c0f7256ecf5b5f8eb28c1793051a6b88f95124/LICENSE"
+    },
+    {
+      "bytes": 1089,
+      "name": "arduino-tinyusb-LICENSE",
+      "sha256": "b171720e8a442e7a3957d83c62cd3299dbb29da3db534cc626f9dded0de2ca44",
+      "url": "https://raw.githubusercontent.com/hathach/tinyusb/a0e5626bc/LICENSE"
+    },
+    {
+      "bytes": 1089,
+      "name": "idf-tinyusb-LICENSE",
+      "sha256": "b171720e8a442e7a3957d83c62cd3299dbb29da3db534cc626f9dded0de2ca44",
+      "url": "https://raw.githubusercontent.com/espressif/tinyusb/c4badd394eda18199c0196ed0be1e2d635f0a5f6/LICENSE"
+    },
+    {
+      "bytes": 1057,
+      "name": "littlefs-LICENSE",
+      "sha256": "b6bbf3bd17c2b5532bc25a7acf1760faac0b995d6e0ad8bec29435166727d4c5",
+      "url": "https://raw.githubusercontent.com/joltwallet/esp_littlefs/41873c2/LICENSE"
+    },
+    {
+      "bytes": 11357,
+      "name": "rainmaker-LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "url": "https://raw.githubusercontent.com/espressif/esp-rainmaker/d8e9345/LICENSE"
+    },
+    {
+      "bytes": 1523,
+      "name": "littlefs-core-LICENSE.md",
+      "sha256": "0cb4ff1daf5fdc1359c6a6ee3116092f08fc100c9d58b1b77ab17bfd801f856d",
+      "url": "https://raw.githubusercontent.com/littlefs-project/littlefs/f53a0cc961a8acac85f868b431d2f3e58e447ba3/LICENSE.md"
+    },
+    {
+      "bytes": 11357,
+      "name": "insights-LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "url": "https://raw.githubusercontent.com/espressif/esp-insights/203a87f671710295579404f7d4c62a8a5e25ae7c/LICENSE"
+    },
+    {
+      "bytes": 19100,
+      "name": "fastpbkdf2.c",
+      "sha256": "152a561b9dc9f3e65598978ec9f4bcd1dc08a001c6789313de33f10ff47294f2",
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/38eeba213a/components/wpa_supplicant/src/crypto/fastpbkdf2.c"
+    },
+    {
+      "bytes": 7048,
+      "name": "CC0-1.0.txt",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+      "url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt"
+    }
+  ],
+  "target": "litch-esp32s3",
+  "version": "3.20017.241212+sha.dcc1105b"
+}

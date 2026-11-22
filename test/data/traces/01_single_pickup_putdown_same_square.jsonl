@@ -1,0 +1,10 @@
+{"type":"header","ver":1,"session":"single_pickup_putdown_same_square"}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+{"type":"sensor","t_ms":0,"square":12,"occ":1}
+{"type":"tick","t_ms":0}
+{"type":"sensor","t_ms":50,"square":12,"occ":0}
+{"type":"tick","t_ms":50}
+{"type":"sensor","t_ms":140,"square":12,"occ":1}
+{"type":"tick","t_ms":140}
+{"type":"tick","t_ms":700}
+{"type":"end","t_ms":750}

@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Primary developer entrypoint for Litch."""
+
+import platform
+import sys
+
+
+MINIMUM_PYTHON = (3, 9)
+
+if sys.version_info < MINIMUM_PYTHON:
+    current_version = ".".join(str(part) for part in sys.version_info[:3])
+    sys.stderr.write(
+        "./litch requires Python 3.9 or newer; "
+        "found Python %s at %s.\n" % (current_version, sys.executable)
+    )
+    sys.stderr.write(
+        "Install Python 3.9+ and ensure `python3` on PATH resolves to it, "
+        "then rerun ./litch.\n"
+    )
+    raise SystemExit(2)
+
+host_release = platform.release().lower()
+supported_host = sys.platform == "darwin" or (
+    sys.platform.startswith("linux") and "microsoft" not in host_release
+)
+if not supported_host:
+    sys.stderr.write(
+        "./litch supports macOS and native Linux hosts; "
+        "this host (%s, %s) is unsupported.\n" % (sys.platform, platform.release())
+    )
+    sys.stderr.write(
+        "Native Windows and unvalidated Windows POSIX environments, including "
+        "WSL, Cygwin, and MSYS2, are not supported.\n"
+    )
+    raise SystemExit(2)
+
+from tools.dev.cli import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

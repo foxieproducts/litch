@@ -1,0 +1,96 @@
+schema_version: 1
+default_variant: esp32s3_v3_3
+
+# Button rows use physical bank names and the default logical owner.
+# wake_capable includes the S3 P1-X release-gated ULP wake on GPIO0.
+variants:
+  esp32s3_v3_3:
+    revisions: ["V3.3", "V3.31"]
+    button_count: 12
+    electrical: &electrical {input_mode: INPUT_PULLUP, active_level: low}
+    buttons:
+      - &p1_up    {physical_name: p1_dpad_up,    gpio: 7,  logical_button: up,    owner: p1, active_level: low, wake_capable: true}
+      - &p1_left  {physical_name: p1_dpad_left,  gpio: 5,  logical_button: left,  owner: p1, active_level: low, wake_capable: true}
+      - &p1_down  {physical_name: p1_dpad_down,  gpio: 6,  logical_button: down,  owner: p1, active_level: low, wake_capable: true}
+      - &p1_right {physical_name: p1_dpad_right, gpio: 9,  logical_button: right, owner: p1, active_level: low, wake_capable: true}
+      - &p1_x     {physical_name: p1x,           gpio: 0,  logical_button: p1x,   owner: p1, active_level: low, wake_capable: true}
+      - &p1_o     {physical_name: p1o,           gpio: 10, logical_button: p1o,   owner: p1, active_level: low, wake_capable: true}
+      - &p2_up    {physical_name: p2_dpad_up,    gpio: 15, logical_button: up,    owner: p2, active_level: low, wake_capable: true}
+      - &p2_left  {physical_name: p2_dpad_left,  gpio: 13, logical_button: left,  owner: p2, active_level: low, wake_capable: true}
+      - &p2_down  {physical_name: p2_dpad_down,  gpio: 14, logical_button: down,  owner: p2, active_level: low, wake_capable: true}
+      - &p2_right {physical_name: p2_dpad_right, gpio: 17, logical_button: right, owner: p2, active_level: low, wake_capable: true}
+      - &p2_x     {physical_name: p2x,           gpio: 12, logical_button: p2x,   owner: p2, active_level: low, wake_capable: true}
+      - &p2_o     {physical_name: p2o,           gpio: 18, logical_button: p2o,   owner: p2, active_level: low, wake_capable: true}
+    behavior:
+      debounce_ms: 20
+      direction_repeat: &direction_repeat {before_repeat_ms: 250, left_right_repeat_rate_ms: 50, up_down_repeat_rate_ms: 19}
+      long_hold_ms_default: 0
+      rotate180_behavior: Gameplay orientation and player placement can exchange the logical owners and X/O IDs. Directions stay local to the physical player.
+      wake_ignore_gate_ms: 200
+      boot_sequences:
+        hardware_test_mode: Hold either physical Up at cold boot for factory inspection.
+        factory_reset_entry: &reset_entry Hold Down on one physical bank at cold power-on. Release Down and all X/O buttons when the amber prompt appears.
+        factory_reset_confirm: &reset_confirm Within the 10-second prompt, freshly hold X and O together on the entry bank for 2 seconds. Keep Down and all face buttons on any other bank released.
+        factory_reset_cues: Both banks' X/O LEDs blink amber at the prompt and flash green twice after reset succeeds.
+      factory_test_override: During an active inspection, hold same-bank X and O for 5 seconds to exit. An unfinished test records Override and can resume normal boot after the save.
+
+  # Earlier boards retained for service and firmware compatibility.
+  esp32s3_v3:
+    revisions: ["V3"]
+    button_count: 12
+    electrical: *electrical
+    buttons:
+      - *p1_up
+      - *p1_left
+      - *p1_down
+      - *p1_right
+      - *p1_x
+      - *p1_o
+      - {<<: *p2_up,    gpio: 14}
+      - {<<: *p2_left,  gpio: 17}
+      - {<<: *p2_down,  gpio: 15}
+      - {<<: *p2_right, gpio: 13}
+      - *p2_x
+      - *p2_o
+    behavior: &legacy_behavior
+      debounce_ms: 20
+      direction_repeat: *direction_repeat
+      long_hold_ms_default: 0
+      rotate180_behavior: Gameplay orientation and player placement can exchange logical owners and X/O IDs. Directions stay local to the physical player.
+      wake_ignore_gate_ms: 200
+      boot_sequences:
+        factory_reset_entry: *reset_entry
+        factory_reset_confirm: *reset_confirm
+        factory_reset_cues: The home-edge markers for each fitted bank blink amber at the prompt and flash green twice after reset succeeds.
+
+  esp32s3:
+    revisions: ["V2"]
+    button_count: 12
+    electrical: *electrical
+    buttons:
+      - *p1_up
+      - *p1_left
+      - *p1_down
+      - *p1_right
+      - *p1_x
+      - {<<: *p1_o, wake_capable: false}
+      - {<<: *p2_up,    gpio: 17}
+      - {<<: *p2_left,  gpio: 15}
+      - {<<: *p2_down,  gpio: 16}
+      - {<<: *p2_right, gpio: 21}
+      - {<<: *p2_x,     gpio: 14, wake_capable: false}
+      - {<<: *p2_o,     gpio: 26, wake_capable: false}
+    behavior: *legacy_behavior
+
+  esp32c3:
+    revisions: ["V1"]
+    button_count: 6
+    electrical: *electrical
+    buttons:
+      - {<<: *p1_up,    gpio: 10}
+      - {<<: *p1_left,  gpio: 4}
+      - {<<: *p1_down,  gpio: 7}
+      - *p1_right
+      - {<<: *p1_x,     gpio: 21, wake_capable: false}
+      - {<<: *p1_o,     gpio: 20, wake_capable: false}
+    behavior: *legacy_behavior

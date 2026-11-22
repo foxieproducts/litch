@@ -1,0 +1,15 @@
+# Preserve exact licensed SDK evidence; the hardening test pins these bytes.
+tools/pio/tests/fixtures/nimble_237/ble_gap.c -whitespace
+
+# Preserve carried license text in the Flutter notice supplement.
+app/assets/licenses/native_runtime_notices.txt -text -whitespace
+
+# Preserve the exact reviewed first-party scope and license texts.
+/LICENSE -text
+/LICENSE-HARDWARE -text
+/LICENSE-DOCUMENTATION -text
+
+# Preserve imported manufacturing exports byte-for-byte; use their design tools for diffs.
+pcb/*.pdf binary
+manufacturing_models/**/*.dxf binary
+manufacturing_models/**/*.stl binary

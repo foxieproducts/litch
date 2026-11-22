@@ -1,0 +1,161 @@
+schema_version: 1
+default_variant: esp32s3_v3_3
+
+variants:
+  esp32s3:
+    runtime_revision: v2
+    total_led_count: 224
+    board_led_count: 192
+    edge_led_count: 32
+    logical_square_mapping:
+      square_index_basis: 0=a8_to_63=h1
+      leds_per_square: 3
+      edge_start_index: 192
+      led_index_formula: led_index = square_index * 3 + slot_offset
+    square_led_roles:
+      - {slot_name: square0, slot_offset: 0, purpose: first perimeter slot}
+      - {slot_name: piece, slot_offset: 1, purpose: center or piece emphasis slot}
+      - {slot_name: square2, slot_offset: 2, purpose: opposite perimeter slot}
+    physical_index_mapping:
+      board_transport:
+        pixel_type: sk6805side_frgbw
+        color_order: GRBW
+        board_strip: {signal: board_leds, controller_hint: NeoEsp32Rmt0Sk6812Method}
+        edge_strip: {signal: edge_leds, controller_hint: NeoEsp32Rmt1Sk6812Method}
+      board_rotate_formula: rotated_square = 63 - square_index; square0 <-> square2; piece unchanged
+      edge_rotate_formula: rotated_edge = (edge_index + 16) mod 32
+      edge_logical_ranges:
+        north_home: {range: 0-7, order: left_to_right_from_p2_perspective}
+        east: {range: 8-15, order: top_to_bottom_canonical}
+        south_home: {range: 16-23, order: left_to_right_from_p1_perspective}
+        west: {range: 24-31, order: bottom_to_top_canonical}
+    unknowns:
+      - Exact physical PCB entry point and winding direction of the edge ring are only indirectly recoverable from current render semantics.
+
+  esp32s3_v3:
+    runtime_revision: v3
+    total_physical_led_count: 288
+    semantic_led_count: 224
+    board_led_count: 256
+    edge_led_count: 32
+    logical_square_mapping: &four_led_squares
+      square_index_basis: 0=a8_to_63=h1
+      board_frame_slots_per_square: 4
+      legacy_semantic_leds_per_square: 3
+      physical_leds_per_square: 4
+      physical_led_index_formula: led_index = square_index * 4 + physical_slot_offset
+    square_led_roles: &legacy_four_led_square_roles
+      - {semantic_slot: square0, physical_slots: [left], physical_offsets: [0], purpose: outward square/background}
+      - {semantic_slot: piece, physical_slots: [top, bottom], physical_offsets: [1, 3], purpose: inward piece illumination}
+      - {semantic_slot: square2, physical_slots: [right], physical_offsets: [2], purpose: outward square/background}
+    physical_index_mapping:
+      board_transport:
+        pixel_type: sk6805side_frgbw
+        color_order: GRBW
+        board_strip: {signal: board_leds, gpio: 47, count: 256, first_designator: LED1, last_designator: LED256}
+        edge_strip: {signal: status_leds, gpio: 33, count: 32, first_designator: LED257, last_designator: LED288}
+      square_order: row_major_from_top_left_in_pcb_view
+      square_physical_order: [left, top, right, bottom]
+      board_rotate_formula: rotated_square = 63 - square_index; left <-> right; top <-> bottom
+      edge_rotate_formula: rotated_edge = (edge_index + 16) mod 32
+      edge_logical_ranges:
+        north: {range: 0-7, designators: LED257-LED264, order: left_to_right}
+        east: {range: 8-15, designators: LED265-LED272, order: top_to_bottom}
+        south: {range: 16-23, designators: LED273-LED280, order: right_to_left}
+        west: {range: 24-31, designators: LED281-LED288, order: bottom_to_top}
+    output_contract:
+      - Expand semantic roles to physical targets before current estimation and limiting.
+      - Walking and path animations use outward square LEDs at restrained intensity.
+
+  esp32s3_v3_3:
+    runtime_revision: v3_3
+    pcb_revision: "3.31"
+    total_physical_led_count: 300
+    board_led_count: 256
+    edge_led_count: 32
+    control_led_count: 12
+    logical_square_mapping: *four_led_squares
+    square_led_roles: *legacy_four_led_square_roles
+    physical_index_mapping:
+      board_transport:
+        pixel_type: sk6812side_a
+        color_order: GRB
+        reset_low_us: 300
+        output_scale_256: 128
+        board_strip: {signal: board_leds, gpio: 47, count: 256, first_designator: LED1, last_designator: LED256}
+        edge_strip: {signal: edge_leds, gpio: 33, count: 44, first_designator: LED257, last_designator: LED300}
+      square_order: row_major_from_top_left_in_pcb_view
+      square_physical_order: [left, top, right, bottom]
+      board_rotate_formula: rotated_square = 63 - square_index; left <-> right; top <-> bottom
+      edge_rotate_formula: rotated_edge = (edge_index + 16) mod 32
+      # When rotation is requested, rotate the perimeter before mapping it to physical chain indices.
+      status_chain:
+        - {perimeter: [0, 3], physical: [0, 3]}
+        - {bank: p2, physical: [4, 9], roles: [o, up, right, down, left, x]}
+        - {perimeter: [4, 19], physical: [10, 25]}
+        - {bank: p1, physical: [26, 31], roles: [o, up, right, down, left, x]}
+        - {perimeter: [20, 31], physical: [32, 43]}
+
+  esp32c3:
+    total_led_count: 192
+    board_led_count: 192
+    edge_led_count: 0
+    logical_square_mapping:
+      square_index_basis: 0=a8_to_63=h1
+      leds_per_square: 3
+      edge_start_index: 192
+      led_index_formula: led_index = square_index * 3 + slot_offset
+    square_led_roles:
+      - {slot_name: square0, slot_offset: 0, purpose: first perimeter slot}
+      - {slot_name: piece, slot_offset: 1, purpose: center or piece emphasis slot}
+      - {slot_name: square2, slot_offset: 2, purpose: opposite perimeter slot}
+    physical_index_mapping:
+      board_transport:
+        pixel_type: ws2812x_rgb
+        color_order: GRB
+        shared_strip: {signal: board_leds, controller_hint: NeoWs2812xMethod}
+      board_rotate_formula: rotated_square = 63 - square_index; square0 <-> square2; piece unchanged
+      edge_rotate_formula: rotated_edge = (edge_index + 16) mod 32
+      virtual_edge_count: 32
+      virtual_edge_mapping:
+        "0": {square_index: 7, slot: square0}
+        "1": {square_index: 6, slot: square0}
+        "2": {square_index: 5, slot: square0}
+        "3": {square_index: 4, slot: square0}
+        "4": {square_index: 3, slot: square0}
+        "5": {square_index: 2, slot: square0}
+        "6": {square_index: 1, slot: square0}
+        "7": {square_index: 0, slot: square0}
+        "8": {square_index: 7, slot: square2}
+        "9": {square_index: 15, slot: square2}
+        "10": {square_index: 23, slot: square2}
+        "11": {square_index: 31, slot: square2}
+        "12": {square_index: 39, slot: square2}
+        "13": {square_index: 47, slot: square2}
+        "14": {square_index: 55, slot: square2}
+        "15": {square_index: 63, slot: square2}
+        "16": {square_index: 56, slot: square0}
+        "17": {square_index: 57, slot: square0}
+        "18": {square_index: 58, slot: square0}
+        "19": {square_index: 59, slot: square0}
+        "20": {square_index: 60, slot: square0}
+        "21": {square_index: 61, slot: square0}
+        "22": {square_index: 62, slot: square0}
+        "23": {square_index: 63, slot: square0}
+        "24": {square_index: 56, slot: square2}
+        "25": {square_index: 48, slot: square2}
+        "26": {square_index: 40, slot: square2}
+        "27": {square_index: 32, slot: square2}
+        "28": {square_index: 24, slot: square2}
+        "29": {square_index: 16, slot: square2}
+        "30": {square_index: 8, slot: square2}
+        "31": {square_index: 0, slot: square2}
+      virtual_edge_notes:
+        - Blend alpha is capped at 160 and never fully overrides square semantics.
+        - All 32 semantic positions use distinct corner-facing square LED slots.
+        - Gameplay perimeter rotation follows the control-bank swap. Menus and the active Sleep countdown follow BOARD_ROTATE.
+      physical_clear_behavior:
+        physical_clear_pixel_count: 224
+        note: Current renderer can clear 32 appended shared-chain pixels even though the logical edge count is zero.
+    unknowns:
+      - Exact population of shared-chain appended pixels on legacy C3 hardware is not formally documented.

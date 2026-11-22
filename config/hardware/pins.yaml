@@ -1,0 +1,427 @@
+schema_version: 1
+default_variant: esp32s3
+confidence_levels: [confirmed, inferred, conflicting, unknown]
+
+variants:
+  esp32s3:
+    board_profile: litch_esp32s3
+    pin_table_revision: v2
+    launch_revision: v3_3
+    runtime_revision_detection:
+      strap_gpios: [35, 36, 37]
+      input_mode: input_pullup
+      profiles:
+        v2: {gpio35: high, gpio36: high, gpio37: high, raw_version: 0, revision_id: 2}
+        v3: {gpio35: low, gpio36: high, gpio37: high, raw_version: 1, revision_id: 3}
+        v3_3: {gpio35: low, gpio36: low, gpio37: high, raw_version: 3, revision_id: 4}
+      unknown_behavior: Preserve the raw Unknown result and resolve the complete V2 profile.
+    runtime_revision_overrides:
+      v3:
+        5v_en: 11
+        p2_controls: {up: 14, left: 17, down: 15, right: 13, x: 12, o: 18}
+        expander_interrupts: [34, 38, 48, 39]
+        accelerometer_int1: 21
+        accelerometer_int2: not_connected
+        deep_sleep_wake: &v3_ext1 [p1_dpad_up, p1_dpad_left, p1_dpad_down, p1_dpad_right, p1o, p2_dpad_up, p2_dpad_left, p2_dpad_down, p2_dpad_right, p2x, p2o]
+        optional_motion_wake: accelerometer_int1
+      v3_3:
+        pcb_revision: "3.31"
+        5v_en: 11
+        p2_controls: {up: 15, left: 13, down: 14, right: 17, x: 12, o: 18}
+        expander_interrupts: [34, 38, 48, 39]
+        accelerometer_int1: 21
+        accelerometer_int2: not_connected
+        deep_sleep_wake: *v3_ext1
+        optional_motion_wake: accelerometer_int1
+    # Historical center contacts are unused by firmware. The launch PCB has six switches per bank.
+    unused_center_contacts: {v2: {p1: 8, p2: 18}, v3: {p1: 8, p2: 16}}
+    pins:
+      - signal_name: board_leds
+        gpio: 47
+        direction: output
+        active_level: high_data
+        pull: none
+        notes: Board LED strip data output. Hold low during 5V rail sequencing and sleep prep.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/power_rail.cpp]
+        confidence: confirmed
+      - signal_name: edge_leds
+        gpio: 33
+        direction: output
+        active_level: high_data
+        pull: none
+        notes: Edge LED strip data output. Hold low during 5V rail sequencing and sleep prep.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/power_rail.cpp]
+        confidence: confirmed
+      - signal_name: 5v_en
+        gpio: 13
+        direction: output
+        active_level: high
+        pull: none
+        notes: Enables the switched 5V rail. V3.31 powers its Hall sensors separately from +3.3V.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/power_rail.cpp]
+        confidence: confirmed
+      - signal_name: p1_dpad_up
+        gpio: 7
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Wake-capable P1 d-pad input.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p1_dpad_left
+        gpio: 5
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Wake-capable P1 d-pad input.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p1_dpad_down
+        gpio: 6
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Holding P1 Down on cold power-on opens the reset prompt for this bank.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: p1_dpad_right
+        gpio: 9
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Wake-capable P1 d-pad input.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p1x
+        gpio: 0
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: P1 face button on GPIO0. Wakes on release through the ULP. Holding it across cold power-on selects the ROM downloader.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p1o
+        gpio: 10
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: At the cold-reset prompt, release Down, then hold X and O together on this bank for two seconds to confirm.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: p2_dpad_up
+        gpio: 17
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Wake-capable P2 d-pad input.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p2_dpad_left
+        gpio: 15
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Wake-capable P2 d-pad input.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p2_dpad_down
+        gpio: 16
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Holding P2 Down on cold power-on opens the reset prompt for this bank.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: p2_dpad_right
+        gpio: 21
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Wake-capable P2 d-pad input.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p2x
+        gpio: 14
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: P2 face button.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p2o
+        gpio: 26
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: At the cold-reset prompt, release Down, then hold X and O together on this bank for two seconds to confirm.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/gpio_user_input.cpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: i2c_sda
+        gpio: 3
+        direction: bidirectional_open_drain
+        active_level: "n/a"
+        pull: external_or_board_level
+        notes: Explicit S3 I2C SDA pin. The configured clock defaults to 100 kHz.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/firmware_app_boot_services.cpp, include/hardware/i2c_clock_settings.hpp]
+        confidence: confirmed
+      - signal_name: i2c_scl
+        gpio: 4
+        direction: bidirectional_open_drain
+        active_level: "n/a"
+        pull: external_or_board_level
+        notes: Explicit S3 I2C SCL pin. The configured clock defaults to 100 kHz.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/firmware_app_boot_services.cpp, include/hardware/i2c_clock_settings.hpp]
+        confidence: confirmed
+      - signal_name: pca9555_int0
+        gpio: 34
+        direction: input
+        active_level: low_falling
+        pull: input_pullup
+        notes: Interrupt line for the 0x20 expander.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: pca9555_int1
+        gpio: 12
+        direction: input
+        active_level: low_falling
+        pull: input_pullup
+        notes: Interrupt line for the 0x21 expander.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: pca9555_int2
+        gpio: 48
+        direction: input
+        active_level: low_falling
+        pull: input_pullup
+        notes: Interrupt line for the 0x22 expander.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: pca9555_int3
+        gpio: 11
+        direction: input
+        active_level: low_falling
+        pull: input_pullup
+        notes: Interrupt line for the 0x23 expander.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: usb_cc1
+        gpio: 1
+        direction: analog_input
+        active_level: thresholded_adc
+        pull: none
+        notes: USB-C CC1 analog source-current sense.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/usb_cc_sense.cpp]
+        confidence: confirmed
+      - signal_name: usb_cc2
+        gpio: 2
+        direction: analog_input
+        active_level: thresholded_adc
+        pull: none
+        notes: USB-C CC2 analog source-current sense.
+        source_files: [include/hardware/pins_esp32s3.hpp, src/usb_cc_sense.cpp]
+        confidence: confirmed
+    wake_groups:
+      deep_sleep_wake: [p1_dpad_up, p1_dpad_left, p1_dpad_down, p1_dpad_right, p2_dpad_up, p2_dpad_left, p2_dpad_down, p2_dpad_right]
+      ulp_wake_on_release: [p1x]
+      notes: S3 uses EXT1 for the revision-specific deep_sleep_wake list and the ULP for GPIO0.
+
+  esp32c3:
+    board_profile: litch_esp32c3
+    pins:
+      - signal_name: board_leds
+        gpio: 2
+        direction: output
+        active_level: high_data
+        pull: none
+        notes: Shared LED-chain data for the logical 192-board-LED surface.
+        source_files: [include/hardware/pins_esp32c3.hpp, include/firmware/firmware_internal.hpp]
+        confidence: confirmed
+      - signal_name: edge_leds
+        gpio: 2
+        direction: output_alias
+        active_level: high_data
+        pull: none
+        notes: Logical edge count is zero, but the current renderer can still clear appended pixels on the same chain.
+        source_files: [include/hardware/pins_esp32c3.hpp, include/firmware/firmware_internal.hpp, src/neopixel_led_renderer.cpp]
+        confidence: inferred
+      - signal_name: p1_dpad_up
+        gpio: 10
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: Wake-capable P1 d-pad input.
+        source_files: [include/hardware/pins_esp32c3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p1_dpad_left
+        gpio: 4
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: P1 left direction.
+        source_files: [include/hardware/pins_esp32c3.hpp, docs/spec/hardware_platform.md]
+        confidence: confirmed
+      - signal_name: p1_dpad_down
+        gpio: 7
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: P1 down direction.
+        source_files: [include/hardware/pins_esp32c3.hpp, src/gpio_user_input.cpp, docs/spec/hardware_platform.md]
+        confidence: confirmed
+      - signal_name: p1_dpad_right
+        gpio: 9
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: P1 right direction.
+        source_files: [include/hardware/pins_esp32c3.hpp, docs/spec/hardware_platform.md]
+        confidence: confirmed
+      - signal_name: p1x
+        gpio: 21
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: P1 face button.
+        source_files: [include/hardware/pins_esp32c3.hpp, src/gpio_user_input.cpp]
+        confidence: confirmed
+      - signal_name: p1o
+        gpio: 20
+        direction: input
+        active_level: low
+        pull: input_pullup
+        notes: At the cold-reset prompt, release Down, then hold X and O together on this bank for two seconds to confirm.
+        source_files: [include/hardware/pins_esp32c3.hpp, src/gpio_user_input.cpp, src/firmware_app_boot.cpp]
+        confidence: confirmed
+      - signal_name: i2c_sda
+        gpio: 5
+        direction: bidirectional_open_drain
+        active_level: "n/a"
+        pull: external_or_board_level
+        notes: Wire.begin() uses the SDA GPIO from the board's Arduino variant.
+        source_files: [boards/litch_esp32c3.json, variants/litch_esp32c3/pins_arduino.h, src/firmware_app_boot_services.cpp]
+        confidence: confirmed
+      - signal_name: i2c_scl
+        gpio: 6
+        direction: bidirectional_open_drain
+        active_level: "n/a"
+        pull: external_or_board_level
+        notes: Wire.begin() uses the SCL GPIO from the board's Arduino variant.
+        source_files: [boards/litch_esp32c3.json, variants/litch_esp32c3/pins_arduino.h, src/firmware_app_boot_services.cpp]
+        confidence: confirmed
+    absent_or_placeholder_signals:
+      - signal_name: p2_dpad_up
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_P2_CONTROLS=false. Placeholder value 0 in the legacy header is not a real assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: p2_dpad_left
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_P2_CONTROLS=false. Placeholder value 0 in the legacy header is not a real assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: p2_dpad_press
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_P2_CONTROLS=false. Placeholder value 0 in the legacy header is not a real assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: p2_dpad_down
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_P2_CONTROLS=false. Placeholder value 0 in the legacy header is not a real assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: p2_dpad_right
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_P2_CONTROLS=false. Placeholder value 0 in the legacy header is not a real assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: p2x
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_P2_CONTROLS=false. Placeholder value 0 in the legacy header is not a real assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: p2o
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_P2_CONTROLS=false. Placeholder value 0 in the legacy header is not a real assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: pca9555_int0
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_EXPANDER_INTERRUPTS=false. Placeholder value 0 is not a real GPIO assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: pca9555_int1
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_EXPANDER_INTERRUPTS=false. Placeholder value 0 is not a real GPIO assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: pca9555_int2
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_EXPANDER_INTERRUPTS=false. Placeholder value 0 is not a real GPIO assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: pca9555_int3
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: "HW_HAS_EXPANDER_INTERRUPTS=false. Placeholder value 0 is not a real GPIO assignment."
+        source_files: [include/hardware/pins_esp32c3.hpp]
+        confidence: confirmed
+      - signal_name: usb_cc1
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: No live USB-C CC sense path exists on the current C3 firmware route.
+        source_files: [include/hardware/pins_esp32c3.hpp, src/usb_cc_sense.cpp]
+        confidence: confirmed
+      - signal_name: usb_cc2
+        gpio: null
+        direction: not_present
+        active_level: "n/a"
+        pull: "n/a"
+        notes: No live USB-C CC sense path exists on the current C3 firmware route.
+        source_files: [include/hardware/pins_esp32c3.hpp, src/usb_cc_sense.cpp]
+        confidence: confirmed
+      - signal_name: 5v_en
+        gpio: null
+        direction: not_present
+        active_level: high
+        pull: none
+        notes: The current C3 contract omits 5V rail control. `PIN_5V_EN=13` in the legacy header is stale residue.
+        source_files: [include/hardware/pins_esp32c3.hpp, src/power_rail.cpp]
+        confidence: conflicting
+    wake_groups:
+      any_wake: [p1_dpad_up, p1_dpad_left, p1_dpad_down, p1_dpad_right]
+      deep_sleep_wake: [p1_dpad_up, p1_dpad_left, p1_dpad_down, p1_dpad_right]
+      notes: Only the P1 d-pad is used for wake on C3.

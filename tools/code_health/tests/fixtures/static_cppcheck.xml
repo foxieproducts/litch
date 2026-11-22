@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<results version="2">
+  <cppcheck version="2.14"/>
+  <errors>
+    <error id="knownConditionTrueFalse" severity="style" msg="Condition is always true">
+      <location file="REPO/src/example.cpp" line="12" column="7"/>
+    </error>
+  </errors>
+</results>

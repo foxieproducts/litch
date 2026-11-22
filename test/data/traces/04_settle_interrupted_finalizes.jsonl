@@ -1,0 +1,14 @@
+{"type":"header","ver":1,"session":"settle_interrupted_finalizes"}
+{"type":"settings","t_ms":0,"json":{"BOARD_ROTATE":0}}
+{"type":"sensor","t_ms":0,"square":1,"occ":1}
+{"type":"sensor","t_ms":0,"square":9,"occ":0}
+{"type":"tick","t_ms":0}
+{"type":"sensor","t_ms":40,"square":1,"occ":0}
+{"type":"tick","t_ms":40}
+{"type":"sensor","t_ms":80,"square":9,"occ":1}
+{"type":"tick","t_ms":80}
+{"type":"tick","t_ms":200}
+{"type":"sensor","t_ms":240,"square":30,"occ":1}
+{"type":"tick","t_ms":240}
+{"type":"tick","t_ms":1200}
+{"type":"end","t_ms":1300}

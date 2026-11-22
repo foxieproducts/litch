@@ -1,0 +1,110 @@
+{
+  "producer": "test_hint_capture_virtual_litch_journey; exact HomeStateLine bytes; seq=1 for fresh observation publisher; app replay normalizes sequence only",
+  "checkpoints": [
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "CPU-reference",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"cpu\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4010001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"0x\",\"c\":[\"e2\",\"e4\",\"e4\"]}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "Hint-visible",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4010001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"3he2e4\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "Hint-replayed",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4010001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"3he2e4\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "other-piece-held",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"lift\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"0010001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"1lg120A0000000000000\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "other-pickup-returned",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4010001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"3he2e4\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "illegal-f4-correction",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"corr\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4000003000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"1x\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "illegal-square-cue",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"corr\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4000003000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"1x\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "illegal-piece-relifted",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"lift\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4000001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"1le210EF101000000000e4\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "illegal-placement-restored",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4010001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"3he2e4\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "mover-held",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"lift\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4000001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"1le210EF101000000000e4\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "victim-removed",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"lift\",\"fen\":\"4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1\",\"occ\":\"4000000000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"1x\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/ordinary-white",
+      "stage": "complete-after-expiry",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/8/8/4R3/8/8/6K1 b - - 0 1\",\"occ\":\"4000001000000010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"b\",0,0,0,\"n\"],\"as\":\"2o\",\"m\":\"e2e4----w\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "CPU-reference",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"cpu\",\"fen\":\"4k3/8/6b1/8/3Pp3/8/8/4K3 b - d3 0 1\",\"occ\":\"1000001800400010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"b\",0,0,0,\"n\"],\"as\":\"0x\",\"c\":[\"e4\",\"d3\",\"d4\"]}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "Hint-visible",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/6b1/8/3Pp3/8/8/4K3 b - d3 0 1\",\"occ\":\"1000001800400010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"b\",0,0,0,\"n\"],\"as\":\"3he4d3\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "Hint-replayed",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/6b1/8/3Pp3/8/8/4K3 b - d3 0 1\",\"occ\":\"1000001800400010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"b\",0,0,0,\"n\"],\"as\":\"3he4d3\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "other-piece-held",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"lift\",\"fen\":\"4k3/8/6b1/8/3Pp3/8/8/4K3 b - d3 0 1\",\"occ\":\"1000001800400000\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"b\",0,0,0,\"n\"],\"as\":\"1le80000000000003828\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "other-pickup-returned",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/6b1/8/3Pp3/8/8/4K3 b - d3 0 1\",\"occ\":\"1000001800400010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"b\",0,0,0,\"n\"],\"as\":\"3he4d3\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "mover-held",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"lift\",\"fen\":\"4k3/8/6b1/8/3Pp3/8/8/4K3 b - d3 0 1\",\"occ\":\"1000000800400010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"b\",0,0,0,\"n\"],\"as\":\"1le40000180000000000d3\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "en-passant-pawn-pending",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"settle\",\"fen\":\"4k3/8/6b1/8/3Pp3/8/8/4K3 b - d3 0 1\",\"occ\":\"1000080800400010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"b\",0,0,0,\"n\"],\"as\":\"1x\",\"c\":[\"e4\",\"d3\",\"d4\"]}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "victim-removed",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/6b1/8/8/3p4/8/4K3 w - - 0 2\",\"occ\":\"1000080000400010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"2o\",\"m\":\"----e4d3b\"}"
+    },
+    {
+      "run": "HintCaptureMatchesCpu/en-passant-black-swapped",
+      "stage": "complete-after-expiry",
+      "home": "{\"event\":\"home_state\",\"v\":1,\"seq\":1,\"a\":\"idle\",\"fen\":\"4k3/8/6b1/8/8/3p4/8/4K3 w - - 0 2\",\"occ\":\"1000080000400010\",\"g\":\"c\",\"duck\":\"--\",\"out\":\"n\",\"win\":\"n\",\"rot\":0,\"white\":1,\"pm\":0,\"up\":0,\"co\":0,\"cl\":[0,0,0,\"w\",0,0,0,\"n\"],\"as\":\"2o\",\"m\":\"----e4d3b\"}"
+    }
+  ]
+}

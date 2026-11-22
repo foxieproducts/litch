@@ -1,0 +1,111 @@
+{
+  "gcc_version": "8.4.0",
+  "host_scope": "The recorded link map and original archive observations are from darwin_arm64. The linux_x86_64 variant binds the same archive paths to the exact checksum-verified Linux distribution; it does not claim a Linux build or host-independent archive bytes. Admit only the exact installed package name, version and a listed system, then verify that variant archive hashes.",
+  "link_map_sha256": "39dfdb6a63f3e7a281a4bc9ea40dd05d5be704431952b2db33724e4eddca2bc2",
+  "newlib_version": "3.3.0",
+  "notice_scope": "Runtime libraries actually selected by the S3 link, separate from the host compiler programs. GCC Runtime Library Exception 3.1 applies under its eligible-compilation conditions; no blanket GPL status is inferred from package.json.",
+  "package": "espressif/toolchain-xtensa-esp32s3",
+  "platform_selection_metadata": "tools/release/license_evidence/platformio-platform/platformio__espressif32-6.12.0/platform.json",
+  "selection": "Archives contributing members before the linker map Discarded input sections marker. Legal collection also covers the full selected archive containers for the relink deliverable; it does not assert coverage for all unselected SDK components or other hardware targets.",
+  "selection_candidate_note": "Selected archive closure was rechecked after the approved source-prefix-map rebuild; precompiled package archive bytes were unchanged.",
+  "source_candidate": "1d313a91cd27eb2e3e7516ab98c2fbc5598f61ee",
+  "source_references": {
+    "gcc": "https://github.com/espressif/gcc/tree/esp-2021r2-patch4",
+    "newlib": "https://github.com/espressif/newlib-esp32/tree/esp-2021r2-patch5"
+  },
+  "target": "litch-esp32s3",
+  "variants": {
+    "darwin_arm64": {
+      "archives": [
+        {
+          "bytes": 10897852,
+          "license_paths": [
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/newlib/COPYING.NEWLIB"
+          ],
+          "name": "libc.a",
+          "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libc.a",
+          "sha256": "b8b1e4a6c23f42c32bbf48dbc50b35cbd8e7d62afdcbb497096280b2c6826d58"
+        },
+        {
+          "bytes": 4642848,
+          "license_paths": [
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/newlib/COPYING.NEWLIB"
+          ],
+          "name": "libm.a",
+          "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libm.a",
+          "sha256": "64ced61f0cb9cd94f60f6a2bf307284e6e6a1de0dd99a4e18c579dd645dba178"
+        },
+        {
+          "bytes": 20592856,
+          "license_paths": [
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING3",
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING.RUNTIME",
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/RUNTIME_DECLARATION.txt"
+          ],
+          "name": "libstdc++.a",
+          "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libstdc++.a",
+          "sha256": "46cbd877255439cee2b048b42b1fda0612e54180d88ede86f489e61a5cec103c"
+        },
+        {
+          "bytes": 1172470,
+          "license_paths": [
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING3",
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING.RUNTIME",
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/RUNTIME_DECLARATION.txt"
+          ],
+          "name": "libgcc.a",
+          "package_path": "lib/gcc/xtensa-esp32s3-elf/8.4.0/no-rtti/libgcc.a",
+          "sha256": "c07c00fdc56ce449f8051f3bbaa4e5b870e7dea7bf433b67609e0d06edaa6150"
+        }
+      ],
+      "package_metadata": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/package.json"
+    },
+    "linux_x86_64": {
+      "archives": [
+        {
+          "bytes": 10718048,
+          "license_paths": [
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/newlib/COPYING.NEWLIB"
+          ],
+          "name": "libc.a",
+          "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libc.a",
+          "sha256": "1841b5a27179228f72d2010844869c1df6a29ce7ef6d86321230f9fc7cfe0146"
+        },
+        {
+          "bytes": 4538484,
+          "license_paths": [
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/newlib/COPYING.NEWLIB"
+          ],
+          "name": "libm.a",
+          "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libm.a",
+          "sha256": "785c2fb14817d1504c4e3aaf8caa9c6745bde35f41958590191d3bb2d0866e47"
+        },
+        {
+          "bytes": 20521608,
+          "license_paths": [
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING3",
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING.RUNTIME",
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/RUNTIME_DECLARATION.txt"
+          ],
+          "name": "libstdc++.a",
+          "package_path": "xtensa-esp32s3-elf/lib/no-rtti/libstdc++.a",
+          "sha256": "8851afb05a57ab0941cbca86f4330e26944e2b35f76176d2a63b355264cac4d2"
+        },
+        {
+          "bytes": 1144194,
+          "license_paths": [
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING3",
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/COPYING.RUNTIME",
+            "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/gcc/RUNTIME_DECLARATION.txt"
+          ],
+          "name": "libgcc.a",
+          "package_path": "lib/gcc/xtensa-esp32s3-elf/8.4.0/no-rtti/libgcc.a",
+          "sha256": "6006c286cf0554033bab453f5792ab3ed13c282d921d94daca59627f887244ea"
+        }
+      ],
+      "distribution_provenance": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/linux_x86_64/distribution.json",
+      "package_metadata": "tools/release/license_evidence/platformio-runtime/espressif__toolchain-xtensa-esp32s3-8.4.0+2021r2-patch5/linux_x86_64/package.json"
+    }
+  },
+  "version": "8.4.0+2021r2-patch5"
+}

@@ -1,0 +1,53 @@
+{
+  "partial": {
+    "runtime_health": {
+      "revision": 1,
+      "state": 2
+    }
+  },
+  "malformed": {
+    "runtime_health": "revision=1 state=2 causes=4"
+  },
+  "bool_revision": {
+    "runtime_health": {
+      "revision": true,
+      "state": 2,
+      "causes": 4
+    }
+  },
+  "bool_state": {
+    "runtime_health": {
+      "revision": 1,
+      "state": false,
+      "causes": 4
+    }
+  },
+  "out_of_range_revision": {
+    "runtime_health": {
+      "revision": 65536,
+      "state": 2,
+      "causes": 4
+    }
+  },
+  "out_of_range_state": {
+    "runtime_health": {
+      "revision": 1,
+      "state": 256,
+      "causes": 4
+    }
+  },
+  "out_of_range_causes": {
+    "runtime_health": {
+      "revision": 1,
+      "state": 2,
+      "causes": 65536
+    }
+  },
+  "unknown_values": {
+    "runtime_health": {
+      "revision": 65535,
+      "state": 255,
+      "causes": 65535
+    }
+  }
+}

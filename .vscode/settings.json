@@ -1,0 +1,21 @@
+{
+    "explorer.excludeGitIgnore": false,
+    "files.exclude": {
+        "**/build": false,
+        "**/build/**": false,
+        "**/build/fw_release/**": false
+    },
+    "search.exclude": {
+        "**/.pio/**": true,
+        "**/.venv/**": true,
+        "**/build/**": true,
+        "**/logs/**": true
+    },
+    "files.watcherExclude": {
+        "**/.pio/**": true,
+        "**/.venv/**": true,
+        "**/build/**": true,
+        "**/build/fw_release/**": false,
+        "**/logs/**": true
+    }
+}

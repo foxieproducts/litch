@@ -3264,10 +3264,27 @@ void RunLegalGuideHintLatchJourney() {
           NAME, "returning the recovered piece clears its legal destinations");
     Check(session.ObserveHallMask(LIFTED) == VIRTUAL_LITCH_OK && legalRails() == DARK_RAILS &&
               session.ObserveHallMask(INITIAL_OCCUPANCY) == VIRTUAL_LITCH_OK && legalRails() == DARK_RAILS &&
-              session.Advance(400U) == VIRTUAL_LITCH_OK && legalRails() == DARK_RAILS &&
+              session.State().interaction_phase == static_cast<uint8_t>(runtime::ChessInteractionPhase::Idle) &&
+              session.State().valid_destination_mask == 0ULL && !session.HintDisplayRequested() &&
+              session.Advance(400U) == VIRTUAL_LITCH_OK &&
+              session.State().interaction_phase == static_cast<uint8_t>(runtime::ChessInteractionPhase::Idle) &&
+              session.State().valid_destination_mask == 0ULL && !session.HintDisplayRequested() &&
+              session.State().expected_occupied_mask == INITIAL_OCCUPANCY &&
+              session.State().side_to_move_black == 0U && session.State().pending_action_token == 0U &&
+              std::strcmp(session.HomeStateSnapshot().fen, INITIAL_FEN) == 0 &&
               session.UndoHistoryMoveCount() == 0U,
-          NAME, "returning e2 during a fresh reveal clears both destinations through expiry");
-    checkpoint("returned", "lift-a-piece");
+          NAME, "returning e2 clears legal guidance immediately and keeps the unchanged game idle while its return effect finishes");
+    checkpoint("returned-ripple-finishing", "lift-a-piece");
+    // The default return Ripple lasts 560 ms and can cross an old destination.
+    Check(session.Advance(160U) == VIRTUAL_LITCH_OK && legalRails() == DARK_RAILS &&
+              session.State().interaction_phase == static_cast<uint8_t>(runtime::ChessInteractionPhase::Idle) &&
+              session.State().valid_destination_mask == 0ULL && !session.HintDisplayRequested() &&
+              session.State().expected_occupied_mask == INITIAL_OCCUPANCY &&
+              session.State().side_to_move_black == 0U && session.State().pending_action_token == 0U &&
+              std::strcmp(session.HomeStateSnapshot().fen, INITIAL_FEN) == 0 &&
+              session.UndoHistoryMoveCount() == 0U,
+          NAME, "the finite return Ripple retires at 560 ms without replaying legal guidance or a move");
+    checkpoint("returned-effect-expired", "lift-a-piece");
 
     Check(MutateSetting(session, 1404U, "MINIMAL_ANIMATIONS", "true") &&
               session.ObserveHallMask(LIFTED) == VIRTUAL_LITCH_OK &&

@@ -2475,8 +2475,8 @@ void CpuOffTargetAndPendingUndoJourney() {
               RawMove(s, occupancy, 51U, 35U) && s.UndoHistoryMoveCount() == 3U,
           run, "raw e2e4 b8c6 d2d4 establish the witnessed live position and three committed plies");
     const std::string beforeFen = s.HomeStateSnapshot().fen;
-    Check(beforeFen == "r1bqkbnr/pppppppp/2n5/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq d3 0 1",
-          run, "authoritative FEN matches the captured phone trace before CPU pickup");
+    Check(beforeFen == "r1bqkbnr/pppppppp/2n5/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq d3 0 2",
+          run, "authoritative FEN records the witnessed position and advances the fullmove after Black before CPU pickup");
     engine.Choose(11U, 27U); engine.finish = true;
     Check(Coach(s) && s.HomeStateSnapshot().coachingMask == 2U,
           run, "raw P2 O hold latches the same retained Coach setting seen beside CPU mode");
@@ -2524,7 +2524,7 @@ void CpuOffTargetAndPendingUndoJourney() {
           run, "raw X cancels the pending CPU plan while its pawn is still at D6");
     const std::string undoFen = s.HomeStateSnapshot().fen;
     Check(s.HomeStateSnapshot().undoPending && s.UndoHistoryMoveCount() == 2U &&
-              undoFen == "r1bqkbnr/pppppppp/2n5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1" &&
+              undoFen == "r1bqkbnr/pppppppp/2n5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2" &&
               s.State().physical_occupied_mask == occupancy,
           run, "pending-CPU Undo rewinds the previous White d2d4 first; uncommitted D6 has no history entry");
     Checkpoint(s, run, "pending-CPU-Undo-White-first", "return-white-d4-to-d2-then-correct-black-d6", "accepted", Bit(35U)|Bit(51U)|Bit(19U)|Bit(11U));
@@ -2593,7 +2593,7 @@ void HumanCoachAlternateQuietMoveJourney(const char* policy, uint32_t durationMs
         std::this_thread::yield(); (void)s.Advance(20U);
     }
     Check(s.UndoHistoryMoveCount() == 2U && s.State().side_to_move_black == 0U &&
-              std::string(s.HomeStateSnapshot().fen) == "rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1",
+              std::string(s.HomeStateSnapshot().fen) == "rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
           run, "D7D6 commits once and publishes the actual Black pawn with White to move");
     Check(!s.TryGetHintMoveSquares(from, to) && EmptyPieceTargets(s, 27U) && Energy(Square(s, 27U)) == 0U,
           run, "the previous D5 Hint is cleared rather than forcing or replaying its destination");

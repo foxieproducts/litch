@@ -3243,8 +3243,32 @@ void CheckRawThinkingControlJourney(Results& results, bool cpu, bool black, bool
     results.Check(session.Advance(200U) == VIRTUAL_LITCH_OK,
                   "raw control journey reaches the full thinking fade inside its current envelope");
     results.Check(ControlBankLit(session,physicalP2,true)&&(v3||ControlBankLit(session,!physicalP2,false)),"thinking uses same physical bank as raw mover button input");
-    results.Check((visibleWitness||session.PhysicalFrame().power_limited) && session.PhysicalFrame().applied_led_current_ma <= config.max_led_current_ma,
+    results.Check(session.PhysicalFrame().applied_led_current_ma <= config.max_led_current_ma,
                   "actual control pixels remain inside the existing configured current envelope");
+    if (!visibleWitness) {
+        // Sparse calibrated V3 output can already fit below 10 mA. Exercise
+        // active limiting with real additional board demand, without changing
+        // the cap or advancing this search/presentation timestamp.
+        const auto sparse = session.PhysicalFrame();
+        const uint32_t beforeLoadMs = session.State().now_ms;
+        results.Check(Set(session, 906U, "WHITE_SQUARES_ON", "true"),
+                      "current-limit witness adds ordinary board light through the production settings owner");
+        const auto loaded = session.PhysicalFrame();
+        results.Check(loaded.estimated_led_current_ma > config.max_led_current_ma &&
+                          loaded.power_limited &&
+                          loaded.applied_led_current_ma <= config.max_led_current_ma,
+                      "demand above the unchanged 10 mA cap engages limiting and keeps final mapped output within budget");
+        std::printf("[CONTROL_CURRENT_BOUND] run=%s sparse_ma=%u requested_ma=%u applied_ma=%u cap_ma=%u limited=%u\n",
+                    run, sparse.applied_led_current_ma, loaded.estimated_led_current_ma,
+                    loaded.applied_led_current_ma, config.max_led_current_ma, loaded.power_limited);
+        results.Check(Set(session, 907U, "WHITE_SQUARES_ON", "false"),
+                      "current-limit witness restores the original board-light setting");
+        bool restored = session.State().now_ms == beforeLoadMs && worker.IsActive() && engine.starts == 1U;
+        for (uint16_t index = 0U; index < sparse.led_count; ++index)
+            restored &= CueEqual(sparse.pixels[index], session.PhysicalFrame().pixels[index]);
+        results.Check(restored,
+                      "removing extra demand restores every prior mapped pixel at the same timestamp without restarting search");
+    }
     ControlCheckpoint(session,run,"pending-search","wait-for-move");
     if (cpu) {
         virtual_litch_action_request coaching{};
@@ -3756,11 +3780,28 @@ void CheckThinkingControlFadeJourney(Results& results, const bool clockwise) {
     };
     results.Check(onlyUp()&&session.Advance(75U)==VIRTUAL_LITCH_OK&&onlyUp(),
                   "a lost V3.3 release retains only the accepted Up acknowledgement through its finite fade");
+    const auto upAt75 = session.PhysicalFrame().pixels[upIndex].g;
     ControlCheckpoint(session,run,"lost-release-ack75ms","wait-for-bounded-recovery");
-    results.Check(session.Advance(75U)==VIRTUAL_LITCH_OK&&!ControlBankLit(session,true,true)&&worker.IsActive(),
-                  "at150ms the lost release cannot latch any V3.3 control light");
+    // Low user brightness can quantize adjacent fade samples to the same
+    // physical intensity code; require no increase here and a drop by halfway.
+    results.Check(session.Advance(75U)==VIRTUAL_LITCH_OK&&onlyUp()&&
+                      session.PhysicalFrame().pixels[upIndex].g <= upAt75,
+                  "at150ms only the palette Up acknowledgement remains without brightening or restarting");
+    const auto upAt150 = session.PhysicalFrame().pixels[upIndex].g;
+    results.Check(session.Advance(100U)==VIRTUAL_LITCH_OK&&onlyUp()&&
+                      session.PhysicalFrame().pixels[upIndex].g < upAt150,
+                  "at250ms the mapped Up acknowledgement has faded further without a release event");
+    // PaletteEdit owns a 500 ms fade; the generic action acknowledgement is
+    // 150 ms. The missing release must not extend or restart the palette cue.
+    results.Check(session.Advance(250U)==VIRTUAL_LITCH_OK&&ControlBankLit(session,true,false)&&
+                      worker.IsActive()&&session.HintDisplayRequested()&&engine.starts==1U,
+                  "at500ms the lost release leaves the V3.3 bank dark while the same requested search continues");
+    ControlCheckpoint(session,run,"lost-release-expired500ms","wait-for-current-position-Hint");
+    results.Check(session.Advance(200U)==VIRTUAL_LITCH_OK&&ControlBankLit(session,true,false)&&
+                      session.SettingsForPersistenceTest().ReadValue("P2_END_PIECE_WHEEL",0U)==85U,
+                  "a missing release cannot relight the expired acknowledgement or repeat the palette edit");
     results.Check(Set(session,883U,"HINT_THINKING_STYLE",clockwise?"\"player_clockwise\"":"\"foxie_sweep\"")&&
-                      session.Advance(750U)==VIRTUAL_LITCH_OK&&energy()>0U&&worker.IsActive(),
+                      session.Advance(200U)==VIRTUAL_LITCH_OK&&energy()>0U&&worker.IsActive()&&engine.starts==1U,
                   "the still-current thinking request resumes without restarting its engine or presentation lease");
     ControlCheckpoint(session,run,"lost-release-recovered900ms","consider-latest-Hint");
     (void)session.Advance(start+89999U-session.NowMs());

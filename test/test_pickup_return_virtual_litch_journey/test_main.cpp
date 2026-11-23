@@ -440,12 +440,22 @@ void RookCaptureAtomicJourney(const bool rotate) {
         Check(Observe(session, removed) && Observe(session, occupancy & ~extra) &&
                   session.Advance(2600U) == VIRTUAL_LITCH_OK &&
                   session.State().interaction_phase ==
-                      static_cast<uint8_t>(runtime::ChessInteractionPhase::Correction) &&
+                      static_cast<uint8_t>(runtime::ChessInteractionPhase::PieceLifted) &&
+                  session.State().selected_square == A2 &&
+                  session.State().valid_destination_mask ==
+                      ((UINT64_C(1) << A3) | (UINT64_C(1) << 32U)) &&
+                  (session.State().valid_destination_mask & victim) == 0ULL &&
+                  session.State().expected_occupied_mask == occupancy &&
+                  session.State().side_to_move_black == 0U &&
+                  session.State().pending_action_token == 0U &&
                   Fen(session) == position && session.UndoHistoryMoveCount() == 0U,
-              run, "production engine rejects an illegal A2-to-D5 capture and preserves the game");
-        Checkpoint(session, run, "illegal-capturer-rejected", "return-A2-piece");
-        Check(Observe(session, occupancy) && Idle(session), run,
-              "returning the illegal capturer recovers without a move");
+              run, "D5 return with A2 departure remains an ordinary A2 pickup with only A3/A4 legal and no capture committed");
+        Checkpoint(session, run, "victim-return-A2-held", "return-A2-piece-or-place-A3-A4");
+        Check(Observe(session, occupancy) && Idle(session) &&
+                  session.State().expected_occupied_mask == occupancy &&
+                  session.State().side_to_move_black == 0U &&
+                  Fen(session) == position && session.UndoHistoryMoveCount() == 0U,
+              run, "returning A2 cancels the ambiguous pickup and recovers without a move");
 
         Check(Observe(session, removed) && session.Advance(100U) == VIRTUAL_LITCH_OK &&
                   session.State().interaction_phase ==

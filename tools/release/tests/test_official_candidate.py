@@ -1290,8 +1290,25 @@ class WorkflowRecoveryTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "draft creation failure"):
                     first.prepare("prepare-notes")
                 shutil.rmtree(self.runner / "channel-notes")
-                github_promotion.Promotion().prepare("prepare-notes")
+                retry = github_promotion.Promotion()
+                list_releases = retry.releases
+                # GitHub accepted create/upload but briefly served the old list,
+                # then showed the draft before listing its uploaded context.
+                listings = iter(([], [], "without-context"))
+
+                def delayed_list():
+                    view = next(listings, None)
+                    if view == "without-context":
+                        return [dict(record, assets=[]) for record in list_releases()]
+                    return list_releases() if view is None else view
+
+                with patch.object(retry, "releases", side_effect=delayed_list), patch.object(
+                        github_promotion, "sleep") as wait:
+                    retry.prepare("prepare-notes")
+                self.assertEqual([call.args[0] for call in wait.call_args_list], [2, 4])
                 state = self.load()
+                writes = [call[1] for call in state["calls"] if call[0] == "release"]
+                self.assertEqual(writes, ["create", "create", "upload"])
                 release = state["releases"][self.env["DRAFT_TAG"]]
                 release["body"] = "Owner edits."
                 self.save(state)
@@ -1310,6 +1327,23 @@ class WorkflowRecoveryTests(unittest.TestCase):
                 self.assertEqual(self.load()["releases"][self.env["DRAFT_TAG"]]["body"], "Owner edits.")
         finally:
             os.chdir(previous)
+
+    def test_stale_release_readback_preserves_source_and_fails_on_timeout(self):
+        import github_promotion
+        shutil.copytree(self.f.output, self.runner / "firmware-candidate")
+        with patch.dict(os.environ, self.env):
+            job = github_promotion.Promotion()
+        draft = dict(tag_name=job.draft_tag, draft=True, target_commitish=job.source, assets=[])
+        with patch.object(job, "releases", return_value=[draft]), patch.object(github_promotion, "sleep") as wait:
+            with self.assertRaisesRegex(ValueError, "metadata is still stale"):
+                job.read_after_write(published=True)
+            self.assertEqual(wait.call_count, 5)
+        with patch.object(job, "releases", return_value=[dict(draft, target_commitish="foreign")]), patch.object(
+                github_promotion, "sleep") as wait:
+            with self.assertRaisesRegex(ValueError, "source/status"):
+                job.read_after_write(asset="notes-context.json")
+            wait.assert_not_called()
+        self.assertEqual(self.load()["calls"], [])
 
 
 if __name__ == "__main__":

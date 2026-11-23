@@ -335,7 +335,7 @@ class Promotion:
         return digest
 
     def releases(self) -> list:
-        pages = json.loads(gh("api", "--paginate", "--slurp",
+        pages = json.loads(gh("api", "--paginate", "--slurp", "-H", "Cache-Control: no-cache",
                               f"repos/{candidate.REPOSITORY}/releases?per_page=100"))
         return candidate.release_identity.release_records(pages)
 
@@ -357,6 +357,19 @@ class Promotion:
                 raise PublicationError("Public cutover release record differs from the original")
             require_tag_source(self.final_tag, self.cutover_root or self.source)
         return release
+
+    def read_after_write(self, *, asset: str | None = None, published: bool = False) -> dict:
+        """GitHub can acknowledge a write before its release list reflects it."""
+        for delay in (0, 2, 4, 8, 16, 32):
+            if delay:
+                sleep(delay)
+            release = self.resolve(self.releases())
+            if release is None or (published and release["draft"]):
+                continue
+            if asset is None or any(item["name"] == asset for item in release["assets"]):
+                return release
+        raise PublicationError("GitHub acknowledged the write but its release metadata is still stale; "
+                               "resume with the original build after readback")
 
     def download(self, release: dict, name: str, destination: Path) -> Path:
         destination.mkdir(parents=True, exist_ok=True)
@@ -604,7 +617,7 @@ class Promotion:
                "--notes-file", str(output / "notes.md"))
         gh("release", "upload", self.draft_tag, str(output / "notes-context.json"),
            "--repo", candidate.REPOSITORY)
-        saved = self.resolve(self.releases())
+        saved = self.read_after_write(asset="notes-context.json")
         summary("Editable draft: " + saved["html_url"] + " — notes SHA-256: "
                 + candidate.sha256((saved["body"] or "").encode()))
 
@@ -629,7 +642,7 @@ class Promotion:
                 raise PublicationError("Existing archive asset differs; refusing overwrite: " + path.name)
             if not item:
                 gh("release", "upload", release["tag_name"], str(path), "--repo", candidate.REPOSITORY)
-            refreshed = self.resolve(self.releases())
+            refreshed = self.read_after_write(asset=path.name)
             remote = self.download(refreshed, path.name, self.root / "archive-readback")
             if remote.read_bytes() != path.read_bytes():
                 raise PublicationError("Draft archive readback mismatch: " + path.name)
@@ -679,7 +692,7 @@ class Promotion:
                "--title", f"Firmware {self.build['version']} ({self.channel})",
                "--prerelease=" + ("true" if self.channel == "beta" else "false"),
                "--draft=false")
-            release = self.resolve(self.releases())
+            release = self.read_after_write(published=True)
             self.require_body(release)
         if release["draft"]:
             raise PublicationError("Official record remains a draft; resume the retained promotion")

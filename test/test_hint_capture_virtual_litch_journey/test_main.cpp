@@ -9,6 +9,8 @@
 
 #include "foxie_embedded/millis.hpp"
 #include "modules/orientation.hpp"
+#include "modules/led_power_envelope.hpp"
+#include "modules/brightness_scale_policy.hpp"
 #include "hardware/board_led_output_mapping.hpp"
 #include <litch_max/chess_notation.hpp>
 #include "runtime/chess_interaction_model.hpp"
@@ -65,18 +67,18 @@ virtual_litch_color RemovalSide(const runtime::VirtualLitchSession& s,uint8_t vi
 }
 bool RemovalCue(const runtime::VirtualLitchSession& s,uint8_t victim){
     const auto left=s.SemanticFrame().board[victim][0U],right=s.SemanticFrame().board[victim][2U];
-    const uint16_t sum=left.r+right.r;
-    if(left.r!=left.g || left.g!=left.b || right.r!=right.g || right.g!=right.b ||
-        left.w!=0U || right.w!=0U || sum<254U || sum>257U || !Eq(s.SemanticFrame().board[victim][1U],{}))return false;
+    const bool palette = Eq(left, {255U, 101U, 0U, 0U}) ||
+        Eq(left, {64U, 25U, 0U, 0U}) || Eq(left, {255U, 85U, 0U, 0U});
+    if (!palette || left.b != 0U || left.w != 0U || !Eq(left,right) ||
+        !Eq(s.SemanticFrame().board[victim][1U],{})) return false;
     const auto revision=s.PhysicalFrame().led_count==300U?hardware::BoardRevision::V3_3S3:hardware::BoardRevision::V3S3;
     const auto pieces=hardware::MapSemanticSquareLedTargets(revision,victim,hardware::SquareLedSlot::Piece,Rotate(s));
     for(uint8_t i=0U;i<pieces.count;++i)if(!Eq(s.PhysicalFrame().pixels[pieces.indices[i]],{}))return false;
     for(const auto slot:{hardware::SquareLedSlot::Square0,hardware::SquareLedSlot::Square2}){
         const auto semantic=s.SemanticFrame().board[victim][static_cast<uint8_t>(slot)];
         const auto mapped=RemovalSide(s,victim,slot);
-        if(semantic.r==0U && !Eq(mapped,{}))return false;
-        if(semantic.r==255U && Eq(mapped,{}))return false;
-        if(revision==hardware::BoardRevision::V3_3S3 && (mapped.r!=mapped.g || mapped.g!=mapped.b || mapped.w!=0U))return false;
+        if (mapped.r == 0U || mapped.b != 0U || mapped.w != 0U || mapped.g > mapped.r) return false;
+
     }
     return true;
 }
@@ -159,6 +161,7 @@ void Journey(const Position& p) {
     virtual_litch_config config{}; virtual_litch_default_config(&config);
     config.hardware = p.black ? VIRTUAL_LITCH_HARDWARE_V3 : VIRTUAL_LITCH_HARDWARE_V3_3;
     config.first_player_is_p2 = p.swapped;
+    const uint16_t currentBudget = modules::SelectS3LedPowerEnvelope(false).maxLedCurrentMa;
     test_support::BoundedHintSession humanFixture(config), cpuFixture(config);
     auto& human = humanFixture.session; auto& cpu = cpuFixture.session;
     Check(Prepare(human, p) && Prepare(cpu, p), p.name, "external FEN plus mapped Hall occupancy enters real play");
@@ -168,22 +171,34 @@ void Journey(const Position& p) {
           p.name, "production CPU policy enabled for the same side and position");
     const bool cpuReady = WaitCpuPlan(cpu, p);
     Check(cpuReady, p.name, "production CPU search supplies the comparison capture prompt");
-    Check(TapHint(human, p.black) && human.Advance(600U) == VIRTUAL_LITCH_OK,
-          p.name, "physical O tap reveals completed production Hint after the reveal boundary");
+    Check(TapHint(human, p.black), p.name, "physical O tap reveals the completed production Hint");
     uint8_t from = 255U, to = 255U;
     Check(human.TryGetHintMoveSquares(from, to) && from == p.from && to == p.to,
           p.name, "real bounded search selects the legal capture used by the physical journey");
     if (from != p.from || to != p.to || !cpuReady) return;
 
-    const uint32_t start = std::max(human.State().now_ms, cpu.State().now_ms) + 600U;
+    const auto firstHuman = Square(human, p.victim);
+    const auto firstCpu = Square(cpu, p.victim);
+    Check(Eq(firstHuman, {255U, 101U, 0U, 0U}) &&
+              Eq(firstCpu, {255U, 101U, 0U, 0U}),
+          p.name, "the first shown Hint and CPU removal cues begin with an amber strike");
+    const uint32_t humanStart = human.State().now_ms;
+    const uint32_t cpuStart = cpu.State().now_ms;
     std::array<virtual_litch_color, 2> cpuColors{};
     bool varied = false, matches = true, victimDark = true, physicalMatches = true;
-    bool leftBrighter=false,rightBrighter=false,mappedLeftBrighter=false,mappedRightBrighter=false;
+    bool floor = false, wasStrike = false;
+    unsigned strikeStarts = 0U;
+    uint8_t normalPeak = 0U;
     for (unsigned i = 0U; i < 25U; ++i) {
-        At(human, start + i * 50U); At(cpu, start + i * 50U);
+        At(human, humanStart + i * 50U); At(cpu, cpuStart + i * 50U);
         const auto expected = Square(cpu, p.victim);
         const auto left=human.SemanticFrame().board[p.victim][0U],right=human.SemanticFrame().board[p.victim][2U];
-        leftBrighter=leftBrighter || left.r>right.r; rightBrighter=rightBrighter || right.r>left.r;
+        const bool strike = Eq(left, {255U, 101U, 0U, 0U});
+        if (strike && !wasStrike) ++strikeStarts;
+        wasStrike = strike;
+        floor = floor || Eq(left, {64U, 25U, 0U, 0U});
+        if (strike) normalPeak = std::max(normalPeak, RemovalSide(
+            human, p.victim, hardware::SquareLedSlot::Square0).r);
         if (i == 0U) cpuColors[0] = expected;
         if (!Eq(expected, cpuColors[0])) { cpuColors[1] = expected; varied = true; }
         matches = matches && Eq(Square(human, p.victim), expected);
@@ -199,13 +214,10 @@ void Journey(const Position& p) {
             for (uint8_t target = 0U; target < targets.count; ++target)
                 victimDark = victimDark && Eq(board->PhysicalFrame().pixels[targets.indices[target]], {});
             Check(RemovalCue(*board,p.victim),p.name,
-                  "both actual side emitters carry a complementary WHITE fade with zero/full endpoints and both Piece LEDs zero");
-            if(board==&human){
-                const auto l=hardware::MapSemanticSquareLedTargets(revision,p.victim,hardware::SquareLedSlot::Square0,Rotate(human));
-                const auto r=hardware::MapSemanticSquareLedTargets(revision,p.victim,hardware::SquareLedSlot::Square2,Rotate(human));
-                mappedLeftBrighter=mappedLeftBrighter || human.PhysicalFrame().pixels[l.indices[0U]].r>human.PhysicalFrame().pixels[r.indices[0U]].r;
-                mappedRightBrighter=mappedRightBrighter || human.PhysicalFrame().pixels[r.indices[0U]].r>human.PhysicalFrame().pixels[l.indices[0U]].r;
-            }
+                  "both actual square emitters carry synchronized warm flashes and visible floor, with both Piece LEDs zero");
+            Check(board->PhysicalFrame().applied_led_current_ma <= currentBudget,
+                  p.name, "capture palette remains inside the configured physical current budget");
+
         }
         if (!p.black) for(const uint8_t neighbor:{35U,37U}){
             bool ordinary=true;
@@ -222,13 +234,102 @@ void Journey(const Position& p) {
                 human.SemanticFrame().board[neighbor][0U].g,human.SemanticFrame().board[neighbor][0U].b,
                 human.SemanticFrame().board[neighbor][2U].r,human.SemanticFrame().board[neighbor][2U].g,human.SemanticFrame().board[neighbor][2U].b);
         }
+        if (!p.black) {
+            const auto l = RemovalSide(human,p.victim,hardware::SquareLedSlot::Square0);
+            const auto r = RemovalSide(human,p.victim,hardware::SquareLedSlot::Square2);
+            std::printf("[CAPTURE_PALETTE] age=%u clock_mod1200=%u semantic=%u,%u,%u physicalL=%u,%u,%u,%u physicalR=%u,%u,%u,%u current=%u budget=%u\n",
+                i*50U, human.State().now_ms%1200U, left.r,left.g,left.b,
+                l.r,l.g,l.b,l.w,r.r,r.g,r.b,r.w,human.PhysicalFrame().applied_led_current_ma,currentBudget);
+        }
         if (i == 0U || i == 6U) {
             Checkpoint(cpu, p.name, "CPU-reference", p.victim, "remove-victim");
             Checkpoint(human, p.name, "Hint-visible", p.victim, "remove-victim-or-lift-mover");
         }
     }
+    if (!p.black) {
+        auto dimConfig = config;
+        dimConfig.brightness_scale_256 = modules::brightness_scale_policy::NEAR_DARK_SCALE256;
+        test_support::BoundedHintSession dimFixture(dimConfig);
+        auto& dim = dimFixture.session;
+        Check(Prepare(dim,p) && TapHint(dim,p.black) && dim.Advance(600U)==VIRTUAL_LITCH_OK,
+              p.name,"actual Hint scene uses production near-dark output scale");
+        uint8_t lowPeak = 0U, lowFloor = 255U;
+        for (unsigned sample=0U; sample<24U; ++sample) {
+            dim.Advance(50U);
+            Check(RemovalCue(dim,p.victim),p.name,"warm floor survives physical near-dark quantization");
+            const auto pixel=RemovalSide(dim,p.victim,hardware::SquareLedSlot::Square0);
+            lowPeak = std::max(lowPeak, pixel.r);
+            lowFloor = std::min(lowFloor, pixel.r);
+            Check(dim.PhysicalFrame().applied_brightness_scale_65535<=2048U &&
+                  dim.PhysicalFrame().applied_led_current_ma<=currentBudget,p.name,
+                  "near-dark capture is actually dimmed and obeys current budget");
+            std::printf("[CAPTURE_LOW] clock_mod1200=%u square=%u,%u,%u,%u scale=%u current=%u budget=%u\n",
+                dim.State().now_ms%1200U,pixel.r,pixel.g,pixel.b,pixel.w,
+                dim.PhysicalFrame().applied_brightness_scale_65535,
+                dim.PhysicalFrame().applied_led_current_ma,currentBudget);
+        }
+        Check(Setting(dim,"MINIMAL_ANIMATIONS","true"),p.name,"Minimal capture mode applies");
+        dim.Advance(0U);
+        const auto minimal=Square(dim,p.victim);
+        const auto lowOrdinary = RemovalSide(dim,p.victim,hardware::SquareLedSlot::Square0);
+        Check(lowPeak > lowOrdinary.r && lowOrdinary.r > lowFloor && lowFloor > 0U,
+              p.name, "near-dark strike exceeds the steady ordinary amber reference and retains a nonzero rest");
+        Check(Eq(minimal, {255U,85U,0U,0U}), p.name,
+              "Minimal uses the steady orange semantic capture color");
+        for(unsigned sample=0U;sample<6U;++sample){
+            dim.Advance(200U);
+            Check(Eq(Square(dim,p.victim),minimal)&&RemovalCue(dim,p.victim) &&
+                      Eq(RemovalSide(dim,p.victim,hardware::SquareLedSlot::Square0),lowOrdinary),p.name,
+                  "Minimal keeps actual occupied victim rails steady and Piece LEDs off");
+        }
+
+        auto headroomConfig = config;
+        headroomConfig.brightness_scale_256 = 128U;
+        test_support::BoundedHintSession headroomFixture(headroomConfig), referenceFixture(headroomConfig);
+        auto& headroom = headroomFixture.session;
+        auto& reference = referenceFixture.session;
+        Check(Prepare(headroom,p) && TapHint(headroom,p.black) &&
+                  Prepare(reference,p) && Setting(reference,"MINIMAL_ANIMATIONS","true") &&
+                  TapHint(reference,p.black), p.name,
+              "normal-output strike and steady amber reference follow real Hint with headroom");
+        uint8_t headroomPeak = 0U;
+        for (unsigned sample = 0U; sample < 25U; ++sample) {
+            if (Eq(Square(headroom,p.victim), {255U,101U,0U,0U}))
+                headroomPeak = std::max(headroomPeak,
+                    RemovalSide(headroom,p.victim,hardware::SquareLedSlot::Square0).r);
+            headroom.Advance(50U);
+        }
+        const auto normalOrdinary = RemovalSide(reference,p.victim,hardware::SquareLedSlot::Square0);
+        Check(headroomPeak > normalOrdinary.r && normalOrdinary.r > 0U, p.name,
+              "actual normal-output strike is brighter than ordinary steady amber when budget permits");
+        std::printf("[CAPTURE_ACCENT] full_peak=%u normal_peak=%u normal_reference=%u low_peak=%u low_reference=%u low_floor=%u\n",
+                    normalPeak, headroomPeak, normalOrdinary.r, lowPeak, lowOrdinary.r, lowFloor);
+
+        auto cappedConfig = config;
+        cappedConfig.max_led_current_ma = 120U;
+        test_support::BoundedHintSession cappedFixture(cappedConfig);
+        auto& capped = cappedFixture.session;
+        Check(Prepare(capped,p) && TapHint(capped,p.black), p.name, "hard-capped Hint reaches capture guidance");
+        bool observedStrike = false, powerLimited = false;
+        uint16_t maxCappedCurrent = 0U;
+        for (unsigned sample = 0U; sample < 25U; ++sample) {
+            const auto semantic = Square(capped,p.victim);
+            observedStrike = observedStrike || Eq(semantic, {255U,101U,0U,0U});
+            powerLimited = powerLimited || capped.PhysicalFrame().power_limited != 0U;
+            maxCappedCurrent = std::max(maxCappedCurrent, capped.PhysicalFrame().applied_led_current_ma);
+            Check(capped.PhysicalFrame().applied_led_current_ma <= cappedConfig.max_led_current_ma,
+                  p.name, "capture accent never exceeds the hard LED current cap");
+            capped.Advance(50U);
+        }
+        Check(observedStrike && powerLimited, p.name,
+              "hard-capped observation includes an actual strike while limiting is active");
+        std::printf("[CAPTURE_HARD_CAP] maximum=%u limit=%u limited=%u\n",
+                    maxCappedCurrent, cappedConfig.max_led_current_ma, powerLimited);
+    }
+
     const auto removal = cpuColors[0].r > cpuColors[1].r ? cpuColors[0] : cpuColors[1];
-    Check(varied && matches && leftBrighter && rightBrighter && mappedLeftBrighter && mappedRightBrighter,p.name,"Hint and CPU share the same smooth WHITE handoff, no floor or surrounding highlights");
+    Check(varied && matches && strikeStarts >= 2U && floor, p.name,
+          "Hint and CPU share two amber strikes followed by the sustained dim rest");
     Check(physicalMatches, p.name, "V3 physical mapping matches CPU removal feedback after end/orientation mapping");
     Check(victimDark, p.name, "BOTH actual victim Piece emitters stay zero throughout suggested and mandatory removal");
     uint8_t replayFrom = 64U, replayTo = 64U;
@@ -326,13 +427,13 @@ void Journey(const Position& p) {
               p.name, "restoring e2 recovers the original visible capture Hint without a commit");
         bool restoredRed = true, restoredVaried = false;
         const auto restoredStart = Square(human,p.victim);
-        for (unsigned i = 0U; i < 13U; ++i) {
+        for (unsigned i = 0U; i < 25U; ++i) {
             const auto color = Square(human, p.victim);
             restoredRed = restoredRed && RemovalCue(human,p.victim);
             restoredVaried = restoredVaried || !Eq(color,restoredStart);
             human.Advance(50U);
         }
-        Check(restoredRed && restoredVaried,p.name,"recovery resumes the CPU-equivalent WHITE fade");
+        Check(restoredRed && restoredVaried,p.name,"recovery resumes the CPU-equivalent warm capture rhythm");
         Checkpoint(human, p.name, "illegal-placement-restored", p.victim, "follow-original-capture-Hint");
     }
 
@@ -342,13 +443,13 @@ void Journey(const Position& p) {
           p.name, "Hint capture remains a legal destination while source is held");
     bool heldVaried = false, heldMatches = true;
     const auto heldInitial = Square(human, p.victim);
-    for (unsigned i = 0U; i < 7U; ++i) {
+    for (unsigned i = 0U; i < 13U; ++i) {
         human.Advance(100U);
         const auto color = Square(human, p.victim);
         heldVaried = heldVaried || !Eq(heldInitial, color);
         heldMatches = heldMatches && RemovalCue(human,p.victim);
     }
-    Check(heldVaried && heldMatches, p.name, "matching held Hint retains the WHITE fade with zero/full endpoints");
+    Check(heldVaried && heldMatches, p.name, "matching held Hint retains the warm capture flashes and floor");
     CheckHeldProjection(human, p.name, p.from, p.to, true);
     Checkpoint(human, p.name, "mover-held", p.victim, "remove-captured-piece");
     if (p.to != p.victim) {
@@ -379,7 +480,7 @@ void Journey(const Position& p) {
               ? emptyPiece.r != 0U || emptyPiece.g != 0U || emptyPiece.b != 0U || emptyPiece.w != 0U
               : emptyPiece.r == 0U && emptyPiece.g == 0U && emptyPiece.b == 0U && emptyPiece.w == 0U,
           p.name, "removed target becomes the explicit landing cue; off-target en-passant victim stays dark");
-    Check(!Eq(Square(human, p.victim), removal), p.name, "victim removal immediately retires the WHITE capture cue");
+    Check(!Eq(Square(human, p.victim), removal), p.name, "victim removal immediately retires the colored capture cue");
     if (p.to == p.victim) {
         Check(!Eq(Square(human, p.to), removal) &&
                   (PhysicalSquare(human, p.to).r != 0U ||
@@ -406,7 +507,18 @@ void Journey(const Position& p) {
         occupied |= 1ULL << p.to;
         Check(Observe(human, occupied), p.name, "ordinary capture mover placed on cleared destination");
     }
-    Check(human.Advance(3000U) == VIRTUAL_LITCH_OK && human.UndoHistoryMoveCount() == 1U &&
+    for (unsigned sample = 0U; sample < 21U; ++sample) {
+        Check(!RemovalCue(human, p.victim), p.name,
+              "seated Hint capturer never reacquires victim removal during settling");
+        if (sample == 0U || sample == 10U || sample == 20U) {
+            const auto& slots = human.SemanticFrame().board[p.to];
+            std::printf("[CAPTURE_SETTLE] run=%s age=%u phase=%u action=%u square=%u,%u,%u piece=%u,%u,%u\n",
+                p.name, sample * 100U, human.State().interaction_phase, human.State().required_action,
+                slots[0].r, slots[0].g, slots[0].b, slots[1].r, slots[1].g, slots[1].b);
+        }
+        if (sample != 20U) human.Advance(100U);
+    }
+    Check(human.Advance(1000U) == VIRTUAL_LITCH_OK && human.UndoHistoryMoveCount() == 1U &&
               human.State().expected_occupied_mask == occupied && human.State().correction_mask == 0ULL,
           p.name, "capture commits once and acknowledgement expires without correction");
     // Last-move/acknowledgement animations may continue; only the removal cue
@@ -426,7 +538,7 @@ void Journey(const Position& p) {
               Setting(cpu, "VS_CPU_LEVEL", "3") && WaitCpuPlan(cpu, p),
           p.name, "original CPU capture is requeued before its independent physical execution");
     // Finish the CPU plan through the same Hall seam.
-    // A newly seated capturer must never inherit its removed victim's WHITE cue.
+    // A newly seated capturer must never inherit its removed victim's capture cue.
     uint64_t cpuOccupied = p.occupied & ~(1ULL << p.victim);
     Check(Observe(cpu, cpuOccupied), p.name, "CPU victim-first removal uses the real directed plan");
     if (p.to == p.victim) {

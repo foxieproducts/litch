@@ -54,8 +54,11 @@ struct HintPresentationTuple {
     uint8_t toSquare = 255U;
     uint8_t duckFromSquare = 255U;
     uint8_t duckToSquare = 255U;
+    bool SamePrimaryMove(const HintPresentationTuple& other) const {
+        return fromSquare == other.fromSquare && toSquare == other.toSquare;
+    }
     bool operator==(const HintPresentationTuple& other) const {
-        return fromSquare == other.fromSquare && toSquare == other.toSquare &&
+        return SamePrimaryMove(other) &&
             duckFromSquare == other.duckFromSquare && duckToSquare == other.duckToSquare;
     }
 };
@@ -417,6 +420,7 @@ inline void BeginHintRefinement(GameStateMachineRenderState& state) {
 
 inline void RefreshHintRefinementIncoming(GameStateMachineRenderState& state) {
     auto& refinement = state.hintRefinement;
+    // Once fade-in starts, a pickup may own this exact chess/Duck selection.
     if (refinement.elapsed.Started() &&
         refinement.elapsed.ElapsedMs() < refinement.durationMs / 2U) {
         refinement.incoming = CurrentHintPresentation(state);
@@ -428,7 +432,7 @@ inline void AdvanceHintRefinement(HintRefinementPresentation& refinement,
                                   const uint32_t nowMs) {
     if (!refinement.elapsed.Started() ||
         nowMs - refinement.elapsed.StartMs() < refinement.durationMs) return;
-    if (!(refinement.incoming == latest)) {
+    if (!refinement.incoming.SamePrimaryMove(latest)) {
         // A queued refinement begins at the preceding handoff's absolute end.
         // Sampling late must neither restart nor slow its presentation clock.
         const uint32_t startedMs = refinement.elapsed.StartMs() + refinement.durationMs;
@@ -575,31 +579,21 @@ inline bool TryGetHintMoveSquares(const GameStateMachineRenderState& state,
 }
 
 inline void ClearHintDuckMove(GameStateMachineRenderState& state) {
-    ClearHintRefinement(state);
+    if (IsHintReplayActive(state)) return;
     state.hintDuckMoveValid = false;
+    RefreshHintRefinementIncoming(state);
 }
 
 inline void SetHintDuckMoveSquares(GameStateMachineRenderState& state,
                                    const uint8_t fromSquare,
-                                   const uint8_t toSquare,
-                                   const bool allowRefinement = true) {
+                                   const uint8_t toSquare) {
     if (IsHintReplayActive(state)) return;
-    AdvanceHintRefinement(state);
-    const bool changed = !state.hintDuckMoveValid || state.hintDuckMoveFromSquare != fromSquare ||
-                         state.hintDuckMoveToSquare != toSquare;
-    const bool feedbackAllowed = !state.hintDuckMoveValid || state.hintRefinementReady;
-    const bool coalescing = state.hintRefinement.elapsed.Started();
-    if (changed && allowRefinement && state.hintRefinementReady && state.hintDuckMoveValid &&
-        state.hintMoveValid && state.hintDisplayRequested) {
-        BeginHintRefinement(state);
-    }
+    // The Duck destination is private until the chess move is accepted.
+    // Updating it must not restart the player's current movement cue.
     state.hintDuckMoveFromSquare = fromSquare;
     state.hintDuckMoveToSquare = toSquare;
     state.hintDuckMoveValid = true;
     RefreshHintRefinementIncoming(state);
-    if (changed && state.hintDisplayRequested && !coalescing && feedbackAllowed) {
-        state.hintFeedbackElapsed.Reset();
-    }
 }
 
 inline bool TryGetHintDuckMoveSquares(

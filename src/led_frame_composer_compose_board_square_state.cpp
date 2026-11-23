@@ -314,7 +314,9 @@ void ApplySquareStatePrompts(const ComposeContext& ctx,
         } else if (((in.previewDestMask >> logicalSq) & 1ULL) != 0ULL) {
             ioFinalSquare = ctx.availablePromptRgb;
         }
-    } else if (ctx.renderIntent.hintPromptVisible && ctx.hintMoveValid) {
+    } else if (ctx.renderIntent.hintPromptVisible && ctx.hintMoveValid &&
+               (IsIdleInteraction(snapshot) || snapshot.interaction.taggedState.tag ==
+                    runtime::ChessInteractionPhase::DuckRelocation)) {
         ApplyHintMovePrompt(ctx, runtime, logicalSq, ioFinalSquare, ioPromptState);
     } else if (ctx.partialCastlingTargetOccValid) {
         const uint64_t bit = (1ULL << logicalSq);
@@ -323,13 +325,6 @@ void ApplySquareStatePrompts(const ComposeContext& ctx,
         if (targetOcc && !physOcc) {
             ioFinalSquare = ctx.availablePromptRgb;
         }
-    }
-    if (snapshot.game.variant == modules::GameVariant::Duck &&
-        ctx.renderIntent.hintPromptVisible && ctx.hintDuckMoveValid &&
-        modules::IsMatchingDuckHintChessProgress(
-            snapshot.interaction.taggedState, ctx.hintFromSquare, ctx.hintToSquare) &&
-        (logicalSq == ctx.hintDuckFromSquare || logicalSq == ctx.hintDuckToSquare)) {
-        ApplyHintMovePrompt(ctx, runtime, logicalSq, ioFinalSquare, ioPromptState);
     }
 }
 

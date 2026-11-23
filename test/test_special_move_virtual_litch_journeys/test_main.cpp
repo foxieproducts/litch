@@ -2774,21 +2774,19 @@ void RunDuckCompoundHintJourney() {
 
     const auto& hintedFrame = session.PhysicalFrame();
     Check(HasSquareGuidance(hintedFrame, chessFrom) &&
-              HasSquareGuidance(hintedFrame, chessTo) &&
-              HasSquareGuidance(hintedFrame, duckFrom) &&
-              HasSquareGuidance(hintedFrame, duckTo),
+              HasSquareGuidance(hintedFrame, chessTo),
           NAME,
-          "one frame shows both chess and Duck endpoint pairs");
-    Check(IsYellowDominant(PhysicalSquareColor(
+          "the first frame guides only the chess movement from the retained compound decision");
+    Check(!IsYellowDominant(PhysicalSquareColor(
               hintedFrame,
               duckFrom,
               hardware::SquareLedSlot::Square0)) &&
-              IsYellowDominant(PhysicalSquareColor(
+              !IsYellowDominant(PhysicalSquareColor(
                   hintedFrame,
                   duckTo,
                   hardware::SquareLedSlot::Square0)),
           NAME,
-          "yellow distinguishes the Duck pair from the player-colored chess pair");
+          "the unplayed Duck pair does not compete with chess movement guidance");
     char chessFromText[3] = {};
     char chessToText[3] = {};
     char duckFromText[3] = {};
@@ -2802,20 +2800,18 @@ void RunDuckCompoundHintJourney() {
             duckFrom, duckFromText, sizeof(duckFromText)) &&
         litch_max::TryFormatUciSquare(
             duckTo, duckToText, sizeof(duckToText));
-    char expectedCompound[32] = {};
+    char expectedChess[32] = {};
     (void)std::snprintf(
-        expectedCompound,
-        sizeof(expectedCompound),
-        "\"as\":\"3b%s%s%s%s\"",
+        expectedChess,
+        sizeof(expectedChess),
+        "\"as\":\"3h%s%s\"",
         chessFromText,
-        chessToText,
-        duckFromText,
-        duckToText);
+        chessToText);
     Check(endpointsFormatted &&
               std::strstr(session.HomeStateLine().CStr(),
-                          expectedCompound) != nullptr,
+                          expectedChess) != nullptr,
           NAME,
-          "Home preserves the selected chess and Duck endpoint pairs as one compound Hint");
+          "fresh Home exposes chess-only Hint before the physical move while its Duck choice stays cached");
 
     occupancy &= ~(UINT64_C(1) << chessFrom);
     Check(session.ObserveHallMask(occupancy) == VIRTUAL_LITCH_OK,
@@ -3561,14 +3557,14 @@ void RunCpuCaptureCorrectionJourney(const bool tentativeEntry,
             hardware::SquareLedSlot::Square0);
         const auto right = PhysicalSquareColor(session.PhysicalFrame(), TARGET,
             hardware::SquareLedSlot::Square2);
-        const auto isWhite = [](const virtual_litch_color color) {
-            return color.w != 0U || (color.r != 0U && color.r == color.g && color.g == color.b);
-        };
-        Check((isWhite(left) || isWhite(right)) &&
-                  PhysicalSquareEnergy(session.PhysicalFrame(), TARGET,
-                      hardware::SquareLedSlot::Piece) == 0U &&
+        const auto piece = hardware::MapSemanticSquareLedTargets(
+            hardware::BoardRevision::V3S3, TARGET, hardware::SquareLedSlot::Piece, false);
+        Check(ColorsEqual(left, right) && left.r > 0U && left.r >= left.g && left.b == 0U && left.w == 0U &&
+                  piece.count == 2U &&
+                  ColorEnergy(session.PhysicalFrame().pixels[piece.indices[0U]]) == 0U &&
+                  ColorEnergy(session.PhysicalFrame().pixels[piece.indices[1U]]) == 0U &&
                   !StatusIsFullRedFault(session.SemanticFrame()),
-            runName, "still-present victim receives physical white removal rails with its piece LEDs dark");
+              runName, "the restored victim has matching warm removal rails and both physical Piece LEDs dark");
         checkpoint("g1-restored-old-proof-rejected", "remove-victim-d5");
         occupancy &= ~TARGET_MASK;
         observe("fresh-remove-d5", "place-rook-d5");

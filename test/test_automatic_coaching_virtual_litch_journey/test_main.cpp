@@ -13,6 +13,7 @@
 #include "hardware/led_layout.hpp"
 #include "hardware/board_led_output_mapping.hpp"
 #include "modules/orientation.hpp"
+#include "modules/home_state_wire_codec.hpp"
 #include "runtime/chess_interaction_model.hpp"
 #include "runtime/square_mapping.hpp"
 
@@ -312,12 +313,64 @@ void AutomaticCoachingWholeTurn(bool duck, bool firstP2, bool rotated,
     }
     uint8_t duckFrom = 64U;
     uint8_t duckTo = 64U;
+    const auto checkDuckPhase = [&](const char* stage, const bool relocating) {
+        if (!duck) return;
+        if (duckFrom >= 64U || duckTo >= 64U) {
+            Check(false, run, "phase observation requires the retained legal Duck decision");
+            return;
+        }
+        const auto home = session.HomeStateSnapshot();
+        const auto& assistance = home.assistance;
+        const bool selected = session.State().selected_square < 64U;
+        const auto expected = relocating
+            ? modules::HomeAssistancePresentation::DuckRelocation
+            : selected ? modules::HomeAssistancePresentation::LegalGuide
+                       : modules::HomeAssistancePresentation::HintReady;
+        Check(assistance.valid && assistance.hintRequested &&
+                  assistance.presentation == expected, run,
+              "fresh board Home projection exposes only the current physical half of a Duck Hint");
+        modules::home_state_wire::Payload wire{};
+        const bool encoded = modules::home_state_wire::Encode(home, wire);
+        StaticJsonDocument<2048> json;
+        const auto line = session.HomeStateLine();
+        const bool parsed = !deserializeJson(json, line.CStr());
+        const char* exported = parsed ? json["as"].as<const char*>() : nullptr;
+        Check(encoded && wire[85U] == static_cast<uint8_t>(expected) &&
+                  exported != nullptr && exported[0] != '\0' &&
+                  exported[1] == (relocating ? 'd' : selected ? 'l' : 'h'), run,
+              "fresh JSON and binary Home messages serialize the current phase without a compound pair");
+        if (relocating) {
+            Check(assistance.duckFromSquare == duckFrom &&
+                      assistance.duckToSquare == duckTo &&
+                      assistance.fromSquare >= 64U && assistance.toSquare >= 64U &&
+                      wire[86U] >= 64U && wire[87U] >= 64U &&
+                      wire[88U] == duckFrom && wire[89U] == duckTo, run,
+                  "Duck phase exports its retained Duck destination and retires chess endpoints");
+        } else {
+            const auto yellow = [](const virtual_litch_color color) {
+                return color.r > 0U && color.r == color.g && color.b == 0U && color.w == 0U;
+            };
+            Check(assistance.fromSquare == from && assistance.toSquare == to &&
+                      assistance.duckFromSquare >= 64U && assistance.duckToSquare >= 64U &&
+                      wire[86U] == from && wire[87U] == to &&
+                      wire[88U] >= 64U && wire[89U] >= 64U &&
+                      !yellow(session.SemanticFrame().board[duckFrom][0U]) &&
+                      !yellow(session.SemanticFrame().board[duckTo][0U]), run,
+                  "idle and held chess guidance keep cached Duck endpoints off board and phone");
+        }
+        std::printf("[AUTOMATIC_COACHING_DUCK_PHASE] run=%s stage=%s presentation=%u "
+                    "wire=%u,%u,%u,%u as=%s\n", run, stage,
+                    static_cast<unsigned>(assistance.presentation), wire[86U], wire[87U],
+                    wire[88U], wire[89U], exported == nullptr ? "unavailable" : exported);
+    };
     Check(session.HintDisplayRequested() && Pair(session, from) && Pair(session, to),
           run, "Coaching reveals chess endpoints without a manual Hint press");
     if (duck) {
         Check(session.TryGetHintDuckMoveSquares(duckFrom, duckTo) &&
-                  duckFrom == DUCK_START && Pair(session, duckFrom) && Pair(session, duckTo),
-              run, "automatic Duck Coaching reveals the same compound placement pair");
+                  duckFrom == DUCK_START && duckTo < 64U &&
+                  (occupancy & (UINT64_C(1) << duckTo)) == 0ULL,
+              run, "automatic Duck Coaching retains the full cached choice while revealing chess first");
+        checkDuckPhase("automatic-ready", false);
     }
     Checkpoint(session, run, "automatic-ready", "lift-suggested-chess-piece", publisher, true);
 
@@ -359,10 +412,12 @@ void AutomaticCoachingWholeTurn(bool duck, bool firstP2, bool rotated,
                 heldStart.r, heldStart.g, heldStart.b, heldStart.w,
                 heldLater.r, heldLater.g, heldLater.b, heldLater.w);
     Checkpoint(session, run, "picked-up", "place-piece-or-return-it", publisher, true);
+    checkDuckPhase("picked-up", false);
     occupancy |= UINT64_C(1) << from;
     Check(Observe(session, occupancy) && session.Advance(200U) == VIRTUAL_LITCH_OK &&
               session.HintDisplayRequested(), run, "returning the piece restores automatic guidance");
     Checkpoint(session, run, "pickup-canceled", "choose-a-move", publisher, true);
+    checkDuckPhase("pickup-canceled", false);
 
     Check(Button(session, whiteOwner, runtime::VirtualLitchPhysicalButton::X, true) &&
               session.Advance(1200U) == VIRTUAL_LITCH_OK &&
@@ -429,6 +484,7 @@ void AutomaticCoachingWholeTurn(bool duck, bool firstP2, bool rotated,
                   session.State().side_to_move_black == 0U,
               run, "automatic placement remains visible and the combined turn has not advanced");
         CheckDuckYellow(session, run, duckTo);
+        checkDuckPhase("early-Duck-pickup", true);
         Checkpoint(session, run, "duck-placement", "move-duck-to-yellow-destination", publisher, true);
         Check(Coaching(session, whiteOwner, false) && Coaching(session, whiteOwner, true) &&
                   session.HintDisplayRequested() && Pair(session, duckTo),

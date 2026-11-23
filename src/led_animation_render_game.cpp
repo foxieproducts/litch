@@ -24,6 +24,7 @@ void LedAnimationRenderer::RenderGame(LedAnimationPresentation& presentation,
     ownership.prioritySquares = 0U;
     ownership.ordinaryPieces = 0U;
     ownership.captureRemoval = 0U;
+    ownership.captureTaps = 0U;
     ownership.duckReminder = 0U;
     ownership.menuActive = false;
     ComposeGame(presentation, game, result, ownership);
@@ -104,7 +105,7 @@ void LedAnimationRenderer::ComposeGame(LedAnimationPresentation& presentation,
         modules::led_frame_composer::Compose(inputs, m_board, m_status,
             result.grid, &result.menuBackground, nullptr, &ownership.prioritySquares,
             &ownership.ordinaryPieces, &ownership.status, &ownership.foreground,
-            &ownership.captureRemoval, &ownership.duckReminder, &hint);
+            &ownership.captureRemoval, &ownership.duckReminder, &hint, &ownership.captureTaps);
         result.receipt.visibleHint = hint.tuple;
         result.receipt.visibleHintValid = hint.visible;
         result.retainPriorHint = hint.retainPrior;
@@ -121,6 +122,7 @@ void LedAnimationRenderer::ComposeGame(LedAnimationPresentation& presentation,
             ownership.prioritySquares = 0U;
             ownership.ordinaryPieces = 0U;
             ownership.captureRemoval = 0U;
+            ownership.captureTaps = 0U;
             ownership.duckReminder = 0U;
             result.receipt.visibleHintValid = false;
             result.retainPriorHint = false;

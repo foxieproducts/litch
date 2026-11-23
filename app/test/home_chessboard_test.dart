@@ -230,7 +230,7 @@ void main() {
     },
   );
 
-  testWidgets('compound Duck markers coexist and clear behind CPU authority', (
+  testWidgets('Duck hint markers follow the live chess and Duck stages', (
     WidgetTester tester,
   ) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -249,12 +249,12 @@ void main() {
     for (final String key in <String>[
       'assistance-from-e2',
       'assistance-to-e4',
-      'assistance-from-a5',
-      'duck-assistance-to-d4',
     ]) {
       expect(find.byKey(ValueKey<String>(key)), findsOneWidget);
     }
-    expect(value.assistanceGuidance, 'Hint: e2 to e4, then duck a5 to d4.');
+    expect(find.byKey(const ValueKey('assistance-from-a5')), findsNothing);
+    expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsNothing);
+    expect(value.assistanceGuidance, 'Hint: e2 to e4.');
     await pumpBoard(
       tester,
       value: value.copyWith(
@@ -275,14 +275,8 @@ void main() {
     final chessTarget = find.byKey(const ValueKey('assistance-to-e3'));
     final duckTarget = find.byKey(const ValueKey('duck-assistance-to-e3'));
     expect(chessTarget, findsOneWidget);
-    expect(
-      find.descendant(of: duckTarget, matching: find.byType(Image)),
-      findsOneWidget,
-    );
-    expect(
-      tester.getRect(chessTarget).overlaps(tester.getRect(duckTarget)),
-      isFalse,
-    );
+    expect(duckTarget, findsNothing);
+    expect(find.byKey(const ValueKey('assistance-to-e4')), findsOneWidget);
     final capturePosition = HomeChessPosition.tryParse(
       '7k/8/8/8/8/3p4/4P3/K7 w - - 0 1',
     )!;
@@ -309,12 +303,44 @@ void main() {
     );
     await pumpBoard(tester, value: capture, size: 320);
     expect(find.byKey(const ValueKey('capture-removal-d3')), findsOneWidget);
-    expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsOneWidget);
+    expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsNothing);
     expect(
       capture.assistanceGuidance,
-      'Remove the piece on d3, then move the piece from e2 to d3. Duck hint: a5 to d4.',
+      'Remove the piece on d3, then move the piece from e2 to d3.',
     );
 
+    final duckStage = value.copyWith(
+      position: HomeChessPosition.tryParse('7k/8/8/8/4P3/8/8/K7 w - - 0 1'),
+      homeStateAction: HomeStateAction.duck,
+      gameStatus: const HomeGameStatus(
+        variant: 'duck',
+        duckSquare: 24,
+        duckMovePending: true,
+        outcome: 'none',
+        winner: 'none',
+      ),
+    );
+    await pumpBoard(tester, value: duckStage, size: 320);
+    expect(find.byKey(const ValueKey('assistance-from-a5')), findsOneWidget);
+    expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsOneWidget);
+    expect(find.byKey(const ValueKey('assistance-from-e2')), findsNothing);
+    expect(find.byKey(const ValueKey('assistance-to-e4')), findsNothing);
+    expect(duckStage.assistanceGuidance, 'Duck hint: a5 to d4.');
+    await pumpBoard(
+      tester,
+      value: duckStage.copyWith(
+        homeStateAction: HomeStateAction.settle,
+        assistance: const HomeAssistanceState(
+          requested: true,
+          manualAvailable: true,
+          coachingOwned: false,
+          presentation: HomeAssistancePresentation.duck,
+          duckMove: (from: 24, to: 35),
+        ),
+      ),
+      size: 320,
+    );
+    expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsNothing);
     await pumpBoard(
       tester,
       value: value.copyWith(

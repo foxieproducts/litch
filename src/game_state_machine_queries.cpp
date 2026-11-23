@@ -444,10 +444,7 @@ void GameStateMachine::ClearHintDuckMove() {
 void GameStateMachine::SetHintDuckMoveSquares(
     const uint8_t fromSquare,
     const uint8_t toSquare) {
-    runtime::SetHintDuckMoveSquares(
-        m_renderState, fromSquare, toSquare,
-        m_chessInteractionModel.phase.tag == ChessInteractionPhase::Idle &&
-            !m_placementModeActive && !m_textOverlayActive && !m_kingQueenSwapPromptActive);
+    runtime::SetHintDuckMoveSquares(m_renderState, fromSquare, toSquare);
 }
 
 bool GameStateMachine::TryGetHintDuckMoveSquares(

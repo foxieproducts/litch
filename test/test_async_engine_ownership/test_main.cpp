@@ -651,8 +651,8 @@ void CheckCpuTakeoverWaitsForHint(fxe::test_support::TestResults& results,
     const auto visibleFrame = CaptureSquareFrame(settings, coordinator, stateMachine, true);
     const auto hiddenFrame = CaptureSquareFrame(settings, coordinator, stateMachine, false);
     results.Check(!SamePixel(visibleFrame[40U], hiddenFrame[40U]) &&
-                      (!duck || !SamePixel(visibleFrame[35U], hiddenFrame[35U])),
-                  "manual chess and Duck Hint targets reach the actual RGBW renderer before takeover");
+                      (!duck || SamePixel(visibleFrame[35U], hiddenFrame[35U])),
+                  "before takeover the chess Hint is visible while the later Duck destination stays ordinary");
     printFrame("visible-before", duck ? "consider a2a3 then Duck a5d4" : "consider a2a3",
                visibleFrame);
     if (duringCleanup) {

@@ -66,7 +66,7 @@ void LedAnimationRenderer::OutputGameFrame(LedAnimationPresentation& presentatio
         }
     }
     if (capture || duck) {
-        const uint64_t mask = capture ? ownership.captureRemoval : ownership.duckReminder;
+        const uint64_t mask = capture ? ownership.captureTaps : ownership.duckReminder;
         for (uint8_t square = 0U; square < 64U; ++square) {
             if ((mask & (UINT64_C(1) << square)) == 0U) continue;
             for (const auto slot : {hardware::SquareLedSlot::Square0,
@@ -80,7 +80,7 @@ void LedAnimationRenderer::OutputGameFrame(LedAnimationPresentation& presentatio
         }
     }
     modules::LedFrameAccent accent{accentMask.data(), accentMask.size(),
-        capture ? modules::led_render_policy::CAPTURE_REMOVAL_ACCENT_SCALE256 :
+        capture ? modules::led_render_policy::CaptureTapScale(ownership.captureTaps) :
         duck ? modules::led_render_policy::DUCK_REMINDER_ACCENT_SCALE256 :
         m_startupPieceScale256, capture || duck ? uint16_t{256U} : uint16_t{0U}};
     const auto* artworkInput = std::get_if<modules::litchcraft_presentation::Inputs>(&presentation.scene);

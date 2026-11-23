@@ -266,6 +266,8 @@ bool GamePersistenceCoordinator::ShowCachedDuckHint() {
             m_duckHintTurn.duckDestination < 64U) {
             m_stateMachine.SetHintDuckMoveSquares(
                 m_duckSquare, m_duckHintTurn.duckDestination);
+        } else {
+            m_stateMachine.ClearHintDuckMove();
         }
         RecordAcceptedHintDiagnostic();
     }

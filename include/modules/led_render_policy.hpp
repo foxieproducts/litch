@@ -11,9 +11,11 @@ constexpr uint16_t LEGACY_BROWNOUT_LED_CURRENT_LIMIT_MA = 450U;
 // One owner for the unchanged compositor boost. Bounded cues can compensate
 // before this stage instead of clipping a complementary fade at its peak.
 constexpr uint16_t COMPOSER_GLOBAL_BRIGHTNESS_BOOST_SCALE256 = 320U;
-// WHITE capture removal uses the same emitter strength as a full directed
-// target. Its existing mask/ceiling still pass through hard current/thermal caps.
-constexpr uint16_t CAPTURE_REMOVAL_ACCENT_SCALE256 = 256U;
+// Only bright amber taps spend spare current above the ordinary emitter level.
+constexpr uint16_t CAPTURE_REMOVAL_ACCENT_SCALE256 = 384U;
+constexpr uint16_t CaptureTapScale(const uint64_t tapMask) {
+    return tapMask != 0ULL ? CAPTURE_REMOVAL_ACCENT_SCALE256 : 256U;
+}
 constexpr uint16_t DUCK_REMINDER_ACCENT_SCALE256 = 384U;
 
 struct PowerPolicyInputs {

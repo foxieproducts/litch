@@ -80,6 +80,7 @@ struct PhysicalBoardState {
 struct InteractionStateView {
     uint64_t validDestinationMask = 0;
     uint64_t captureFirstCapturerMask = 0ULL;
+    uint8_t captureFirstEnPassantLanding = CHESS_INTERACTION_INVALID_SQUARE;
     // Legal castling is a coordinated two-piece action. These masks let the
     // renderer distinguish it from an ordinary king destination without
     // re-reading engine state or inferring intent from distance.

@@ -2563,13 +2563,11 @@ void main() {
     ]);
     await tester.pumpAndSettle();
     expect(
-      find.text(
-        'Remove the piece on f3, then move the piece from e2 to f3. Duck hint: a5 to d4.',
-      ),
+      find.text('Remove the piece on f3, then move the piece from e2 to f3.'),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('capture-removal-f3')), findsOneWidget);
-    expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsOneWidget);
+    expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsNothing);
     ble.controller.add(const <String>[
       '{"event":"home_state","v":1,"seq":2,"a":"idle",'
           '"fen":"7k/8/8/8/8/8/4P3/K7 w - - 0 1",'
@@ -2578,17 +2576,29 @@ void main() {
           '"as":"3be2e4a5d4"}',
     ]);
     await tester.pumpAndSettle();
-    expect(find.text('Hint: e2 to e4, then duck a5 to d4.'), findsOneWidget);
+    expect(find.text('Hint: e2 to e4.'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('assistance-to-e4')),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey<String>('duck-assistance-to-d4')),
-      findsOneWidget,
+      findsNothing,
     );
+    // An older board may publish the remaining Duck hint while the chess
+    // move is still settling. Neither text nor markers may advance early.
     ble.controller.add(const <String>[
-      '{"event":"home_state","v":1,"seq":3,"a":"duck",'
+      '{"event":"home_state","v":1,"seq":3,"a":"settle",'
+          '"fen":"7k/8/8/8/8/8/4P3/K7 w - - 0 1",'
+          '"occ":"0100001001000080","g":"d","duck":"a5",'
+          '"out":"n","win":"n","rot":0,"white":1,"pm":0,'
+          '"as":"3da5d4"}',
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Duck hint:'), findsNothing);
+    expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsNothing);
+    ble.controller.add(const <String>[
+      '{"event":"home_state","v":1,"seq":4,"a":"duck",'
           '"fen":"7k/8/8/8/4P3/8/8/K7 w - - 0 1",'
           '"occ":"0100001001000080","g":"d","duck":"a5",'
           '"out":"n","win":"n","rot":0,"white":1,"pm":0,'
@@ -2606,7 +2616,7 @@ void main() {
       findsOneWidget,
     );
     ble.controller.add(const <String>[
-      '{"event":"home_state","v":1,"seq":4,"a":"idle",'
+      '{"event":"home_state","v":1,"seq":5,"a":"idle",'
           '"fen":"7k/8/8/8/4P3/8/8/K7 b - - 0 1",'
           '"occ":"0100001800000080","g":"d","duck":"d4",'
           '"out":"n","win":"n","rot":0,"white":1,"pm":0}',

@@ -19,15 +19,8 @@ bool GameStateMachine::IsContinuousDuckHint() const {
 
 void GameStateMachine::SetDuckRelocationHint(
     const uint8_t fromSquare, const uint8_t toSquare) {
-    const bool continuesShownCue = m_renderState.hintDuckMoveValid &&
-        m_renderState.hintDuckMoveFromSquare == fromSquare &&
-        m_renderState.hintDuckMoveToSquare == toSquare;
-    const auto elapsed = m_renderState.hintFeedbackElapsed;
     ClearHintMove();
     SetHintMoveSquares(fromSquare, toSquare);
-    if (continuesShownCue) {
-        m_renderState.hintFeedbackElapsed = elapsed;
-    }
 }
 
 bool GameStateMachine::BeginDuckRelocation(

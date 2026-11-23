@@ -649,7 +649,7 @@ void ReturnedSourceCaptureHandoffJourney(const bool rotate,
     Checkpoint(session, run, "expired-handoff-retains-one-move", "Black-to-move");
 }
 
-void PawnCaptureNearEnPassantJourney() {
+void PawnCaptureNearEnPassantJourney(const bool rotate) {
     constexpr const char* position = "6k1/8/5b2/3pP3/8/8/P7/4K3 w - d6 0 1";
     constexpr uint64_t source = UINT64_C(1) << E5;
     constexpr uint64_t epVictim = UINT64_C(1) << D5;
@@ -659,9 +659,11 @@ void PawnCaptureNearEnPassantJourney() {
     virtual_litch_config config{};
     virtual_litch_default_config(&config);
     config.hardware = VIRTUAL_LITCH_HARDWARE_V3_3;
+    config.board_rotate = rotate;
     for (const bool enPassant : {false, true}) {
-        const char* run = enPassant ? "PawnE5/EP-metadata/en-passant" :
-                                     "PawnE5/EP-metadata/ordinary-f6";
+        char run[96] = {};
+        std::snprintf(run, sizeof(run), "PawnE5/EP-metadata/%s/rotate-%u",
+                      enPassant ? "en-passant" : "ordinary-f6", rotate);
         test_support::BoundedHintSession fixture(config);
         auto& session = fixture.session;
         if (!Prepare(session, run, position, occupancy)) return;
@@ -687,6 +689,38 @@ void PawnCaptureNearEnPassantJourney() {
                       static_cast<uint8_t>(runtime::ChessInteractionPhase::CaptureStaged),
               run, "the actual capture victim is observed empty first");
         Checkpoint(session, run, "victim-observed-empty", enPassant ? "move-E5-pawn-to-D6" : "move-E5-pawn-to-F6");
+        if (enPassant) {
+            const auto checkEpRoute = [&](const char* message) {
+                bool sourceVisible = false, landingVisible = false, victimDark = true;
+                const bool mappedRotate = modules::ComputeSquareRotate(
+                    session.BoardRotate(), session.FirstPlayerIsP2());
+                const auto victimPieces = hardware::MapSemanticSquareLedTargets(
+                    hardware::BoardRevision::V3_3S3, D5,
+                    hardware::SquareLedSlot::Piece, mappedRotate);
+                for (unsigned sample = 0U; sample < 60U; ++sample) {
+                    Check(session.Advance(30U) == VIRTUAL_LITCH_OK, run, "advance EP route playback");
+                    for (const auto slot : {hardware::SquareLedSlot::Square0,
+                                            hardware::SquareLedSlot::Square2}) {
+                        const auto sourcePixel = session.PhysicalFrame().pixels[PhysicalCueIndex(session, E5, slot)];
+                        const auto landingPixel = session.PhysicalFrame().pixels[PhysicalCueIndex(session, D6, slot)];
+                        sourceVisible = sourceVisible || sourcePixel.r > sourcePixel.g + 3U;
+                        landingVisible = landingVisible || landingPixel.r > landingPixel.g + 3U;
+                    }
+                    for (uint8_t i = 0U; i < victimPieces.count; ++i) {
+                        const auto pixel = session.PhysicalFrame().pixels[victimPieces.indices[i]];
+                        victimDark = victimDark && (pixel.r | pixel.g | pixel.b | pixel.w) == 0U;
+                    }
+                }
+                Check(sourceVisible && landingVisible && victimDark && victimPieces.count == 2U,
+                      run, message);
+            };
+            checkEpRoute("staged EP previews E5 to actual D6 landing while both empty D5 Piece emitters stay dark");
+            Check(Observe(session, occupancy & ~victim & ~source) &&
+                      session.State().required_action ==
+                          static_cast<uint8_t>(runtime::RequiredPhysicalAction::PlacePrimary),
+                  run, "lifting E5 hands staged EP to the physical placement action");
+            checkEpRoute("held EP continues E5-to-D6 guidance without illuminating empty D5 Piece emitters");
+        }
         Check(Observe(session, captured) && session.State().interaction_phase ==
                   static_cast<uint8_t>(runtime::ChessInteractionPhase::Settling) &&
                   session.UndoHistoryMoveCount() == 0U,
@@ -786,22 +820,23 @@ void EnPassantLandingWithUnrelatedPickupJourney() {
                   advance(3000U) && unchanged(),
               run, "valid EP landing still waits for its actual captured pawn past the deadline");
         Checkpoint(session, run, "valid-EP-waits-for-D5", "remove-the-black-pawn-on-D5");
-        bool sawLeft = false;
-        bool sawRight = false;
-        for (uint8_t sample = 0U; sample < 6U; ++sample) {
+        bool sawBright = false, sawDim = false;
+        for (uint8_t sample = 0U; sample < 13U; ++sample) {
             Check(advance(100U) && unchanged(), run,
                   "directed EP removal does not advance the game");
-            const auto left = session.SemanticFrame().board[D5][0U];
-            const auto right = session.SemanticFrame().board[D5][2U];
-            Check(left.r == left.g && left.g == left.b &&
-                      right.r == right.g && right.g == right.b &&
-                      (left.r != 0U || right.r != 0U),
-                  run, "the actual EP victim has white removal guidance");
-            sawLeft = sawLeft || left.r > right.r;
-            sawRight = sawRight || right.r > left.r;
+            const auto& victimLeds = session.SemanticFrame().board[D5];
+            const auto& left = victimLeds[0U];
+            const auto& right = victimLeds[2U];
+            const auto& piece = victimLeds[1U];
+            Check(left.r > 0U && left.r >= left.g && left.b == 0U && left.w == 0U &&
+                      right.r == left.r && right.g == left.g && right.b == left.b && right.w == left.w &&
+                      (piece.r | piece.g | piece.b | piece.w) == 0U,
+                  run, "after correction both rails on the actual EP victim flash together with its Piece LEDs dark");
+            sawBright = sawBright || left.r == 255U;
+            sawDim = sawDim || (left.r == 64U && left.g == 25U);
         }
-        Check(sawLeft && sawRight, run,
-              "EP removal guidance crossfades while the captured pawn remains");
+        Check(sawBright && sawDim, run,
+              "the recovered EP removal alternates amber strikes with a dim rest");
         const uint64_t after = (before & ~source & ~victim) | target;
         Check(advance(250U) && Observe(session, after) && advance(2200U) &&
                   Idle(session) && Fen(session) == completed &&
@@ -990,7 +1025,8 @@ int main() {
         ReturnedSourceCaptureHandoffJourney(rotate, false);
         ReturnedSourceCaptureHandoffJourney(rotate, true);
     }
-    PawnCaptureNearEnPassantJourney();
+    PawnCaptureNearEnPassantJourney(false);
+    PawnCaptureNearEnPassantJourney(true);
     EnPassantLandingWithUnrelatedPickupJourney();
     CaptureDuringCorrectionJourney();
     if (failures == 0) {

@@ -91,6 +91,7 @@ void Session::CaptureStartupFrame(const uint32_t nowMs,
     m_cpuThinkingVisible = false;
     m_sidePrioritySquareMask = 0ULL;
     m_captureRemovalMask = 0ULL;
+    m_captureTapMask = 0ULL;
     m_duckReminderMask = 0ULL;
     m_fixedPhysicalStatusOverlay = {};
     modules::led_frame_composer::ComposeStartupGrid(m_settings, m_semanticLedFrame);
@@ -280,7 +281,8 @@ void Session::CaptureFrame() {
         &m_gridFrameBeforeMenuOverlay,
         &m_cpuThinkingVisible,
         &m_sidePrioritySquareMask, &m_ordinaryPieceMask,
-        &m_fixedPhysicalStatusOverlay, &m_menuForeground, &m_captureRemovalMask, &m_duckReminderMask);
+        &m_fixedPhysicalStatusOverlay, &m_menuForeground, &m_captureRemovalMask, &m_duckReminderMask,
+        nullptr, &m_captureTapMask);
     if (m_gamePersistence && m_gamePersistence->Litchcraft().IsCanvasVisible()) {
         const auto sharedStatusFrame = m_statusFrame;
         m_waterSlosh.SetAdmitted(false,m_nowMs);

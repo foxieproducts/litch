@@ -79,10 +79,12 @@ void Compose(const ComposeInputs& in,
              modules::GridForegroundLayer* outMenuForeground,
              uint64_t* outCaptureRemovalMask,
              uint64_t* outDuckReminderMask,
-    HintPresentationOutcome* outHint) {
+             HintPresentationOutcome* outHint,
+             uint64_t* outCaptureTapMask) {
     if (outHint != nullptr) *outHint = {};
     if (outOrdinaryPieceMask != nullptr) { *outOrdinaryPieceMask = 0ULL; }
     if (outCaptureRemovalMask != nullptr) { *outCaptureRemovalMask = 0ULL; }
+    if (outCaptureTapMask != nullptr) { *outCaptureTapMask = 0ULL; }
     if (outDuckReminderMask != nullptr) { *outDuckReminderMask = 0ULL; }
     if (outSidePrioritySquareMask != nullptr) {
         *outSidePrioritySquareMask = 0ULL;
@@ -112,6 +114,8 @@ void Compose(const ComposeInputs& in,
         ctx.renderIntent.hintPromptVisible && ctx.hintRefinementAlpha255 == 0U;
     if (outHint != nullptr && ctx.hintMoveValid &&
         ctx.renderIntent.hintPromptVisible && ctx.hintRefinementAlpha255 != 0U) {
+        // Keep the legal continuation attached to the chess move the player saw.
+        // Its Duck lights first appear when the interaction enters DuckRelocation.
         outHint->tuple = {ctx.hintFromSquare, ctx.hintToSquare,
             ctx.hintDuckMoveValid ? ctx.hintDuckFromSquare : uint8_t{255U},
             ctx.hintDuckMoveValid ? ctx.hintDuckToSquare : uint8_t{255U}};
@@ -150,7 +154,8 @@ void Compose(const ComposeInputs& in,
         !runtime::IsRuntimeHealthPlayPaused(ctx.in->runtimeHealth)) {
         *outDuckReminderMask = UINT64_C(1) << reminder.plan.moveFrom;
     }
-    internal::ComposeBoard(ctx, outLedFrame, outGridFrame);
+    const uint64_t captureTaps = internal::ComposeBoard(ctx, outLedFrame, outGridFrame);
+    if (outCaptureTapMask != nullptr) *outCaptureTapMask = captureTaps;
     internal::ApplyPlacementStylePreview(ctx, outLedFrame, outGridFrame);
     internal::ApplyMenuBackgroundDim(ctx, outLedFrame, outGridFrame);
 

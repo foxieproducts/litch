@@ -165,7 +165,7 @@ void Session::CapturePhysicalFrame(const uint16_t scaleOverride,
         }
     }
     if (captureAccent) for (uint8_t square = 0U; square < 64U; ++square) {
-        if ((m_captureRemovalMask & (UINT64_C(1) << square)) == 0ULL) continue;
+        if ((m_captureTapMask & (UINT64_C(1) << square)) == 0ULL) continue;
         for (const auto slot : {hardware::SquareLedSlot::Square0, hardware::SquareLedSlot::Square2}) {
             const auto targets = hardware::MapSemanticSquareLedTargets(revision, square, slot,
                 outputConfig.square_rotate_for_output != 0U);
@@ -220,7 +220,7 @@ void Session::CapturePhysicalFrame(const uint16_t scaleOverride,
     m_renderer.SetRgbwWhiteMixScale256(rgbwWhiteMixScale256);
     pipeline.RenderFrame(physical.data(), ledCount,
                          {accentMask.data(), accentMask.size(), bootFadeScale256 < 256U ? bootFadeScale256 :
-                             captureAccent ? modules::led_render_policy::CAPTURE_REMOVAL_ACCENT_SCALE256 :
+                             captureAccent ? modules::led_render_policy::CaptureTapScale(m_captureTapMask) :
                              duckAccent ? modules::led_render_policy::DUCK_REMINDER_ACCENT_SCALE256 : m_startupPieceScale256,
                           bootFadeScale256 < 256U ? uint16_t(0U) :
                              captureAccent || duckAccent ? uint16_t(256U) : uint16_t(0U)});

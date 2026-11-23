@@ -68,6 +68,7 @@ class LedAnimationRenderer final {
         uint64_t prioritySquares = 0U;
         uint64_t ordinaryPieces = 0U;
         uint64_t captureRemoval = 0U;
+        uint64_t captureTaps = 0U;
         uint64_t duckReminder = 0U;
         bool menuActive = false;
     };

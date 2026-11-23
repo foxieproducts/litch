@@ -593,23 +593,26 @@ bool CueSameHue(const virtual_litch_color a, const virtual_litch_color b) {
 
 bool ActiveHintLanding(const Session& session, const uint8_t target,
                        const uint8_t neighbor, const modules::Rgb available,
-                       const bool knight = false) {
+                       const modules::Rgb mover, const bool knight = false) {
     const auto ledCount = session.PhysicalFrame().led_count;
     const auto revision = ledCount == 300U ? hardware::BoardRevision::V3_3S3
         : ledCount == 224U ? hardware::BoardRevision::V2S3 : hardware::BoardRevision::V3S3;
     const auto rgb = modules::ScaleRgbSaturatingBy256(available, 320U);
     const virtual_litch_color expected{rgb.r, rgb.g, rgb.b, 0U};
-    // The directional head may crossfade either rail toward the mover's
-    // color. Required landing guidance retains its visible available-color
-    // floor; a full-strength stationary opposite rail is not its contract.
+    const auto head=modules::ScaleRgbSaturatingBy256(mover,320U);
+    // Both rails can carry the moving color during the vertical middle phase.
+    // Their channels stay within the available-to-mover blend and its floor.
     for (const uint8_t slot : {0U, 2U}) {
         const auto actual = session.SemanticFrame().board[target][slot];
         const std::array<uint8_t, 3U> channels{{actual.r, actual.g, actual.b}};
         const std::array<uint8_t, 3U> full{{expected.r, expected.g, expected.b}};
+        const std::array<uint8_t, 3U> moving{{head.r, head.g, head.b}};
         if (CueEnergy(actual) == 0U) return false;
         for (uint8_t channel = 0U; channel < channels.size(); ++channel) {
-            if (!knight && (channels[channel] < full[channel] * 96U / 256U ||
-                            channels[channel] > full[channel])) return false;
+            const auto low=std::min(full[channel],moving[channel]);
+            const auto high=std::max(full[channel],moving[channel]);
+            if (!knight && (channels[channel] < low * 96U / 256U ||
+                            channels[channel] > high)) return false;
         }
     }
     if (CueEnergy(session.SemanticFrame().board[target][1U]) == 0U) return false;
@@ -691,7 +694,7 @@ bool CapturedSamePieceWithinTravelFloor(const Session& session, uint8_t square, 
     return a.count!=0U && a.count==b.count;
 }
 
-// Victim removal is WHITE; correction/error markers below retain their own red.
+// Correction and return markers retain their own amber palette.
 bool AmberTint(const virtual_litch_color color) {
     return color.r > color.g && color.g > 0U && color.b == 0U && color.w == 0U;
 }
@@ -721,20 +724,19 @@ bool CapturedStatusRed(const Session& session) {
 
 bool CapturedRemovalCue(const Session& session,uint8_t square){
     const auto left=session.SemanticFrame().board[square][0U],right=session.SemanticFrame().board[square][2U];
-    const uint16_t sum=left.r+right.r;
-    if(left.r!=left.g || left.g!=left.b || right.r!=right.g || right.g!=right.b ||
-        left.w!=0U || right.w!=0U || sum<254U || sum>257U ||
-        !CapturedSlotLit(session,square,hardware::SquareLedSlot::Piece,false))return false;
+    if(!CueEqual(left,right) || left.r==0U || std::abs(int(left.g)*5-int(left.r)*2)>10 ||
+        left.b!=0U || left.w!=0U || !CapturedSlotLit(session,square,hardware::SquareLedSlot::Piece,false))return false;
+    virtual_litch_color firstMapped{};bool haveMapped=false;
     for(const auto slot:{hardware::SquareLedSlot::Square0,hardware::SquareLedSlot::Square2}){
         const auto targets=hardware::MapSemanticSquareLedTargets(hardware::BoardRevision::V3S3,square,slot,session.HallRotate());
-        const auto semantic=session.SemanticFrame().board[square][static_cast<uint8_t>(slot)];
         for(uint8_t i=0U;i<targets.count;++i){
             const auto mapped=session.PhysicalFrame().pixels[targets.indices[i]];
-            if(semantic.r==0U && CueEnergy(mapped)!=0U)return false;
-            if(semantic.r==255U && CueEnergy(mapped)==0U)return false;
+            if(mapped.r==0U || std::abs(int(mapped.g)*5-int(mapped.r)*2)>10 || mapped.b!=0U || mapped.w!=0U ||
+               (haveMapped && !CueEqual(firstMapped,mapped)))return false;
+            firstMapped=mapped;haveMapped=true;
         }
     }
-    return true;
+    return haveMapped;
 }
 
 std::array<virtual_litch_color, 4U> CapturedCorners(const Session& session) {
@@ -1291,6 +1293,35 @@ void CheckSession(Results& results, bool duck, bool black, bool firstP2, bool ro
                       "real Duck CPU compound result preserves completed turns, raw score scale, perspective and terminal availability");
     }
     Checkpoint(results, session, engine, run, "selected", "move-indicated-computer-piece");
+    modules::DuckThinkResult selectedDuck{};
+    const bool hasDuckDecision=duck && selected && engine.GetLastDuckThinkResult(selectedDuck) &&
+        !selectedDuck.capturedKing && selectedDuck.duckDestination<64U;
+    const auto yellowDuckTarget=[&](uint8_t square) {
+        if(square>=64U)return false;
+        const auto yellow=[](virtual_litch_color c){return c.r>0U && c.r==c.g && c.b==0U && c.w==0U;};
+        for(const auto slot:{hardware::SquareLedSlot::Square0,hardware::SquareLedSlot::Piece,hardware::SquareLedSlot::Square2}) {
+            if(!yellow(session.SemanticFrame().board[square][static_cast<uint8_t>(slot)]))return false;
+            const auto targets=hardware::MapSemanticSquareLedTargets(
+                hardware::BoardRevision::V3_3S3,square,slot,session.HallRotate());
+            for(uint8_t i=0U;i<targets.count;++i)
+                if(!yellow(session.PhysicalFrame().pixels[targets.indices[i]]))return false;
+        }
+        return true;
+    };
+    const auto anyDuckYellow=[&](uint8_t square) {
+        if(square>=64U)return false;
+        const auto yellow=[](virtual_litch_color c){return c.r>0U && c.r==c.g && c.b==0U && c.w==0U;};
+        for(const auto slot:{hardware::SquareLedSlot::Square0,hardware::SquareLedSlot::Piece,hardware::SquareLedSlot::Square2}) {
+            if(yellow(session.SemanticFrame().board[square][static_cast<uint8_t>(slot)]))return true;
+            const auto targets=hardware::MapSemanticSquareLedTargets(
+                hardware::BoardRevision::V3_3S3,square,slot,session.HallRotate());
+            for(uint8_t i=0U;i<targets.count;++i)
+                if(yellow(session.PhysicalFrame().pixels[targets.indices[i]]))return true;
+        }
+        return false;
+    };
+    if(hasDuckDecision)results.Check(!anyDuckYellow(selectedDuck.duckDestination),
+        "selected CPU chess action exposes no yellow emitter at its later Duck destination");
     if (selected) {
         results.Check(Move(session, occupancy, move.fromSquare, move.toSquare),
                       "raw Hall lift/place acknowledges the real selected chess move");
@@ -1302,6 +1333,10 @@ void CheckSession(Results& results, bool duck, bool black, bool firstP2, bool ro
             if (std::strlen(relocation) == 5U) {
                 (void)litch_max::TryParseUciSquare(relocation + 3U, duckTo);
             }
+            results.Check(hasDuckDecision && duckTo==selectedDuck.duckDestination &&
+                              session.State().interaction_phase==static_cast<uint8_t>(runtime::ChessInteractionPhase::DuckRelocation) &&
+                              yellowDuckTarget(duckTo),
+                          "after chess acknowledgement the fixed CPU Duck destination is yellow on both rails and both actual mapped Piece LEDs");
             Checkpoint(results, session, engine, run, "duck-placement", "move-Duck-to-yellow-target");
             results.Check(Move(session, occupancy, DUCK_FROM, duckTo),
                           "raw fixed Duck relocation completes the compound CPU turn");
@@ -1647,7 +1682,8 @@ void CheckBookHintFirstRevealJourney(Results& results) {
     for (const uint32_t elapsed : {0U, 80U, 200U, 450U}) {
         results.Check(session.Advance(elapsed - sampled) == VIRTUAL_LITCH_OK &&
                           session.TryGetHintMoveSquares(from, to) && from == first.fromSquare && to == first.toSquare &&
-                          ActiveHintLanding(session, first.toSquare, neighbor, available, knight) &&
+                          ActiveHintLanding(session, first.toSquare, neighbor, available,
+                              modules::ui_color_wheel::WheelToRgb(modules::player_end_palette::P1_END_DEFAULT_WHEEL), knight) &&
                           worker.IsActive() &&
                           engine.starts == 1U && engine.unsafeReads.load() == 0U,
                       "actual opening landing retains rails, Piece pair and every mapped emitter while the offroute neighbor keeps ordinary guidance");
@@ -1821,14 +1857,22 @@ void CheckHintFirstRevealJourney(Results& results, bool refinementBeforeReveal,
     const auto available = modules::ui_color_wheel::WheelToRgb(
         static_cast<uint8_t>(modules::player_end_palette::P2_END_DEFAULT_WHEEL + 16U));
     uint32_t sampled = 0U;
-    for (const uint32_t elapsed : {0U, 80U, 200U, 450U}) {
+    bool fullLandingRestored=false;
+    const auto expectedLanding=modules::ScaleRgbSaturatingBy256(available,320U);
+    const auto moving=modules::ui_color_wheel::WheelToRgb(modules::player_end_palette::P2_END_DEFAULT_WHEEL);
+    for (const uint32_t elapsed : {0U, 80U, 200U, 450U, 900U, 1400U}) {
         results.Check(session.Advance(elapsed - sampled) == VIRTUAL_LITCH_OK &&
                           hintIs(firstTarget) && ActiveHintLanding(session, firstTarget,
-                              static_cast<uint8_t>(firstTarget + 1U), available) &&
+                              static_cast<uint8_t>(firstTarget + 1U), available, moving) &&
                           worker.IsActive() && engine.starts == 1U && engine.unsafeReads.load() == 0U,
-                      "first held target keeps its full opposite rail and actual landing emitters while nonroute neighbor stays ordinary during the same search");
+                      "first held target keeps visible mover-to-available rails and landing emitters while its neighbor stays ordinary");
+        const auto left=session.SemanticFrame().board[firstTarget][0U];
+        const auto right=session.SemanticFrame().board[firstTarget][2U];
+        fullLandingRestored=fullLandingRestored || (left.r==expectedLanding.r && left.g==expectedLanding.g && left.b==expectedLanding.b &&
+            right.r==expectedLanding.r && right.g==expectedLanding.g && right.b==expectedLanding.b);
         sampled = elapsed;
     }
+    results.Check(fullLandingRestored,"the held target restores both full available-color rails when the moving head is elsewhere");
     results.Check(Observe(session, occupancy), "returning a7 reaches normal recovery to Idle");
     (void)session.Advance(300U);
     results.Check(hintIs(24U), "stable Idle adopts the actual pending depth7 result");
@@ -2061,8 +2105,19 @@ void CheckDuckHintMinimalToggleJourney(Results& results, bool resultWhileMinimal
                       outcome.status == modules::ControlMutationStatus::Applied,
                   "typed manual Hint acknowledges the Duck suggestion without restarting search");
     (void)session.Advance(start + 500U - session.NowMs());
-    results.Check(CapturedSquareLit(session, first.duckDestination),
-                  "first500ms reveal includes semantic and actual V3 mapped Duck destination");
+    const auto noDuckYellow = [&](uint8_t square) {
+        const auto yellow=[](virtual_litch_color c){return c.r>0U && c.r==c.g && c.b==0U && c.w==0U;};
+        for(uint8_t slot=0U;slot<3U;++slot) {
+            if(yellow(session.SemanticFrame().board[square][slot]))return false;
+            const auto targets=hardware::MapSemanticSquareLedTargets(
+                hardware::BoardRevision::V3S3,square,static_cast<hardware::SquareLedSlot>(slot),session.HallRotate());
+            for(uint8_t i=0U;i<targets.count;++i)
+                if(yellow(session.PhysicalFrame().pixels[targets.indices[i]]))return false;
+        }
+        return true;
+    };
+    results.Check(CapturedSquareLit(session, first.toSquare) && noDuckYellow(first.duckDestination),
+                  "first500ms reveal shows the chess destination without the later Duck cue on semantic or mapped pixels");
     HintRefinementFrame(results, session, engine, "duck-first-visible", RUN);
     modules::ThinkCandidate current;
     uint8_t selectedDepth = 0U;
@@ -2093,18 +2148,16 @@ void CheckDuckHintMinimalToggleJourney(Results& results, bool resultWhileMinimal
     uint8_t from = 64U, to = 64U;
     results.Check(session.TryGetHintMoveSquares(from, to) && from == current.fromSquare &&
                       to == current.toSquare &&
-                      CapturedSquareLit(session, first.duckDestination, !resultWhileMinimal) &&
-                      CapturedSquareLit(session, current.duckDestination, resultWhileMinimal),
-                  "authoritative compound tuple updates with a fade only when Minimal is disabled");
+                      noDuckYellow(first.duckDestination) && noDuckYellow(current.duckDestination),
+                  "authoritative compound tuple updates without exposing either later Duck destination during chess play");
     HintRefinementFrame(results, session, engine, "duck-refinement-0ms", RUN);
     if (!resultWhileMinimal) {
         (void)session.Advance(60U);
         results.Check(Set(session, 866U, "MINIMAL_ANIMATIONS", "true") &&
                           session.Advance(1U) == VIRTUAL_LITCH_OK &&
-                          CapturedSquareLit(session, first.duckDestination, false) &&
-                          CapturedSquareLit(session, current.duckDestination) &&
+                          noDuckYellow(first.duckDestination) && noDuckYellow(current.duckDestination) &&
                           CapturedSquareLit(session, current.toSquare),
-                      "Duck typed Minimal on immediately shows the current chess and Duck semantic/mapped cues");
+                      "Minimal on immediately shows the current chess cue while the later Duck destination remains hidden");
     }
     HintRefinementFrame(results, session, engine, resultWhileMinimal
         ? "duck-result-while-minimal-on-at0ms" : "duck-minimal-on-at61ms", RUN);
@@ -2114,25 +2167,28 @@ void CheckDuckHintMinimalToggleJourney(Results& results, bool resultWhileMinimal
                       from == current.fromSquare && to == current.toSquare &&
                       session.TryGetHintDuckMoveSquares(from, to) &&
                       from == DUCK_FROM && to == current.duckDestination &&
-                      CapturedSquareLit(session, first.duckDestination, false) &&
-                      CapturedSquareLit(session, current.duckDestination) &&
-                      CapturedSquareLit(session, current.toSquare) &&
-                      session.SemanticFrame().board[current.duckDestination][0U].r >= 96U &&
-                      session.SemanticFrame().board[current.duckDestination][0U].r ==
-                          session.SemanticFrame().board[current.duckDestination][0U].g &&
-                      session.SemanticFrame().board[current.duckDestination][0U].b == 0U,
-                  "Duck typed Minimal off before240ms retains current mapped guidance and never revives departing tuple");
+                      noDuckYellow(first.duckDestination) && noDuckYellow(current.duckDestination) &&
+                      CapturedSquareLit(session, current.toSquare),
+                  "Minimal off retains current chess guidance without reviving either Duck cue");
     HintRefinementFrame(results, session, engine, resultWhileMinimal
         ? "duck-minimal-off-at1ms" : "duck-minimal-off-at62ms", RUN);
     (void)session.Advance(240U);
-    results.Check(CapturedSquareLit(session, first.duckDestination, false) &&
-                      CapturedSquareLit(session, current.duckDestination) &&
+    results.Check(noDuckYellow(first.duckDestination) && noDuckYellow(current.duckDestination) &&
                       session.TryGetHintMoveSquares(from, to) && from == current.fromSquare && to == current.toSquare,
-                  "Duck recovery expires the discarded episode with current tuple/cache still present");
+                  "the discarded refinement expires with only the current chess cue visible and the Duck tuple cached");
     HintRefinementFrame(results, session, engine, "duck-after-old-expiry", RUN);
     engine.CancelThink();
     results.Check(engine.Finish(session.NowMs()) && engine.starts == 1U && engine.unsafeReads.load() == 0U,
                   "Duck Minimal toggle never erases cache, restarts search or reads the mutable active engine");
+    uint64_t occupancy=session.PhysicalOccupancyMask();
+    results.Check(Move(session,occupancy,current.fromSquare,current.toSquare) &&
+                      session.State().interaction_phase==static_cast<uint8_t>(runtime::ChessInteractionPhase::DuckRelocation) &&
+                      session.TryGetHintMoveSquares(from,to) && from==DUCK_FROM && to==current.duckDestination &&
+                      CapturedSquareLit(session,current.duckDestination) &&
+                      CapturedSlotLit(session,current.duckDestination,hardware::SquareLedSlot::Piece) &&
+                      !noDuckYellow(current.duckDestination),
+                  "after the actual chess move, DuckRelocation reveals the retained yellow landing on semantic and mapped LEDs");
+    HintRefinementFrame(results,session,engine,"duck-phase-after-chess",RUN);
     std::printf("[DUCK_MINIMAL_JOURNEY_SEAMS] actual_search_worker_mailbox_GPC=1 raw_Hall=1 typed_settings=1 "
                 "paired_chess_Duck_setters=1 semantic_mapped_V3=1 schedule_controlled=1 physical_timing_claim=0 "
                 "first=%u,%u,%u current=%u,%u,%u depth=%u\n", first.fromSquare, first.toSquare,
@@ -2186,10 +2242,35 @@ void CheckHintRefinementBoundaries(Results& results) {
         return color;
     };
     const auto halfVisible = renderedTarget(ctx, 46U);
-    const auto latched = machine.GetRenderState().hintRefinement.incoming;
     const auto began = machine.GetRenderState().hintRefinement.elapsed.StartMs();
     const auto feedbackBegan = machine.GetRenderState().hintFeedbackElapsed.StartMs();
     const uint8_t alpha = ctx.hintRefinementAlpha255;
+    const auto latched = machine.GetRenderState().hintRefinement.incoming;
+    machine.SetHintDuckMoveSquares(24U, 27U);
+    ctx=compose();
+    const auto shown=runtime::VisibleHintPresentation(machine.GetRenderState());
+    const auto latest=runtime::CurrentHintPresentation(machine.GetRenderState());
+    const auto unchangedTarget=renderedTarget(ctx,46U);
+    results.Check(latched.fromSquare==54U && latched.toSquare==46U &&
+                      latched.duckFromSquare==24U && latched.duckToSquare==26U &&
+                      machine.GetRenderState().hintRefinement.incoming==latched && shown==latched &&
+                      latest.fromSquare==54U && latest.toSquare==46U &&
+                      latest.duckFromSquare==24U && latest.duckToSquare==27U &&
+                      machine.GetRenderState().hintRefinement.elapsed.StartMs()==began &&
+                      machine.GetRenderState().hintFeedbackElapsed.StartMs()==feedbackBegan &&
+                      ctx.hintRefinementAlpha255==alpha && unchangedTarget.r==halfVisible.r &&
+                      unchangedTarget.g==halfVisible.g && unchangedTarget.b==halfVisible.b,
+                  "incoming chess B retains its Duck d1 while hidden B/d2 is cached without a fade or clock reset");
+    auto boundary=machine.GetRenderState();
+    runtime::AdvanceHintRefinement(boundary.hintRefinement,latest,began+240U);
+    const auto boundaryShown=runtime::VisibleHintPresentation(boundary);
+    results.Check(!boundary.hintRefinement.elapsed.Started() && boundaryShown==latest,
+                  "without another chess change, the original fade end exposes cached B/d2 without another handoff");
+    std::printf("[HINT_DUCK_ASSOCIATION] elapsed=180 shown=%u-%u/%u-%u latest=%u-%u/%u-%u boundary=240 shown=%u-%u/%u-%u extra_fade=%u\n",
+        shown.fromSquare,shown.toSquare,shown.duckFromSquare,shown.duckToSquare,
+        latest.fromSquare,latest.toSquare,latest.duckFromSquare,latest.duckToSquare,
+        boundaryShown.fromSquare,boundaryShown.toSquare,boundaryShown.duckFromSquare,boundaryShown.duckToSquare,
+        boundary.hintRefinement.elapsed.Started());
     machine.SetHintMoveSquares(52U, 44U);
     ctx = compose();
     results.Check(ctx.hintFromSquare == 54U && ctx.hintToSquare == 46U &&
@@ -2220,45 +2301,55 @@ void CheckHintRefinementBoundaries(Results& results) {
     machine.SetHintMoveSquares(52U, 44U);
     results.Check(!machine.GetRenderState().hintRefinement.elapsed.Started(),
                   "same tuple greater-depth publication cannot restart visual refinement");
+    const auto stableFeedback=machine.GetRenderState().hintFeedbackElapsed.StartMs();
+    const auto stableTarget=renderedTarget(ctx,44U);
+    machine.SetHintDuckMoveSquares(24U,25U);
+    ctx=compose();uint8_t duckFrom=64U,duckTo=64U;
+    const auto afterContinuation=renderedTarget(ctx,44U);
+    results.Check(machine.TryGetHintDuckMoveSquares(duckFrom,duckTo) && duckFrom==24U && duckTo==25U &&
+                      !machine.GetRenderState().hintRefinement.elapsed.Started() &&
+                      machine.GetRenderState().hintFeedbackElapsed.StartMs()==stableFeedback &&
+                      afterContinuation.r==stableTarget.r && afterContinuation.g==stableTarget.g &&
+                      afterContinuation.b==stableTarget.b && ctx.hintRefinementAlpha255==255U,
+                  "same chess move with a different hidden Duck continuation updates its cache without fading or restarting the visible cue");
     machine.SetHintMoveSquares(28U, 21U); // EP's empty landing differs from its victim29.
     s_nowMs.fetch_add(180U); machine.Tick(); ctx = compose();
     results.Check(ctx.hintCaptureSquare == 29U && ctx.hintToSquare == 21U,
                   "immutable EP tuple preserves the off-destination victim during fade-in");
-    BoardComposeRuntime boardRuntime = BuildBoardComposeRuntime(ctx);
-    boardRuntime.illegalAnim.elapsedMs = 0U;
-    modules::Rgb victim = modules::RGB_BLACK;
-    ApplyPhysicalRemovalPrompt(ctx, boardRuntime, false, 29U, victim);
+    const auto renderedVictim = [&](const ComposeContext& context, uint8_t square) {
+        modules::BoardLedFrame board{};
+        ApplyPhysicalRemovalBrackets(context,board);
+        return board[square].left;
+    };
+    snapshot.render.hintFeedbackTimingValid=true;
+    snapshot.render.hintFeedbackElapsedMs=0U;
+    auto victim=renderedVictim(ctx,29U);
     auto fullContext=ctx;fullContext.hintRefinementAlpha255=255U;
-    modules::Rgb fullWhite=modules::RGB_BLACK;
-    ApplyPhysicalRemovalPrompt(fullContext,boardRuntime,false,29U,fullWhite);
-    results.Check(victim.r>0U && victim.r<fullWhite.r && victim.r==victim.g && victim.g==victim.b,
-                  "Hint-only EP WHITE removal retains the tuple's partial fade instead of appearing full strength");
+    auto fullWarm=renderedVictim(fullContext,29U);
+    results.Check(victim.r>0U && victim.r<fullWarm.r && std::abs(int(victim.g)*5-int(victim.r)*2)<=5 && victim.b==0U,
+                  "Hint-only EP amber removal retains the tuple's partial fade instead of appearing full strength");
     s_nowMs.fetch_add(60U); machine.Tick();
     machine.SetHintMoveSquares(36U, 27U); // e4xd5 replaces e5xf6 EP on the same board.
     s_nowMs.fetch_add(60U); machine.Tick(); ctx = compose();
-    boardRuntime = BuildBoardComposeRuntime(ctx); boardRuntime.illegalAnim.elapsedMs = 0U;
-    modules::Rgb oldVictim = modules::RGB_BLACK, newVictim = modules::RGB_BLACK;
-    ApplyPhysicalRemovalPrompt(ctx, boardRuntime, false, 29U, oldVictim);
-    ApplyPhysicalRemovalPrompt(ctx, boardRuntime, false, 27U, newVictim);
-    results.Check(ctx.hintCaptureSquare == 29U && oldVictim.r > 0U && oldVictim.r < fullWhite.r &&
-                      oldVictim.r==oldVictim.g && oldVictim.g==oldVictim.b &&
+    snapshot.render.hintFeedbackTimingValid=true;snapshot.render.hintFeedbackElapsedMs=0U;
+    auto oldVictim=renderedVictim(ctx,29U),newVictim=renderedVictim(ctx,27U);
+    results.Check(ctx.hintCaptureSquare == 29U && oldVictim.r > 0U && oldVictim.r < fullWarm.r &&
+                      std::abs(int(oldVictim.g)*5-int(oldVictim.r)*2)<=5 && oldVictim.b==0U &&
                       newVictim.r == 0U && newVictim.g == 0U && newVictim.b == 0U,
-                  "departing EP WHITE fades out without prematurely showing the new capture victim");
+                  "departing EP amber fades out without prematurely showing the new capture victim");
     s_nowMs.fetch_add(120U); machine.Tick(); ctx = compose();
-    boardRuntime = BuildBoardComposeRuntime(ctx); boardRuntime.illegalAnim.elapsedMs = 0U;
-    oldVictim = newVictim = modules::RGB_BLACK;
-    ApplyPhysicalRemovalPrompt(ctx, boardRuntime, false, 29U, oldVictim);
-    ApplyPhysicalRemovalPrompt(ctx, boardRuntime, false, 27U, newVictim);
-    results.Check(ctx.hintCaptureSquare == 27U && oldVictim.r == 0U && newVictim.r > 0U && newVictim.r < fullWhite.r &&
-                      newVictim.r==newVictim.g && newVictim.g==newVictim.b,
+    snapshot.render.hintFeedbackTimingValid=true;snapshot.render.hintFeedbackElapsedMs=0U;
+    oldVictim=renderedVictim(ctx,29U);newVictim=renderedVictim(ctx,27U);
+    results.Check(ctx.hintCaptureSquare == 27U && oldVictim.r == 0U && newVictim.r > 0U && newVictim.r < fullWarm.r &&
+                      std::abs(int(newVictim.g)*5-int(newVictim.r)*2)<=5 && newVictim.b==0U,
                   "only incoming ordinary capture victim fades in after the EP cue retires");
     ctx.hintRefinementAlpha255 = 0U;
     ctx.cpuTargetOccValid = true;
+    snapshot.interaction.cpuMovePromptElapsedMs=0U;
     snapshot.interaction.taggedState.plan.removalRequired = true;
     snapshot.interaction.taggedState.plan.removalSquare = 29U;
-    modules::Rgb required = modules::RGB_BLACK;
-    ApplyPhysicalRemovalPrompt(ctx, boardRuntime, false, 29U, required);
-    results.Check(required.r==fullWhite.r && required.g==fullWhite.g && required.b==fullWhite.b,
+    const auto required=renderedVictim(ctx,29U);
+    results.Check(required.r==fullWarm.r && required.g==fullWarm.g && required.b==fullWarm.b,
                   "required active-plan removal is never faded by optional Hint presentation");
     runtime::GameStateMachineRenderState state;
     runtime::SetHintDisplayRequested(state, true); runtime::SetHintMoveSquares(state, 48U, 27U);
@@ -2446,7 +2537,7 @@ void CheckCapturedKnightToCpuJourney(Results& results) {
         if (frame != 9U) (void)session.Advance(100U);
     }
     results.Check(sourceLow == 0U && sourceHigh > 0U && captureVisible && captureHigh > captureLow,
-                  "White Hint source fully blinks while Black d5 Piece LEDs stay zero and WHITE brackets crossfade through zero/full");
+                  "White Hint source fully blinks while Black d5 Piece LEDs stay zero and paired amber rails strike above a dim floor");
     results.Check(Observe(session, LIFT) && session.State().selected_square == 42U,
                   "captured raw Hall prefix lifts the actual White knight atc3");
     results.Check((session.State().physical_occupied_mask & (UINT64_C(1) << 42U)) == 0ULL &&
@@ -2458,7 +2549,7 @@ void CheckCapturedKnightToCpuJourney(Results& results) {
     results.Check(Observe(session, REMOVE_CAPTURE) &&
                       CapturedSlotLit(session, 27U, hardware::SquareLedSlot::Piece) &&
                       !CapturedRemovalCue(session, 27U),
-                  "captured pawn removal retires WHITE removal and exposes both actual d5 landing emitters");
+                  "captured pawn removal retires warm removal and exposes both actual d5 landing emitters");
     Checkpoint(results, session, engine, RUN, "d5-victim-removed", "place-held-white-knight-d5");
     results.Check(Observe(session, LIFT) &&
                       CapturedSlotLit(session, 42U, hardware::SquareLedSlot::Piece, false) &&

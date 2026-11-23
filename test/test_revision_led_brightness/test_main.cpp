@@ -121,57 +121,78 @@ void CheckPowerLimiting() {
 }
 
 void CheckCaptureTargetStrength() {
-    std::array<modules::Rgb,300U> frame{};
-    frame[0U]={255U,255U,255U}; frame[1U]={255U,255U,255U};
-    frame[2U]={16U,16U,16U};frame[3U]={17U,97U,231U};
-    std::array<uint8_t,300U> mask{}; mask[0U]=1U;mask[4U]=1U;
-    for(const uint16_t gain:{256U,128U})for(const float brightness:{0.25f,0.90f,1.00f}){
-        modules::PowerBudgetPolicyConfig policyConfig;
-        policyConfig.maxLedCurrentMa=20000U;policyConfig.maxTotalCurrentMa=20000U;
-        modules::PowerBudgetPolicy policy(policyConfig);CaptureRenderer renderer;
-        modules::BudgetAwareLedPipelineConfig config;config.outputBrightnessScale256=gain;
-        modules::BudgetAwareLedPipeline pipeline(renderer,policy,config);pipeline.SetBrightnessScale01(brightness);
-        pipeline.RenderFrame(frame.data(),frame.size());const auto baseline=renderer.pixels;
-        pipeline.RenderFrame(frame.data(),frame.size(),{mask.data(),mask.size(),
-            modules::led_render_policy::CAPTURE_REMOVAL_ACCENT_SCALE256,256U});
-        for(uint16_t i=1U;i<frame.size();++i)
-            Check(renderer.pixels[i].r==baseline[i].r && renderer.pixels[i].g==baseline[i].g && renderer.pixels[i].b==baseline[i].b,
-                  "capture-only headroom never changes any unmarked pixel");
-        Check(renderer.pixels[0U].r==renderer.pixels[1U].r && renderer.pixels[0U].g==renderer.pixels[1U].g &&
-              renderer.pixels[0U].b==renderer.pixels[1U].b,
-              "WHITE removal peak equals the full target-reference emitter in the SAME frame at every brightness");
-        Check(renderer.pixels[0U].r>renderer.pixels[2U].r && renderer.pixels[4U].r==0U &&
-              renderer.pixels[4U].g==0U && renderer.pixels[4U].b==0U,
-              "capture white is much brighter than ordinary square lighting while the inactive owned rail stays zero");
-        std::printf("[CAPTURE_TARGET_PEAK] gain=%u brightness=%.2f capture=%u target=%u ordinary=%u inactive=%u\n",
-              gain,brightness,renderer.pixels[0U].r,renderer.pixels[1U].r,renderer.pixels[2U].r,renderer.pixels[4U].r);
-        Check(CurrentMa(renderer)==pipeline.GetLastStats().appliedLedCurrentMa,
-              "capture headroom current estimate equals the actual final output");
+    const modules::Rgb amber{255U, 101U, 0U};
+    std::array<modules::Rgb, 300> frame{};
+    frame[0] = frame[1] = frame[2] = amber;
+    frame[3] = {17U, 97U, 231U};
+    std::array<uint8_t, 300> mask{};
+    mask[0] = mask[1] = mask[4] = 1U;
+    const modules::LedFrameAccent taps{mask.data(), mask.size(),
+        modules::led_render_policy::CAPTURE_REMOVAL_ACCENT_SCALE256, 256U};
+    const auto same = [](const modules::Rgb a, const modules::Rgb b) {
+        return a.r == b.r && a.g == b.g && a.b == b.b;
+    };
+
+    for (const uint16_t gain : {256U, 128U}) {
+        for (const float brightness : {0.0f, 8.0f / 256.0f, 0.25f, 0.90f, 1.0f}) {
+            modules::PowerBudgetPolicyConfig policyConfig;
+            policyConfig.maxLedCurrentMa = policyConfig.maxTotalCurrentMa = 20000U;
+            modules::PowerBudgetPolicy policy(policyConfig);
+            CaptureRenderer renderer;
+            modules::BudgetAwareLedPipelineConfig config;
+            config.outputBrightnessScale256 = gain;
+            modules::BudgetAwareLedPipeline pipeline(renderer, policy, config);
+            pipeline.SetBrightnessScale01(brightness);
+            pipeline.RenderFrame(frame.data(), frame.size());
+            const auto baseline = renderer.pixels;
+            pipeline.RenderFrame(frame.data(), frame.size(), taps);
+            const float peak = std::fmin(brightness * 1.5f, 1.0f);
+            const auto expected = [peak, gain](const uint8_t channel) {
+                return (std::lround(channel * peak) * gain + 128U) / 256U;
+            };
+            const auto rail = renderer.pixels[0];
+            Check(same(rail, renderer.pixels[1]) && rail.r == expected(amber.r) &&
+                      rail.g == expected(amber.g) && rail.b == 0U,
+                  "both amber rails spend spare current up to 1.5x brightness and the output ceiling");
+            for (size_t i = 2U; i < frame.size(); ++i) {
+                Check(same(renderer.pixels[i], baseline[i]),
+                      "peak gain preserves unmarked pixels and cannot light a dark emitter");
+            }
+            Check(CurrentMa(renderer) == pipeline.GetLastStats().appliedLedCurrentMa,
+                  "peak current estimate matches final output at both hardware gains");
+        }
     }
-    for(const bool noHeadroom:{false,true}){
-        frame.fill({255U,255U,255U});frame[4U]={};
-        modules::PowerBudgetPolicyConfig pc;pc.maxLedCurrentMa=80U;pc.maxTotalCurrentMa=80U;
-        pc.fixedSystemCurrentMa=noHeadroom?80U:0U;
-        modules::PowerBudgetPolicy policy(pc);CaptureRenderer renderer;
-        modules::BudgetAwareLedPipeline pipeline(renderer,policy);pipeline.SetBrightnessScale01(0.90f);
-        pipeline.RenderFrame(frame.data(),frame.size());const auto ordinary=renderer.pixels[1U];
-        pipeline.RenderFrame(frame.data(),frame.size(),{mask.data(),mask.size(),
-            modules::led_render_policy::CAPTURE_REMOVAL_ACCENT_SCALE256,256U});
-        Check(renderer.pixels[0U].r==renderer.pixels[1U].r && renderer.pixels[0U].g==renderer.pixels[1U].g &&
-              renderer.pixels[0U].b==renderer.pixels[1U].b,
-              "current-capped white removal and target-reference peaks remain equal in the SAME frame");
-        Check(renderer.pixels[4U].r==0U && renderer.pixels[4U].g==0U && renderer.pixels[4U].b==0U,
-              "current arbitration never relights the inactive owned removal rail");
-        std::printf("[CAPTURE_TARGET_LIMIT] no_headroom=%u capture=%u target=%u inactive=%u current=%u\n",
-            noHeadroom,renderer.pixels[0U].r,renderer.pixels[1U].r,renderer.pixels[4U].r,CurrentMa(renderer));
-        pipeline.RenderFrame(frame.data(),frame.size(),{mask.data(),mask.size(),285U,512U});
-        Check(renderer.pixels[1U].r==ordinary.r && renderer.pixels[1U].g==ordinary.g && renderer.pixels[1U].b==ordinary.b,
-              "current-limited capture accent preserves unmarked baseline bytes");
-        Check(uint32_t(CurrentMa(renderer))+pc.fixedSystemCurrentMa<=80U &&
-                  pipeline.GetLastStats().appliedLedCurrentMa==CurrentMa(renderer),
-              "capture ceiling requests cannot bypass hard80mA or zero available source current");
-        if(noHeadroom)Check(renderer.pixels[0U].r==0U && renderer.pixels[0U].g==0U && renderer.pixels[0U].b==0U,
-                           "zero current headroom cannot light a capture accent");
+
+    frame.fill({255U, 255U, 255U});
+    frame[0] = frame[1] = frame[2] = amber;
+    frame[4] = {};
+    for (const bool noHeadroom : {false, true}) {
+        modules::PowerBudgetPolicyConfig config;
+        config.maxLedCurrentMa = config.maxTotalCurrentMa = 80U;
+        config.fixedSystemCurrentMa = noHeadroom ? 80U : 0U;
+        modules::PowerBudgetPolicy policy(config);
+        CaptureRenderer renderer;
+        modules::BudgetAwareLedPipeline pipeline(renderer, policy);
+        pipeline.SetBrightnessScale01(0.90f);
+        pipeline.RenderFrame(frame.data(), frame.size());
+        const auto baseline = renderer.pixels;
+        const modules::LedFrameAccent oversized{mask.data(), mask.size(), 512U, 512U};
+        for (const auto& accent : {taps, oversized}) {
+            pipeline.RenderFrame(frame.data(), frame.size(), accent);
+            const auto rail = renderer.pixels[0];
+            Check(same(rail, renderer.pixels[1]) && rail.r >= baseline[0].r &&
+                      rail.g >= baseline[0].g && rail.b == 0U,
+                  "the limiter preserves paired amber and the baseline when trimming a tap");
+            for (size_t i = 2U; i < frame.size(); ++i) {
+                Check(same(renderer.pixels[i], baseline[i]),
+                      "current arbitration preserves all unrelated emitters and the dark rail");
+            }
+            Check(CurrentMa(renderer) + config.fixedSystemCurrentMa <= 80U &&
+                      pipeline.GetLastStats().appliedLedCurrentMa == CurrentMa(renderer),
+                  "actual peak output respects hard current and zero remaining source current");
+            if (noHeadroom) Check(same(rail, modules::RGB_BLACK),
+                                  "zero available current keeps both rails dark");
+        }
     }
 }
 

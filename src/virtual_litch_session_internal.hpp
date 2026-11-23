@@ -455,6 +455,7 @@ class Session final {
         m_fixedPhysicalStatusOverlay{};
     uint64_t m_ordinaryPieceMask = 0ULL;
     uint64_t m_captureRemovalMask = 0ULL;
+    uint64_t m_captureTapMask = 0ULL;
     uint64_t m_duckReminderMask = 0ULL;
     uint16_t m_startupPieceScale256 = 256U;
     modules::StartupPieceAccent m_startupPieceAccent;

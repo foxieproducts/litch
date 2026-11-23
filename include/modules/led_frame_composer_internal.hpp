@@ -426,18 +426,11 @@ void ApplyDirectedMovePrompt(const ComposeContext& ctx,
 bool IsHintCaptureRemovalSquare(const ComposeContext& ctx, uint8_t logicalSq);
 
 uint64_t PhysicalRemovalSquareMask(const ComposeContext& ctx);
-void ApplyPhysicalRemovalBrackets(const ComposeContext& ctx,
-                                  const BoardComposeRuntime& runtime,
-                                  modules::BoardLedFrame& board);
-void ApplyPhysicalRemovalPrompt(const ComposeContext& ctx,
-                                const BoardComposeRuntime& runtime,
-                                bool forceOff,
-                                uint8_t logicalSq,
-                                modules::Rgb& ioFinalSquare);
+uint64_t ApplyPhysicalRemovalBrackets(const ComposeContext& ctx, modules::BoardLedFrame& board);
 
-void ComposeBoard(const ComposeContext& ctx,
-                  modules::BoardLedFrame& outLedFrame,
-                  std::array<modules::Rgb, 64>& outGridFrame);
+uint64_t ComposeBoard(const ComposeContext& ctx,
+                      modules::BoardLedFrame& outLedFrame,
+                      std::array<modules::Rgb, 64>& outGridFrame);
 
 void ApplyMenuBackgroundDim(const ComposeContext& ctx,
                             modules::BoardLedFrame& outLedFrame,

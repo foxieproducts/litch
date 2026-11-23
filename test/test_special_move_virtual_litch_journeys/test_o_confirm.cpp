@@ -36,11 +36,10 @@ bool Equal(const virtual_litch_color a, const virtual_litch_color b) {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.w == b.w;
 }
 
-bool RemovalWhite(const virtual_litch_semantic_frame& frame,uint8_t square){
-    const auto left=frame.board[square][0U],right=frame.board[square][2U];
-    const uint16_t sum=left.r+right.r;
-    return left.r==left.g && left.g==left.b && right.r==right.g && right.g==right.b &&
-        sum>=254U && sum<=257U && Equal(frame.board[square][1U],{});
+bool WarmRemovalCue(const virtual_litch_semantic_frame& frame, const uint8_t square) {
+    const auto& left = frame.board[square][0U];
+    return Equal(left, frame.board[square][2U]) && left.r > 0U && left.r >= left.g &&
+           left.b == 0U && left.w == 0U && Equal(frame.board[square][1U], {});
 }
 
 virtual_litch_config Config() {
@@ -194,15 +193,16 @@ void EnPassantCircleJourney() {
                board.State().required_action ==
                    static_cast<uint8_t>(runtime::RequiredPhysicalAction::RemoveCapture) &&
                Equal(ownerColor, board.SemanticFrame().board[D6][1]));
-    bool sawLeft = false, sawRight = false, heldCorrectly = true;
+    bool sawStrike = false, sawRest = false, heldCorrectly = true;
     for (uint8_t sample = 0U; sample < 12U; ++sample) {
         const bool advanced = board.Advance(100U) == VIRTUAL_LITCH_OK;
         heldCorrectly = advanced && heldCorrectly &&
             Pending(fixture, before, 4U, beforeFen) &&
             Equal(ownerColor, board.SemanticFrame().board[D6][1]);
-        const auto left=board.SemanticFrame().board[D5][0U],right=board.SemanticFrame().board[D5][2U];
-        heldCorrectly=heldCorrectly && RemovalWhite(board.SemanticFrame(),D5);
-        sawLeft=sawLeft || left.r>right.r;sawRight=sawRight || right.r>left.r;
+        const auto rail = board.SemanticFrame().board[D5][0U];
+        heldCorrectly = heldCorrectly && WarmRemovalCue(board.SemanticFrame(), D5);
+        sawStrike = sawStrike || Equal(rail, {255U, 101U, 0U, 0U});
+        sawRest = sawRest || Equal(rail, {64U, 25U, 0U, 0U});
         if (sample == 2U || sample == 7U) {
             Checkpoint(board, NAME, "sample-capture-removal-flash", "remove-pawn-d5",
                        heldCorrectly);
@@ -214,7 +214,7 @@ void EnPassantCircleJourney() {
                Pending(fixture, before, 4U, beforeFen));
     const bool waitedForRemoval = board.Advance(4000U) == VIRTUAL_LITCH_OK;
     Checkpoint(board, NAME, "captured-pawn-still-present+4000ms", "remove-pawn-d5",
-               waitedForRemoval && heldCorrectly && sawLeft && sawRight &&
+               waitedForRemoval && heldCorrectly && sawStrike && sawRest &&
                Pending(fixture, before, 4U, beforeFen));
     occupancy &= ~Bit(D5);
     Checkpoint(board, NAME, "remove-captured-pawn-d5", "press-O-or-relift-d6",
@@ -222,7 +222,7 @@ void EnPassantCircleJourney() {
                Pending(fixture, before, 4U, beforeFen) &&
                board.State().interaction_phase ==
                    static_cast<uint8_t>(runtime::ChessInteractionPhase::Settling) &&
-               !RemovalWhite(board.SemanticFrame(),D5) &&
+               !WarmRemovalCue(board.SemanticFrame(), D5) &&
                Equal(ownerColor, board.SemanticFrame().board[D6][1]));
     Checkpoint(board, NAME, "capture-cleared+2001ms", "press-O-or-relift-d6",
                board.Advance(2001U) == VIRTUAL_LITCH_OK &&

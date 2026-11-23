@@ -387,12 +387,6 @@ class HomeBoardSnapshot {
   }
 
   HomeAssistanceState? get visibleAssistance {
-    final settlingDuckHint =
-        gameStatus?.variant == 'duck' &&
-        assistance?.presentation == HomeAssistancePresentation.duck &&
-        assistance?.requested == true &&
-        assistance?.duckMove != null &&
-        assistance!.duckMove!.from == gameStatus?.duckSquare;
     if (position == null ||
         (gameStatus?.isFinished ?? false) ||
         physicalStatus?.placementMode == true ||
@@ -403,7 +397,7 @@ class HomeBoardSnapshot {
             visibleDuckRelocation!.owner != HomeDuckRelocationOwner.human) ||
         homeStateAction == HomeStateAction.promote ||
         homeStateAction == HomeStateAction.correction ||
-        (homeStateAction == HomeStateAction.settle && !settlingDuckHint) ||
+        homeStateAction == HomeStateAction.settle ||
         (physicalPositionMatches == false && !isExpectedBoardInteraction)) {
       return null;
     }
@@ -412,7 +406,42 @@ class HomeBoardSnapshot {
         return null;
       }
     }
-    return assistance;
+    final state = assistance;
+    if (state == null) return null;
+    final duckStage =
+        gameStatus?.variant == 'duck' &&
+        gameStatus?.duckMovePending == true &&
+        homeStateAction == HomeStateAction.duck;
+    if (state.presentation == HomeAssistancePresentation.duck) {
+      // Older partial snapshots cannot establish the physical stage. Keep
+      // their standalone Duck instruction, but never advance a known stage.
+      return gameStatus == null || homeStateAction == null || duckStage
+          ? state
+          : null;
+    }
+    final compound =
+        state.presentation == HomeAssistancePresentation.compoundDuck;
+    if (!compound &&
+        (state.presentation != HomeAssistancePresentation.legal ||
+            state.duckMove == null)) {
+      return state;
+    }
+    // Older boards retain a complete chosen turn. Its future Duck step stays
+    // in the raw state, while every UI consumer sees only the current action.
+    return HomeAssistanceState(
+      requested: state.requested,
+      manualAvailable: state.manualAvailable,
+      coachingOwned: state.coachingOwned,
+      presentation: duckStage
+          ? HomeAssistancePresentation.duck
+          : compound
+          ? HomeAssistancePresentation.ready
+          : HomeAssistancePresentation.legal,
+      move: duckStage ? null : state.move,
+      duckMove: duckStage ? state.duckMove : null,
+      legalSource: duckStage ? null : state.legalSource,
+      legalDestinations: duckStage ? null : state.legalDestinations,
+    );
   }
 
   /// An outstanding removal uses accepted presence, not just a queued move.

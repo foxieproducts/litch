@@ -65,9 +65,9 @@ bool TryGetPendingDuckChessPieceSide(
 
 } // namespace
 
-void ComposeBoard(const ComposeContext& ctx,
-                  modules::BoardLedFrame& outLedFrame,
-                  std::array<modules::Rgb, 64>& outGridFrame) {
+uint64_t ComposeBoard(const ComposeContext& ctx,
+                      modules::BoardLedFrame& outLedFrame,
+                      std::array<modules::Rgb, 64>& outGridFrame) {
     const auto& in = *ctx.in;
     const auto& snapshot = ctx.Snapshot();
     const BoardComposeRuntime boardRuntime = BuildBoardComposeRuntime(ctx);
@@ -380,10 +380,11 @@ void ComposeBoard(const ComposeContext& ctx,
 
     ApplyDirectedMoveLanding(ctx, outLedFrame);
     ApplyPlacementEmitterEffects(ctx, outLedFrame);
-    ApplyPhysicalRemovalBrackets(ctx, boardRuntime, outLedFrame);
+    const uint64_t brightTaps = ApplyPhysicalRemovalBrackets(ctx, outLedFrame);
     for (uint8_t square = 0U; square < 64U; ++square) {
         outGridFrame[square] = modules::RepresentativeSquareColor(boardFrame[square]);
     }
+    return brightTaps;
 }
 
 } // namespace internal

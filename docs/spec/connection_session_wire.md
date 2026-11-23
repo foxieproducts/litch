@@ -117,6 +117,12 @@ move. While the CPU is thinking, bytes 71–74 carry its elapsed half-seconds
 as a little-endian 32-bit integer. Earlier app builds ignore byte 71 while
 the CPU is idle, and earlier boards report zero there.
 
+Duck Hint guidance follows the current physical action. A ready chess hint
+contains the chess source and destination. A pickup can add the legal chess
+destinations. The suggested Duck source and destination appear once the
+board accepts the chess move and enters Duck relocation. Apps reading older
+compound suggestions display the step for the current action.
+
 ## Activation and lifetime
 
 The central registers the exact notification endpoint before Hello. Board

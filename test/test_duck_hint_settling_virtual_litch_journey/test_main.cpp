@@ -1,6 +1,9 @@
 #include "bounded_hint_engine.hpp"
 #include "hardware/board_led_output_mapping.hpp"
 #include "modules/orientation.hpp"
+#include "modules/duck_game_persistence.hpp"
+#include "modules/game_persistence_coordinator.hpp"
+#include "modules/settings_store.hpp"
 #include "runtime/chess_interaction_model.hpp"
 #include "runtime/square_mapping.hpp"
 #include <ArduinoJson.h>
@@ -33,15 +36,16 @@ enum class DuckPlacementBatch { Separate, Unique, Ambiguous };
 void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, bool coaching,
              bool correction = false, bool minimal = false,
              DuckPickup duckPickup = DuckPickup::AfterChessPlacement,
-             DuckPlacementBatch batch = DuckPlacementBatch::Separate) {
+             DuckPlacementBatch batch = DuckPlacementBatch::Separate, unsigned captureOrder = 0U) {
     char run[128]{};
-    std::snprintf(run, sizeof(run), "DuckHintSettling/%s/first-p%u/rotate-%u/%s/%s/pickup-%u/batch-%u",
+    std::snprintf(run, sizeof(run), "DuckHintSettling/%s/first-p%u/rotate-%u/%s/%s/pickup-%u/batch-%u/capture-%u",
                   policy, firstP2 ? 2U : 1U, rotate,
                   correction ? "correction" : (coaching ? "Coaching" : "Hint"),
-                  minimal ? "Minimal" : "Normal", unsigned(duckPickup), unsigned(batch));
+                  minimal ? "Minimal" : "Normal", unsigned(duckPickup), unsigned(batch), captureOrder);
     virtual_litch_config config{};
     virtual_litch_default_config(&config);
-    config.hardware = VIRTUAL_LITCH_HARDWARE_S3;
+    config.hardware = captureOrder ? VIRTUAL_LITCH_HARDWARE_V3_3 : VIRTUAL_LITCH_HARDWARE_S3;
+    const auto revision = captureOrder ? hardware::BoardRevision::V3_3S3 : hardware::BoardRevision::V2S3;
     config.first_player_is_p2 = firstP2;
     config.board_rotate = rotate;
     test_support::BoundedHintSession fixture(config);
@@ -85,6 +89,31 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
           (outcome.status == modules::ControlMutationStatus::Applied ||
            outcome.status == modules::ControlMutationStatus::Noop) && board.Advance(0U) == VIRTUAL_LITCH_OK,
           run, "shared confirmation setting applied");
+    virtual_litch_color captureOwner{};
+    if (captureOrder != 0U) {
+        bool restored = false;
+        // Use the existing saved-game seam only to choose a capture position.
+        // Search, buttons, Hall observations, settling and both LED mappings below are production.
+        board.RunControlIngress([](void* context, modules::SettingsStore& settings,
+            modules::ControlMutationService&, modules::GamePersistenceCoordinator& coordinator) {
+            modules::GamePersistenceState state;
+            const bool position = state.fen.Assign("4k3/8/8/8/4q3/8/4R3/6K1 w - - 0 1");
+            state.undoBaseFen = state.fen;
+            modules::DuckGameDurableState duck;
+            duck.variant = modules::GameVariant::Duck;
+            duck.duckSquare = DUCK;
+            char encoded[32]{};
+            *static_cast<bool*>(context) = position && modules::EncodeDuckGameDurableState(duck, encoded, sizeof(encoded)) &&
+                state.variantState.Assign(encoded) && modules::WriteGamePersistenceState(settings.Doc(), state) &&
+                coordinator.LoadOrInitialize();
+        }, &restored);
+        occupancy = (UINT64_C(1) << 4U) | (UINT64_C(1) << 36U) | (UINT64_C(1) << 52U) |
+                    (UINT64_C(1) << 62U) | (UINT64_C(1) << DUCK);
+        Check(restored && observe() && board.Advance(2500U) == VIRTUAL_LITCH_OK &&
+              board.GameVariant() == modules::GameVariant::Duck, run, "saved Duck capture position restored");
+        captureOwner = board.SemanticFrame().board[52U][1U];
+        Check(!Equal(captureOwner, {}), run, "saved capturer has its player color before Hint");
+    }
     Check(button(white, runtime::VirtualLitchPhysicalButton::O, coaching ? 1200U : 20U),
           run, "physical O requests guidance");
     uint8_t from = 64, to = 64, duckFrom = 64, duckTo = 64;
@@ -123,6 +152,48 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
           readyHome["co"].as<unsigned>() == (coaching ? 1U : 0U),
           run, "White Coaching latch is enabled only in automatic cases");
     checkpoint("compound-ready", "follow-chess-then-same-Duck-destination");
+    const auto duckTargetPiece = hardware::MapSemanticSquareLedTargets(
+        revision, duckTo, hardware::SquareLedSlot::Piece, mappedRotate);
+    uint8_t hiddenDiagnostics = 0U;
+    const auto duckGuidanceHidden = [&]() {
+        const auto report = [&](const char* reason, uint8_t square, uint8_t slot,
+                                virtual_litch_color color) {
+            if (hiddenDiagnostics++ < 5U) std::printf(
+                "[DUCK_HIDE_DETAIL] run=%s time=%u home=%s reason=%s square=%u slot=%u from=%u to=%u duckFrom=%u duckTo=%u color=%u,%u,%u,%u\n",
+                run, board.State().now_ms, Home(board, "a").c_str(), reason, square, slot,
+                from, to, DUCK, duckTo, color.r, color.g, color.b, color.w);
+            return false;
+        };
+        const auto landing = board.SemanticFrame().board[duckTo][1U];
+        if (Yellow(landing)) return report("landing-semantic", duckTo, 1U, landing);
+        for (uint8_t target = 0U; target < duckTargetPiece.count; ++target) {
+            const auto color = board.PhysicalFrame().pixels[duckTargetPiece.indices[target]];
+            if (Yellow(color)) return report("landing-physical", duckTo, target, color);
+        }
+        for (uint8_t square = 0U; square < 64U; ++square) {
+            if (square == from || square == to) continue;
+            for (uint8_t slot = 0U; slot < 3U; ++slot) {
+                // A present Duck keeps its ordinary yellow Piece identity;
+                // this is not a destination or moving route invitation.
+                if (square == DUCK && slot == 1U &&
+                    (occupancy & (UINT64_C(1) << DUCK)) != 0ULL) continue;
+                const auto color = board.SemanticFrame().board[square][slot];
+                if (Yellow(color)) return report("yellow-scan", square, slot, color);
+            }
+        }
+        return true;
+    };
+    Check(duckGuidanceHidden(), run,
+          "chess Hint does not reveal the later Duck landing or path in semantic or mapped LEDs");
+    const auto duckSourcePiece = hardware::MapSemanticSquareLedTargets(
+        revision, DUCK, hardware::SquareLedSlot::Piece, mappedRotate);
+    bool ordinaryDuckIdentity = Yellow(board.SemanticFrame().board[DUCK][1U]);
+    for (uint8_t target = 0U; target < duckSourcePiece.count; ++target) {
+        ordinaryDuckIdentity = ordinaryDuckIdentity &&
+            Yellow(board.PhysicalFrame().pixels[duckSourcePiece.indices[target]]);
+    }
+    Check(ordinaryDuckIdentity, run,
+          "the occupied Duck retains its ordinary yellow identity without an early route or landing");
     if (!coaching) {
         Check(button(white, runtime::VirtualLitchPhysicalButton::O) && !board.HintDisplayRequested(),
               run, "second O hides manual guidance with Coaching disabled");
@@ -148,18 +219,14 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
               (outcome.status == modules::ControlMutationStatus::Applied ||
                outcome.status == modules::ControlMutationStatus::Noop) && board.Advance(0U) == VIRTUAL_LITCH_OK,
               run, "Minimal applies to the already-revealed Coaching decision");
-        const auto initial = board.SemanticFrame();
-        bool steady = true;
+        bool hidden = true;
         for (uint32_t age = 0U; age < 1200U; age += 20U) {
             Check(board.Advance(20U) == VIRTUAL_LITCH_OK, run,
-                  "observe unheld known Duck guidance through its normal pulse period");
-            for (uint8_t slot = 0U; slot < board.SemanticFrame().leds_per_square; ++slot) {
-                steady = steady && Equal(initial.board[DUCK][slot], board.SemanticFrame().board[DUCK][slot]) &&
-                    Equal(initial.board[duckTo][slot], board.SemanticFrame().board[duckTo][slot]);
-            }
+                  "observe chess-only guidance throughout the prior Duck pulse period");
+            hidden = hidden && duckGuidanceHidden();
         }
-        Check(steady && Yellow(board.SemanticFrame().board[duckTo][1U]), run,
-              "Minimal unheld Coaching Duck source and landing Piece invitation stay steady");
+        Check(hidden, run,
+              "Minimal keeps the later Duck landing and path hidden during chess guidance");
         checkpoint("Minimal-compound-steady", "lift-hinted-chess-piece");
     }
     const bool checkPickupOrder = duckPickup == DuckPickup::AfterChessPickup && minimal;
@@ -188,6 +255,15 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
         Check(observe() && board.State().correction_mask == 0ULL,
               run, "restoring the starting occupancy recovers normal pickup");
     }
+    if (captureOrder != 0U) {
+        Check(from == 52U && to == 36U && (occupancy & (UINT64_C(1) << to)) != 0U,
+              run, "real bounded Duck Hint selects the available rook capture");
+        if (from != 52U || to != 36U) return;
+        if (captureOrder == 2U) {
+            occupancy &= ~(UINT64_C(1) << to);
+            Check(observe(), run, "capture victim lifted before mover");
+        }
+    }
     occupancy &= ~(UINT64_C(1) << from);
     Check(observe(), run, "lift hinted chess piece");
     if (duckPickup == DuckPickup::AfterChessPickup) {
@@ -199,23 +275,23 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
                   coaching ? 5U : 1U, 'a' + from % 8U, '8' - from / 8U,
                   static_cast<unsigned long long>(board.State().valid_destination_mask),
                   'a' + to % 8U, '8' - to / 8U);
-    Check(Home(board, "as") == heldAssistance, run,
-          "held Duck chess piece exports every legal target plus only its matching chess Hint");
-    checkpoint("chess-mover-held", "place-chess-piece-first-while-Duck-guide-remains");
+    Check(captureOrder == 2U
+              ? board.State().required_action == static_cast<uint8_t>(runtime::RequiredPhysicalAction::PlacePrimary)
+              : Home(board, "as") == heldAssistance, run,
+          "held Duck chess piece exposes legal targets or its acknowledged victim-first placement plan");
+    checkpoint("chess-mover-held", "place-chess-piece-first");
     bool compoundVisible = true;
     for (uint8_t sample = 0U; sample < 4U; ++sample) {
         uint8_t heldDuckFrom = 64U, heldDuckTo = 64U;
         compoundVisible = compoundVisible && board.HintDisplayRequested() &&
             board.TryGetHintDuckMoveSquares(heldDuckFrom, heldDuckTo) &&
             heldDuckFrom == DUCK && heldDuckTo == duckTo &&
-            Yellow(board.SemanticFrame().board[duckTo][0U]) &&
-            Yellow(board.SemanticFrame().board[duckTo][1U]) &&
-            board.State().correction_mask == 0ULL;
+            duckGuidanceHidden() && board.State().correction_mask == 0ULL;
         Check(board.Advance(100U) == VIRTUAL_LITCH_OK, run,
               "observe stable compound guidance through held-piece rebuilds");
     }
     Check(compoundVisible, run,
-          "the same yellow Duck landing stays visible while the chess piece and optional Duck are held");
+          "the same Duck tuple stays cached without a Duck landing or path while chess is held");
     if (batch != DuckPlacementBatch::Separate) {
         const uint64_t legal = board.State().valid_destination_mask;
         const bool ambiguous = batch == DuckPlacementBatch::Ambiguous;
@@ -283,8 +359,8 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
               "one remaining landing is not misinterpreted as the chess piece");
         occupancy &= ~firstLanding;
         Check(observe() && board.State().interaction_phase == static_cast<uint8_t>(runtime::ChessInteractionPhase::PieceLifted) &&
-              board.HintDisplayRequested() && Yellow(board.SemanticFrame().board[duckTo][1U]), run,
-              "lifting both placements restores the original held chess and Duck suggestion");
+              board.HintDisplayRequested() && duckGuidanceHidden(), run,
+              "lifting both placements restores the original chess guidance while Duck guidance remains hidden");
         checkpoint("ambiguous-recovered", "place-chess-piece-first");
         const uint64_t moverSource = UINT64_C(1) << from;
         const uint64_t openInvalidSquares =
@@ -304,12 +380,62 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
         Check(observe() && board.HomeStateSnapshot().duckLandingRemovalMask == 0ULL &&
               Home(board, "a") == "lift", run, "removing both landings reopens chess placement");
     }
+    if (captureOrder == 1U) {
+        occupancy &= ~(UINT64_C(1) << to);
+        Check(observe(), run, "capture victim lifted after mover");
+    }
     occupancy |= UINT64_C(1) << to;
     Check(observe(), run, "place hinted chess piece");
+    Check(Home(board, "a") == "duck" ? Yellow(board.SemanticFrame().board[duckTo][1U])
+                                      : duckGuidanceHidden(), run,
+          "seated chess piece hides Duck guidance until its stage is committed");
+    if (duration == 2000U && !firstP2 && !rotate && !coaching && !correction &&
+        !minimal && captureOrder == 0U && duckPickup == DuckPickup::AfterChessPlacement &&
+        batch == DuckPlacementBatch::Separate) {
+        Check(board.Advance(100U) == VIRTUAL_LITCH_OK && duckGuidanceHidden(), run,
+              "Duck guidance stays hidden while the chess placement is settling");
+        occupancy &= ~(UINT64_C(1) << to);
+        Check(observe() && duckGuidanceHidden(), run,
+              "relifting the settling chess piece restores chess-only guidance");
+        uint8_t cachedDuckFrom = 64U, cachedDuckTo = 64U;
+        Check(board.TryGetHintDuckMoveSquares(cachedDuckFrom, cachedDuckTo) &&
+                  cachedDuckFrom == DUCK && cachedDuckTo == duckTo, run,
+              "chess relift retains the compound Duck tuple");
+        occupancy |= UINT64_C(1) << to;
+        Check(observe() && duckGuidanceHidden(), run,
+              "reseating the chess piece starts a fresh chess-only settling interval");
+    }
+    if (captureOrder != 0U) {
+        for (unsigned sample = 0U; sample <= 20U; ++sample) {
+            const auto& slots = board.SemanticFrame().board[to];
+            if (Home(board, "a") != "duck") Check(duckGuidanceHidden(), run,
+                "capture settling keeps later Duck landing and path hidden");
+            Check(Equal(slots[1], captureOwner), run,
+                  "seated Duck capturer owns Piece LEDs throughout settling, independent of removal palette");
+            const auto pieceTargets = hardware::MapSemanticSquareLedTargets(revision,
+                to, hardware::SquareLedSlot::Piece, mappedRotate);
+            for (uint8_t i = 0U; i < pieceTargets.count; ++i)
+                Check(!Equal(board.PhysicalFrame().pixels[pieceTargets.indices[i]], {}), run,
+                      "both physical capturer Piece emitters remain lit while settling");
+            if (sample == 0U || sample == 10U || sample == 20U) {
+                const auto targets = hardware::MapSemanticSquareLedTargets(revision,
+                    to, hardware::SquareLedSlot::Square0, mappedRotate);
+                const auto pixel = board.PhysicalFrame().pixels[targets.indices[0]];
+                std::printf("[DUCK_CAPTURE_SETTLE] order=%u age=%u phase=%u action=%u square=%u,%u,%u piece=%u,%u,%u physical=%u,%u,%u,%u\n",
+                    captureOrder, sample * 100U, board.State().interaction_phase, board.State().required_action,
+                    slots[0].r, slots[0].g, slots[0].b, slots[1].r, slots[1].g, slots[1].b,
+                    pixel.r, pixel.g, pixel.b, pixel.w);
+            }
+            if (sample != 20U) board.Advance(100U);
+        }
+    }
+
     if (duckPickup == DuckPickup::AfterChessPlacement || duration == 0U) {
-        Check(board.HintDisplayRequested() && Yellow(board.SemanticFrame().board[duckTo][1U]) &&
+        Check(board.HintDisplayRequested() &&
+              (Home(board, "a") == "duck" ? Yellow(board.SemanticFrame().board[duckTo][1U])
+                                         : duckGuidanceHidden()) &&
               board.State().side_to_move_black == 0U, run,
-              "Duck guidance remains visible while the chess half awaits confirmation");
+              "Duck guidance waits for chess confirmation and appears after the handoff");
     } else {
         Check(Home(board, "a") == "duck" &&
               board.State().required_action == static_cast<uint8_t>(runtime::RequiredPhysicalAction::PlacePrimary), run,
@@ -320,19 +446,15 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
               run, "confirm chess half using shared Circle owner");
         if (duckPickup == DuckPickup::AfterChessPickup) {
             Check(board.Advance(950U) == VIRTUAL_LITCH_OK && Home(board, "a") == "settle",
-                  run, "sample the yellow landing just before chess confirmation");
-            auto lastTop = board.SemanticFrame().board[duckTo][1U];
-            auto lastBottom = board.SemanticFrame().board[duckTo][3U];
+                  run, "sample the hidden Duck landing just before chess confirmation");
+            bool hiddenBefore = duckGuidanceHidden();
             for (uint8_t ms = 0U; ms < 60U && Home(board, "a") == "settle"; ++ms) {
-                lastTop = board.SemanticFrame().board[duckTo][1U];
-                lastBottom = board.SemanticFrame().board[duckTo][3U];
+                hiddenBefore = hiddenBefore && duckGuidanceHidden();
                 Check(board.Advance(1U) == VIRTUAL_LITCH_OK, run, "cross the handoff boundary");
             }
             const auto& now = board.SemanticFrame().board[duckTo];
-            Check(Home(board, "a") == "duck" && Yellow(lastTop) && Yellow(now[1U]) &&
-                  std::abs(int(lastTop.r) - int(now[1U].r)) <= 24 &&
-                  std::abs(int(lastBottom.r) - int(now[3U].r)) <= 24,
-                  run, "yellow landing stays lit at the current animation phase across confirmation");
+            Check(Home(board, "a") == "duck" && hiddenBefore && Yellow(now[1U]),
+                  run, "Duck landing first appears when chess confirmation hands off to Duck placement");
             checkpoint("continuous-Circle-handoff", "place-held-Duck");
         } else {
             Check(board.Advance(1000U) == VIRTUAL_LITCH_OK, run, "finish chess confirmation");
@@ -342,7 +464,7 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
         const uint32_t toPeak = 1200U - board.State().now_ms % 1200U + 72U;
         Check(board.Advance(toPeak) == VIRTUAL_LITCH_OK, run, "sample the required Duck lift reminder before pickup");
         const auto targets = hardware::MapSemanticSquareLedTargets(
-            hardware::BoardRevision::V2S3, DUCK, hardware::SquareLedSlot::Piece, mappedRotate);
+            revision, DUCK, hardware::SquareLedSlot::Piece, mappedRotate);
         const auto color = board.PhysicalFrame().pixels[targets.indices[0U]];
         std::printf("[DUCK_HINT_REMINDER] run=%s t=%u square=%u mapped=%u rgbw=%u,%u,%u,%u current=%u next=lift-Duck\n",
             run, board.State().now_ms, DUCK, targets.indices[0U], color.r, color.g, color.b, color.w,
@@ -354,6 +476,11 @@ void Journey(const char* policy, uint32_t duration, bool firstP2, bool rotate, b
     uint8_t retainedFrom = 64, retainedTo = 64;
     Check(board.TryGetHintMoveSquares(retainedFrom, retainedTo) && retainedFrom == DUCK && retainedTo == duckTo,
           run, "same compound Duck decision survives chess handoff");
+    bool mappedLandingYellow = true;
+    for (uint8_t target = 0U; target < duckTargetPiece.count; ++target)
+        mappedLandingYellow = mappedLandingYellow && Yellow(board.PhysicalFrame().pixels[duckTargetPiece.indices[target]]);
+    Check(mappedLandingYellow, run,
+          "after chess commits, every mapped Duck landing Piece LED shows the retained yellow destination");
     const auto initialDuckFrame = board.SemanticFrame();
     const auto yellow = initialDuckFrame.board[duckTo][0];
     const uint8_t distance = static_cast<uint8_t>(std::max(
@@ -495,6 +622,10 @@ int main() {
     Journey("press_circle_to_confirm", 0U, false, false, true, false, false, DuckPickup::AfterChessPickup, DuckPlacementBatch::Unique);
     Journey("settle_2s", 2000U, false, false, true, false, false, DuckPickup::AfterChessPickup, DuckPlacementBatch::Ambiguous);
     Journey("settle_2s", 2000U, false, false, true, false, true);
+    Journey("settle_2s", 2000U, false, false, false, false, false,
+            DuckPickup::AfterChessPlacement, DuckPlacementBatch::Separate, 1U);
+    Journey("settle_2s", 2000U, false, false, false, false, false,
+            DuckPickup::AfterChessPlacement, DuckPlacementBatch::Separate, 2U);
     std::printf("DuckHintSettling failures=%d\n", failures);
     return failures ? 1 : 0;
 }

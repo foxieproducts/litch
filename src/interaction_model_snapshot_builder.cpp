@@ -75,6 +75,10 @@ InteractionModelSnapshot BuildInteractionModelSnapshot(const InteractionModelSna
     snapshot.interaction.captureFirstCapturerMask = inputs.captureFirstCapturerMask;
     const ChessInteractionModel& chessInteraction =
         stateMachine.GetChessInteractionModel();
+    if (chessInteraction.phase.tag == ChessInteractionPhase::CaptureStaged &&
+        chessInteraction.phase.selectedSquare == chessInteraction.acknowledged.enPassantCaptureSquare) {
+        snapshot.interaction.captureFirstEnPassantLanding = chessInteraction.acknowledged.enPassantTargetSquare;
+    }
     if (chessInteraction.phase.tag == ChessInteractionPhase::PieceLifted) {
         const CastlingPickupIntent castlingIntent = BuildCastlingPickupIntent(
             chessInteraction.acknowledged,

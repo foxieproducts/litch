@@ -15,7 +15,15 @@ Each end of a V3.3 or V3.31 board has four direction buttons, X and Circle. Cont
 
 During setup the board can mark the two starting king squares. Place the pieces in their starting positions. An unexpected occupied square gets its own correction cue. During Undo, a pulsing square shows where to put the piece back. If the move captured a piece, return the mover first, then replace the captured piece where indicated.
 
+For a suggested capture, lift the opposing piece whose two outer lights flash bright amber twice, pause, and repeat. Minimal Animations marks it with steady orange. If you lift the opposing piece first, follow the moving lights from a friendly piece that can capture it. Returning the opposing piece cancels the choice. When your piece lands, its lights show it settling.
+
+In Duck chess, follow the hint for your chess piece first. Once the board accepts that move, yellow lights show where to move the Duck.
+
 Quick Setup lets you adjust the computer opponent, player ends, brightness, light-square lighting, board rotation and game clock. The clock pauses while the menu is open. See the [clock presets](spec/timer_semantics.md).
+
+If your phone cannot connect, open **Connection help** while finding a board or from the Connecting screen. First disconnect any other phone or tablet using that board. If trouble persists, forget the correct Foxie Litch board in your phone’s Bluetooth settings: on iPhone or iPad, choose **Settings → Bluetooth → ⓘ → Forget This Device**; on Samsung, choose **Settings → Connections → Bluetooth → gear → Unpair**. On other Android phones, look under **Connected devices** or **Bluetooth** and choose **Forget** or **Unpair** for your board. If the board is not listed, continue with its physical steps.
+
+To clear saved phones on the board you control, enter Play, hold **X** for about one second, then use **Left/Right** to select **Bluetooth**. At the same end, hold **X and Circle** together for two seconds. Release both at the blue-and-orange animation, then wait for **three success flashes**. This removes all phones, tablets and other devices saved on that board. The game and other settings stay intact. Return to **Foxie Litch**, select the correct board and try connecting again in the app. The app never clears the board’s saved pairings automatically.
 
 ## Promotion
 

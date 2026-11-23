@@ -159,9 +159,6 @@ GamePersistenceCoordinator::BuildHomeAssistanceProjection(
             }
         }
     }
-    const bool matchingDuckChessProgress =
-        shownDuckTurn != nullptr && !shownDuckTurn->capturedKing &&
-        IsMatchingDuckHintChessProgress(interaction, renderedFrom, renderedTo);
     const uint32_t vsCpuLevel = ReadVsCpuLevelSetting();
     const bool firstPlayerIsP2 =
         m_settings.ReadValue(
@@ -183,7 +180,7 @@ GamePersistenceCoordinator::BuildHomeAssistanceProjection(
         m_stateMachine.IsKingQueenSwapPromptActive() ||
         m_stateMachine.IsUndoPromptActive() ||
         m_stateMachine.IsPromotionActive() ||
-        (m_stateMachine.IsMoveSettlingActive() && !matchingDuckChessProgress) ||
+        m_stateMachine.IsMoveSettlingActive() ||
         m_stateMachine.HasQueuedCpuMove() ||
         m_stateMachine.HasHumanIllegal() ||
         m_stateMachine.HasCpuIllegal() ||
@@ -201,9 +198,9 @@ GamePersistenceCoordinator::BuildHomeAssistanceProjection(
 
     const bool assistancePhase =
         interaction.tag == runtime::ChessInteractionPhase::Idle ||
-        humanDuckRelocation || matchingDuckChessProgress;
+        humanDuckRelocation;
     projection.manualAffordanceUseful =
-        !foregroundSuppressed && !matchingDuckChessProgress && assistancePhase &&
+        !foregroundSuppressed && assistancePhase &&
         m_stateMachine.IsPhysicalOccupancyConsistentWithInteraction();
 
     if (!foregroundSuppressed && humanTurn &&
@@ -222,10 +219,6 @@ GamePersistenceCoordinator::BuildHomeAssistanceProjection(
             (projection.legalDestinationMask & (UINT64_C(1) << renderedTo)) != 0ULL) {
             projection.fromSquare = renderedFrom;
             projection.toSquare = renderedTo;
-            if (shownDuckTurn != nullptr && !shownDuckTurn->capturedKing) {
-                projection.duckFromSquare = renderedDuckFrom;
-                projection.duckToSquare = renderedDuckTo;
-            }
         }
         return projection;
     }
@@ -256,22 +249,9 @@ GamePersistenceCoordinator::BuildHomeAssistanceProjection(
             return projection;
         }
     } else if (shownDuckTurn != nullptr) {
-        if (shownDuckTurn->capturedKing) {
-            projection.presentation =
-                HomeAssistancePresentation::HintReady;
-            projection.fromSquare = renderedFrom;
-            projection.toSquare = renderedTo;
-            return projection;
-        }
-        projection.presentation = matchingDuckChessProgress
-            ? HomeAssistancePresentation::DuckRelocation
-            : HomeAssistancePresentation::DuckCompound;
-        if (!matchingDuckChessProgress) {
-            projection.fromSquare = renderedFrom;
-            projection.toSquare = renderedTo;
-        }
-        projection.duckFromSquare = renderedDuckFrom;
-        projection.duckToSquare = renderedDuckTo;
+        projection.presentation = HomeAssistancePresentation::HintReady;
+        projection.fromSquare = renderedFrom;
+        projection.toSquare = renderedTo;
         return projection;
     } else if (!m_takebackGrace.hintOwned &&
                m_gameVariant != GameVariant::Duck) {

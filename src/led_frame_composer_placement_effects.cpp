@@ -238,7 +238,9 @@ bool ApplyPromotionReveal(const ComposeContext& ctx, modules::BoardLedFrame& boa
         const auto levels = PromotionRevealLevels(reveal, elapsed);
         for (uint8_t square = 0U; square < 64U; ++square) {
             if (levels[square] == 0U || square == snapshot.game.duckSquare ||
-                (duck && ctx.hintDuckMoveValid && square == ctx.hintDuckToSquare) ||
+                (duck && (square == phase.plan.moveTo ||
+                          (ctx.renderIntent.hintPromptVisible && ctx.hintMoveValid &&
+                           square == ctx.hintToSquare))) ||
                 (snapshot.game.inCheck && snapshot.game.threatenedKingSquareValid &&
                  square == snapshot.game.threatenedKingSquare) ||
                 (ctx.kingSafetyPromptActive && (square == ctx.kingSafetyKingSquare ||

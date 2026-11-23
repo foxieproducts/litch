@@ -4,14 +4,12 @@
 namespace modules::led_frame_composer::internal {
 namespace {
 
-constexpr uint32_t REMOVAL_HANDOFF_MS = 300U;
-constexpr uint32_t REMOVAL_CYCLE_MS = REMOVAL_HANDOFF_MS * 2U;
-constexpr uint32_t REMOVAL_ENDPOINT_DWELL_MS = 60U;
-constexpr uint32_t REMOVAL_FADE_MS = REMOVAL_HANDOFF_MS - REMOVAL_ENDPOINT_DWELL_MS;
-constexpr uint8_t REMOVAL_WHITE_PEAK = static_cast<uint8_t>(
-    modules::RGB_WHITE.r * 256U / led_render_policy::COMPOSER_GLOBAL_BRIGHTNESS_BOOST_SCALE256);
-constexpr modules::Rgb REMOVAL_WHITE{REMOVAL_WHITE_PEAK, REMOVAL_WHITE_PEAK, REMOVAL_WHITE_PEAK};
-enum class RemovalSide : uint8_t { Left, Right };
+constexpr uint32_t TAP_MS = 120U;
+constexpr uint32_t REMOVAL_CYCLE_MS = 1200U;
+constexpr uint8_t REMOVAL_PEAK = static_cast<uint8_t>(
+    255U * 256U / led_render_policy::COMPOSER_GLOBAL_BRIGHTNESS_BOOST_SCALE256);
+constexpr modules::Rgb REMOVAL_AMBER{REMOVAL_PEAK, REMOVAL_PEAK * 2U / 5U, 0U};
+constexpr modules::Rgb REMOVAL_ORANGE{REMOVAL_PEAK, REMOVAL_PEAK / 3U, 0U};
 
 bool RemovalMayOwnBoard(const ComposeContext& ctx) {
     const auto& snapshot = ctx.Snapshot();
@@ -38,44 +36,32 @@ uint8_t RemovalAlpha(const ComposeContext& ctx, const uint8_t square) {
     return IsHintCaptureRemovalSquare(ctx, square) ? ctx.hintRefinementAlpha255 : 0U;
 }
 
-modules::Rgb RemovalWhite(const ComposeContext& ctx, const BoardComposeRuntime& runtime,
-                          const RemovalSide side = RemovalSide::Left) {
-    // Compute time progress directly: the generic 8-bit triangle quantizes
-    // below the exact full endpoint required by this removal presentation.
-    const uint32_t phase = runtime.illegalAnim.elapsedMs % REMOVAL_CYCLE_MS;
-    const uint32_t towardRight = phase <= REMOVAL_HANDOFF_MS ? phase : REMOVAL_CYCLE_MS - phase;
-    // A centered endpoint dwell survives arbitrary phase at the normal20ms
-    // physical cadence; a single mathematical endpoint could be missed forever.
-    constexpr uint32_t HALF_DWELL_MS = REMOVAL_ENDPOINT_DWELL_MS / 2U;
-    const uint16_t rightScale = towardRight <= HALF_DWELL_MS ? 0U :
-        towardRight >= REMOVAL_HANDOFF_MS - HALF_DWELL_MS ? 256U :
-        static_cast<uint16_t>(((towardRight - HALF_DWELL_MS) * 256U + REMOVAL_FADE_MS / 2U) / REMOVAL_FADE_MS);
-    const uint16_t scale = ctx.minimalAnimations ? 256U :
-        side == RemovalSide::Right ? rightScale : static_cast<uint16_t>(256U - rightScale);
-    return ScaleRgbSaturating(REMOVAL_WHITE, scale);
+bool RemovalTapIsBright(const ComposeContext& ctx, const uint8_t square) {
+    const auto& snapshot = ctx.Snapshot();
+    uint32_t elapsed = snapshot.interaction.lastInteractionElapsedMs;
+    if (ctx.cpuTargetOccValid) {
+        elapsed = snapshot.interaction.cpuMovePromptElapsedMs;
+    } else if (!(ctx.pendingCaptureSquareValid && ctx.pendingCaptureSquare == square) &&
+               snapshot.render.hintFeedbackTimingValid) {
+        elapsed = snapshot.render.hintFeedbackElapsedMs;
+    }
+    const uint32_t phase = elapsed % REMOVAL_CYCLE_MS;
+    return phase < TAP_MS || (phase >= 2U * TAP_MS && phase < 3U * TAP_MS);
 }
 
 } // namespace
 
 bool IsHintCaptureRemovalSquare(const ComposeContext& ctx, const uint8_t logicalSq) {
+    const auto& plan = ctx.Snapshot().interaction.taggedState.plan;
+    // Occupancy after a completed capture belongs to the seated mover. Duck
+    // keeps the compound Hint visible through chess settling; that cache must
+    // not turn the already removed victim back into a physical action.
+    if (plan.removalRequired && plan.removalSquare == logicalSq &&
+        plan.progress.removalComplete) return false;
     return logicalSq < 64U && !ctx.invalidBoard.IsActive() &&
            ctx.renderIntent.hintPromptVisible && ctx.hintMoveValid &&
            ctx.hintCaptureSquare == logicalSq &&
            (ctx.physicalOcc64 & (1ULL << logicalSq)) != 0ULL;
-}
-
-void ApplyPhysicalRemovalPrompt(const ComposeContext& ctx,
-                                const BoardComposeRuntime& runtime,
-                                const bool forceOff,
-                                const uint8_t logicalSq,
-                                modules::Rgb& ioFinalSquare) {
-    const uint8_t alpha = forceOff ? 0U : RemovalAlpha(ctx, logicalSq);
-    if (alpha != 0U) {
-        // Refine optional intensity against black, never an ordinary player
-        // color that could relight the zero end of the local fade.
-        ioFinalSquare = ScaleRgbSaturating(RemovalWhite(ctx, runtime),
-            static_cast<uint16_t>(alpha) * 256U / 255U);
-    }
 }
 
 uint64_t PhysicalRemovalSquareMask(const ComposeContext& ctx) {
@@ -86,24 +72,30 @@ uint64_t PhysicalRemovalSquareMask(const ComposeContext& ctx) {
     return mask;
 }
 
-void ApplyPhysicalRemovalBrackets(const ComposeContext& ctx,
-                                  const BoardComposeRuntime& runtime,
-                                  modules::BoardLedFrame& board) {
+uint64_t ApplyPhysicalRemovalBrackets(const ComposeContext& ctx, modules::BoardLedFrame& board) {
+    uint64_t brightTaps = 0ULL;
     const auto& plan = ctx.Snapshot().interaction.taggedState.plan;
-    const std::array<uint8_t, 3U> victims{plan.removalSquare, ctx.pendingCaptureSquare, ctx.hintCaptureSquare};
-    for (uint8_t i = 0U; i < victims.size(); ++i) {
-        const uint8_t victim = victims[i];
-        bool duplicate = false;
-        for (uint8_t prior = 0U; prior < i; ++prior) duplicate = duplicate || victims[prior] == victim;
-        const uint8_t alpha = duplicate ? 0U : RemovalAlpha(ctx, victim);
+    for (const uint8_t square : {plan.removalSquare, ctx.pendingCaptureSquare, ctx.hintCaptureSquare}) {
+        const uint8_t alpha = RemovalAlpha(ctx, square);
         if (alpha == 0U) continue;
-        auto& leds = board[victim];
-        ApplyPhysicalRemovalPrompt(ctx, runtime, false, victim, leds.left);
-        leds.right = ScaleRgbSaturating(RemovalWhite(ctx, runtime, RemovalSide::Right),
+        modules::Rgb base = REMOVAL_ORANGE;
+        if (!ctx.minimalAnimations) {
+            if (RemovalTapIsBright(ctx, square)) {
+                base = REMOVAL_AMBER;
+                brightTaps |= UINT64_C(1) << square;
+            } else {
+                base = ScaleRgbSaturating(REMOVAL_AMBER, 64U);
+            }
+        }
+        // Only an optional suggestion fades during a Hint refinement.
+        const auto color = ScaleRgbSaturating(base,
             static_cast<uint16_t>(alpha) * 256U / 255U);
+        auto& leds = board[square];
+        leds.left = color;
+        leds.right = color;
         modules::SetPiecePair(leds, modules::RGB_BLACK);
-
     }
+    return brightTaps;
 }
 
 } // namespace modules::led_frame_composer::internal

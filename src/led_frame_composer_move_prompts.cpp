@@ -12,10 +12,6 @@ namespace modules::led_frame_composer {
 namespace internal {
 namespace {
 
-constexpr uint32_t HINT_PROMPT_PULSE_PERIOD_MS = 900U;
-constexpr uint8_t DUCK_HINT_SOURCE_MIN_ALPHA = 80U;
-constexpr uint8_t DUCK_HINT_SOURCE_MAX_ALPHA = 224U;
-constexpr uint8_t DUCK_HINT_DESTINATION_ALPHA = 224U;
 constexpr uint32_t DIRECTED_MIN_TRAVEL_MS = 900U;
 constexpr uint32_t DIRECTED_SQUARE_TRAVEL_MS = 480U;
 constexpr uint32_t DIRECTED_DESTINATION_DWELL_MS = 240U;
@@ -25,19 +21,10 @@ struct DirectedTravel {
     uint8_t source, target, alpha;
     uint32_t elapsed;
     int rankStep, fileStep;
-    uint8_t distance, emitterCount;
+    uint8_t distance;
     bool knight, duck, landingPending;
-    std::array<uint8_t, 4U> order;
     modules::Rgb color;
 };
-
-bool ReservesChessLandingRails(const ComposeContext& ctx, const uint8_t square) {
-    return ctx.hintDuckMoveValid &&
-           ctx.Snapshot().interaction.taggedState.tag ==
-               runtime::ChessInteractionPhase::PieceLifted &&
-           ctx.settings.LegalMoves(ctx.activeOwner) &&
-           (ctx.validDestMask & (1ULL << square)) != 0ULL;
-}
 
 // Logical positions are Left, Top, Right, Bottom; wiring rotation happens later.
 modules::Rgb& DirectionalEmitter(modules::BoardSquareLeds& leds, uint8_t position) {
@@ -49,90 +36,148 @@ modules::Rgb& DirectionalEmitter(modules::BoardSquareLeds& leds, uint8_t positio
     }
 }
 
+uint8_t RouteSquare(const DirectedTravel& cue, const uint8_t step) {
+    const int ranks = int(cue.target / 8U) - int(cue.source / 8U);
+    const int files = int(cue.target % 8U) - int(cue.source % 8U);
+    if (cue.duck) {
+        const int rankNumerator = (cue.source / 8U) * cue.distance + ranks * step;
+        const int fileNumerator = (cue.source % 8U) * cue.distance + files * step;
+        int rank = rankNumerator / cue.distance, file = fileNumerator / cue.distance;
+        const int rankRemainder = rankNumerator % cue.distance;
+        const int fileRemainder = fileNumerator % cue.distance;
+        // Absolute nearest cells are reversible. Half-cell ties choose the
+        // same checkerboard color, which also survives a 180-degree rotation.
+        const bool oddCell = (rank + file) % 2 != 0;
+        if (rankRemainder * 2 > cue.distance ||
+            (rankRemainder * 2 == cue.distance && oddCell)) ++rank;
+        if (fileRemainder * 2 > cue.distance ||
+            (fileRemainder * 2 == cue.distance && oddCell)) ++file;
+        return static_cast<uint8_t>(rank * 8 + file);
+    }
+    const uint8_t longSteps = std::min<uint8_t>(step, 2U);
+    const uint8_t shortSteps = step > 2U ? 1U : 0U;
+    const bool rankFirst = std::abs(ranks) == 2;
+    const uint8_t rankSteps = cue.knight ? (rankFirst ? longSteps : shortSteps) : step;
+    const uint8_t fileSteps = cue.knight ? (rankFirst ? shortSteps : longSteps) : step;
+    return static_cast<uint8_t>((cue.source / 8U + cue.rankStep * rankSteps) * 8 +
+                               cue.source % 8U + cue.fileStep * fileSteps);
+}
+
+// The geometry is logical. The hardware mapper rotates the finished frame,
+// including the four positions within a square.
+constexpr uint8_t SQUARE_EMITTERS = static_cast<uint8_t>(modules::BoardLedSlots::SquarePair);
+constexpr uint8_t ALL_EMITTERS = static_cast<uint8_t>(modules::BoardLedSlots::All);
+
+uint8_t EntryEmitters(const uint8_t from, const uint8_t to) {
+    uint8_t mask = 0U;
+    if (to / 8U > from / 8U) mask |= static_cast<uint8_t>(modules::BoardLedSlots::Top);
+    if (to / 8U < from / 8U) mask |= static_cast<uint8_t>(modules::BoardLedSlots::Bottom);
+    if (to % 8U > from % 8U) mask |= static_cast<uint8_t>(modules::BoardLedSlots::Left);
+    if (to % 8U < from % 8U) mask |= static_cast<uint8_t>(modules::BoardLedSlots::Right);
+    return mask;
+}
+
+struct TravelCell {
+    uint8_t square;
+    uint8_t entry;
+    uint8_t middle;
+    uint8_t exit;
+
+    uint8_t PhaseCount() const { return middle == 0U ? 2U : 3U; }
+};
+
+// A piece owns its inner lights. Use its near/far outer light to carry
+// motion on a rank-only segment when the path cannot use the piece LEDs.
+uint8_t ProjectToRail(const uint8_t mask) {
+    const uint8_t rail = mask & SQUARE_EMITTERS;
+    if (rail != 0U) return rail;
+    return mask == static_cast<uint8_t>(modules::BoardLedSlots::Top)
+        ? static_cast<uint8_t>(modules::BoardLedSlots::Left)
+        : static_cast<uint8_t>(modules::BoardLedSlots::Right);
+}
+
 void ApplyDirectedTravel(const ComposeContext& ctx, const DirectedTravel& cue,
                          modules::BoardLedFrame& board) {
+    std::array<TravelCell, 8U> cells{};
+    uint8_t nodes = 0U;
+    uint8_t before = cue.source;
+    uint8_t square = cue.source;
+    for (uint8_t step = 0U; step <= cue.distance; ++step) {
+        const uint8_t after = step < cue.distance ? RouteSquare(cue, step + 1U) : square;
+        const uint8_t entry = step == 0U ? EntryEmitters(square, after) : EntryEmitters(before, square);
+        const uint8_t exit = step == cue.distance ? EntryEmitters(square, before) : EntryEmitters(after, square);
+        const uint8_t middle = ALL_EMITTERS & ~(entry | exit);
+        cells[step] = {square, entry, middle, exit};
+        nodes += cells[step].PhaseCount();
+        before = square;
+        square = after;
+    }
+
     const uint32_t travelMs = std::max(DIRECTED_MIN_TRAVEL_MS,
         DIRECTED_SQUARE_TRAVEL_MS * cue.distance);
     const uint32_t phase = cue.elapsed % (travelMs + DIRECTED_DESTINATION_DWELL_MS);
-    const uint8_t nodes = static_cast<uint8_t>((cue.distance + 1U) * cue.emitterCount);
     const uint32_t progress = std::min(phase, travelMs) * (nodes - 1U) * 256U / travelMs;
     const uint8_t head = static_cast<uint8_t>(progress / 256U);
     const uint16_t fraction = static_cast<uint16_t>(progress % 256U);
-    const int rankDelta = int(cue.target / 8U) - int(cue.source / 8U);
-    const int fileDelta = int(cue.target % 8U) - int(cue.source % 8U);
-    const bool rankFirst = rankDelta == 2 || rankDelta == -2;
     const uint64_t removalMask = PhysicalRemovalSquareMask(ctx);
+    uint8_t nextNode = 0U;
     for (uint8_t step = 0U; step <= cue.distance; ++step) {
-        const uint8_t longSteps = std::min<uint8_t>(step, 2U);
-        const uint8_t shortSteps = step > 2U ? 1U : 0U;
-        const uint8_t rankSteps = cue.knight ? (rankFirst ? longSteps : shortSteps)
-            : cue.duck ? (std::abs(rankDelta) * step + cue.distance / 2U) / cue.distance : step;
-        const uint8_t fileSteps = cue.knight ? (rankFirst ? shortSteps : longSteps)
-            : cue.duck ? (std::abs(fileDelta) * step + cue.distance / 2U) / cue.distance : step;
-        const uint8_t square = static_cast<uint8_t>(
-            (cue.source / 8U + cue.rankStep * rankSteps) * 8 + cue.source % 8U + cue.fileStep * fileSteps);
-        const bool occupied = (ctx.physicalOcc64 & (1ULL << square)) != 0ULL;
-        const bool reserveRails = cue.duck && ReservesChessLandingRails(ctx, square);
-        const bool squareOnly = occupied || (step == cue.distance && cue.landingPending);
-        if ((removalMask & (1ULL << square)) != 0ULL ||
+        const TravelCell& cell = cells[step];
+        const uint8_t phases = cell.PhaseCount();
+        const uint8_t firstNode = nextNode;
+        nextNode += phases;
+        const uint64_t bit = UINT64_C(1) << cell.square;
+        if ((removalMask & bit) != 0ULL ||
             (ctx.kingSafetyPromptActive &&
-             (square == ctx.kingSafetyKingSquare || square == ctx.kingSafetyAttackerSquare)) ||
-            (!cue.duck && ctx.hintDuckMoveValid &&
-             (square == ctx.hintDuckFromSquare || square == ctx.hintDuckToSquare))) continue;
+             (cell.square == ctx.kingSafetyKingSquare || cell.square == ctx.kingSafetyAttackerSquare))) continue;
+
+        const bool occupied = (ctx.physicalOcc64 & bit) != 0ULL;
+        const bool squareOnly = occupied || (step == cue.distance && cue.landingPending);
+        uint8_t entry = cell.entry, middle = cell.middle, exit = cell.exit;
+        if (squareOnly) {
+            entry = ProjectToRail(entry);
+            exit = ProjectToRail(exit);
+            // An occupied elbow can project both directions onto the same
+            // rail. Keep the exit direction and enter from the other rail.
+            if (entry == exit) entry = SQUARE_EMITTERS ^ exit;
+            middle = SQUARE_EMITTERS;
+        }
+
         uint16_t cellWeight = 0U;
         std::array<uint16_t, 4U> emitterWeights{};
         uint8_t emitterMask = 0U;
-        for (uint8_t local = 0U; local < cue.emitterCount; ++local) {
-            const uint8_t node = static_cast<uint8_t>(step * cue.emitterCount + local);
+        for (uint8_t local = 0U; local < phases; ++local) {
+            const uint8_t node = firstNode + local;
             const uint16_t weight = node == head ? 256U - fraction
                 : node == head + 1U ? fraction : 0U;
-            cellWeight = std::max(cellWeight, weight);
             if (occupied && weight == 0U) continue;
-            // At the L elbow, enter on the long axis and leave on the short
-            // axis. The same two-node crossfade owns both straight legs.
-            const bool vertical = local == 0U
-                ? (step < 3U ? rankFirst : !rankFirst)
-                : (step < 2U ? rankFirst : !rankFirst);
-            const uint8_t incoming = vertical ? (cue.rankStep > 0 ? 1U : 3U)
-                : (cue.fileStep > 0 ? 0U : 2U);
-            uint8_t position = cue.knight
-                ? static_cast<uint8_t>((incoming + (local == 0U ? 0U : 2U)) % 4U)
-                : cue.order[local];
-            // Occupancy and pending capture landing own both Piece emitters.
-            // Keep the route continuous on the square rails when jumping over
-            // a piece, rather than asking for that unrelated piece to move.
-            if (squareOnly && (position == 1U || position == 3U)) {
-                position = position == 1U ? 0U : 2U;
+            const bool center = local != 0U && local + 1U != phases;
+            const uint8_t group = local == 0U ? entry : center ? middle : exit;
+            const uint16_t contribution = squareOnly && center ? weight / 2U : weight;
+            for (uint8_t position = 0U; position < 4U; ++position) {
+                if ((group & (1U << position)) != 0U) emitterWeights[position] += contribution;
             }
-            // Several logical nodes can share an occupied square's rail. Keep
-            // the strongest head rather than letting a weaker node repaint it.
-            emitterWeights[position] = std::max(emitterWeights[position], weight);
-            emitterMask |= static_cast<uint8_t>(1U << position);
+            emitterMask |= group;
+            cellWeight = std::max(cellWeight, weight);
         }
+        // Outside the moving head, the source, legal squares and destination
+        // keep the exact indications already painted by their owners.
+        if (cellWeight == 0U) continue;
         for (uint8_t position = 0U; position < 4U; ++position) {
             if ((emitterMask & (1U << position)) == 0U) continue;
             const bool pieceEmitter = position == 1U || position == 3U;
-            if (!pieceEmitter && reserveRails) continue;
-            auto& emitter = DirectionalEmitter(board[square], position);
-            modules::Rgb replacement = emitter;
-            if (!pieceEmitter && (step == 0U || step == cue.distance ||
-                    (ctx.validDestMask & (1ULL << square)) != 0ULL)) {
-                replacement = ScaleRgbSaturating(cue.duck ? modules::RGB_YELLOW
+            auto& emitter = DirectionalEmitter(board[cell.square], position);
+            modules::Rgb base = emitter;
+            if (!pieceEmitter && (step == 0U || step == cue.distance || (ctx.validDestMask & bit) != 0ULL)) {
+                base = ScaleRgbSaturating(cue.duck ? modules::RGB_YELLOW
                     : step == 0U ? ctx.activePromptRgb : ctx.availablePromptRgb, DIRECTED_FLOOR_256);
             }
-            replacement = modules::AlphaBlendRgb(replacement, cue.color,
-                static_cast<uint8_t>(emitterWeights[position] * 255U / 256U));
-            emitter = modules::AlphaBlendRgb(emitter, replacement, cue.alpha);
-        }
-        // Empty route cells use all four LEDs. The shared half-strength head
-        // envelope keeps the full directional entry/exit emitter readable.
-        if (!squareOnly && cellWeight != 0U) {
-            for (uint8_t position = 0U; position < 4U; ++position) {
-                if (reserveRails && (position == 0U || position == 2U)) continue;
-                auto& emitter = DirectionalEmitter(board[square], position);
-                emitter = modules::AlphaBlendRgb(emitter, cue.color,
-                    static_cast<uint8_t>(cellWeight * 127U / 256U * cue.alpha / 255U));
-            }
+            // Keep a softer moving footprint under the group that leads.
+            const uint16_t halo = squareOnly ? 0U : cellWeight / 2U;
+            const uint16_t weight = emitterWeights[position] +
+                (256U - emitterWeights[position]) * halo / 256U;
+            const auto lit = modules::AlphaBlendRgb(base, cue.color, static_cast<uint8_t>(weight * 255U / 256U));
+            emitter = modules::AlphaBlendRgb(emitter, lit, cue.alpha);
         }
     }
 }
@@ -141,10 +186,8 @@ void ApplyDirectedLanding(const ComposeContext& ctx, const DirectedTravel& cue,
                           const bool pieceTravel, modules::BoardLedFrame& board) {
     auto& landing = board[cue.target];
     const auto color = cue.duck ? modules::RGB_YELLOW : ctx.availablePromptRgb;
-    if (!cue.duck || !ReservesChessLandingRails(ctx, cue.target)) {
-        landing.left = modules::AlphaBlendRgb(landing.left, color, cue.alpha);
-        landing.right = modules::AlphaBlendRgb(landing.right, color, cue.alpha);
-    }
+    landing.left = modules::AlphaBlendRgb(landing.left, color, cue.alpha);
+    landing.right = modules::AlphaBlendRgb(landing.right, color, cue.alpha);
     const uint8_t triangle = modules::animation::TriangleWave255({cue.elapsed}, 1200U);
     const uint16_t gain = static_cast<uint16_t>(triangle) * 160U / 255U;
     landing.top = modules::AlphaBlendRgb(landing.top, ScaleRgbSaturating(color,
@@ -156,52 +199,62 @@ void ApplyDirectedLanding(const ComposeContext& ctx, const DirectedTravel& cue,
 void ApplyDuckMoveTravel(const ComposeContext& ctx, modules::BoardLedFrame& board) {
     const auto& snapshot = ctx.Snapshot();
     const auto& interaction = snapshot.interaction.taggedState;
-    const bool relocating = interaction.tag ==
-        runtime::ChessInteractionPhase::DuckRelocation;
-    runtime::DirectedPhysicalPrompt prompt;
-    const bool fixed = relocating &&
-        interaction.plan.kind == runtime::PhysicalTransitionKind::DuckRelocation &&
-        runtime::TryGetDirectedPhysicalPrompt(interaction, prompt);
-    const bool chessProgress = modules::IsMatchingDuckHintChessProgress(
-        interaction, ctx.hintFromSquare, ctx.hintToSquare);
     if (snapshot.game.variant != modules::GameVariant::Duck ||
-        (!fixed && (!ctx.renderIntent.hintPromptVisible ||
-                    (!IsIdleInteraction(snapshot) && !relocating && !chessProgress)))) return;
-    const uint8_t source = fixed ? prompt.fromSquare
-        : relocating ? ctx.hintFromSquare : ctx.hintDuckFromSquare;
-    const uint8_t target = fixed ? prompt.toSquare
-        : relocating ? ctx.hintToSquare : ctx.hintDuckToSquare;
-    if ((!fixed && !(relocating ? ctx.hintMoveValid : ctx.hintDuckMoveValid)) ||
-        source >= 64U || target >= 64U || source == target ||
+        interaction.plan.kind != runtime::PhysicalTransitionKind::DuckRelocation) return;
+    runtime::DirectedPhysicalPrompt prompt;
+    const bool fixed = runtime::TryGetDirectedPhysicalPrompt(interaction, prompt);
+    if (!fixed && (!ctx.renderIntent.hintPromptVisible || !ctx.hintMoveValid ||
+                   ctx.hintFromSquare != interaction.plan.moveFrom)) return;
+    const uint8_t source = fixed ? prompt.fromSquare : ctx.hintFromSquare;
+    const uint8_t target = fixed ? prompt.toSquare : ctx.hintToSquare;
+    if (source >= 64U || target >= 64U || source == target ||
         (ctx.physicalOcc64 & (1ULL << target)) != 0ULL) return;
     const int dr = int(target / 8U) - source / 8U;
     const int df = int(target % 8U) - source % 8U;
-    const uint8_t vertical = dr > 0 ? 1U : 3U;
-    const uint8_t horizontal = df > 0 ? 0U : 2U;
-    const std::array<uint8_t, 4U> order = dr == 0
-        ? std::array<uint8_t, 4U>{horizontal, uint8_t((horizontal + 2U) % 4U), 0U, 0U}
-        : df == 0 ? std::array<uint8_t, 4U>{vertical, uint8_t((vertical + 2U) % 4U), 0U, 0U}
-        : std::array<uint8_t, 4U>{vertical, horizontal,
-            uint8_t((vertical + 2U) % 4U), uint8_t((horizontal + 2U) % 4U)};
     const DirectedTravel cue{source, target, fixed ? uint8_t{255U} : ctx.hintRefinementAlpha255,
         !fixed && snapshot.render.hintFeedbackTimingValid ? snapshot.render.hintFeedbackElapsedMs
             : snapshot.interaction.lastInteractionElapsedMs,
         (dr > 0) - (dr < 0), (df > 0) - (df < 0),
         static_cast<uint8_t>(std::max(std::abs(dr), std::abs(df))),
-        static_cast<uint8_t>(dr != 0 && df != 0 ? 4U : 2U), false, true, false, order,
+        false, true, false,
         modules::RGB_YELLOW};
-    ApplyDirectedLanding(ctx, cue, !ctx.minimalAnimations && dr != 0, board);
+    ApplyDirectedLanding(ctx, cue, !ctx.minimalAnimations, board);
     if (!ctx.minimalAnimations) ApplyDirectedTravel(ctx, cue, board);
 }
 
-uint8_t HintPromptPulseAlpha(const BoardComposeRuntime& runtime) {
-    const uint8_t tri = modules::animation::TriangleWave255(
-        runtime.globalAnim, HINT_PROMPT_PULSE_PERIOD_MS);
-    const uint16_t range =
-        DUCK_HINT_SOURCE_MAX_ALPHA - DUCK_HINT_SOURCE_MIN_ALPHA;
-    return static_cast<uint8_t>(
-        DUCK_HINT_SOURCE_MIN_ALPHA +
-        (static_cast<uint16_t>(tri) * range + 127U) / 255U);
+runtime::PieceRelocation CaptureFirstRoute(const ComposeContext& ctx, uint32_t& elapsed) {
+    const auto& snapshot = ctx.Snapshot();
+    const auto& interaction = snapshot.interaction;
+    const uint8_t victim = interaction.taggedState.selectedSquare;
+    if (victim >= 64U || !snapshot.board.enginePiecesValid ||
+        (ctx.physicalOcc64 & (UINT64_C(1) << victim)) != 0ULL) return {};
+
+    // Give each legal source one complete pass. The list and its order come
+    // from the current position; physical pickup immediately selects a plan.
+    const uint64_t candidates = interaction.captureFirstCapturerMask & ctx.physicalOcc64;
+    uint32_t cycleMs = 0U;
+    for (uint8_t pass = 0U; pass < 2U; ++pass) {
+        for (uint8_t from = 0U; from < 64U; ++from) {
+            if ((candidates & (UINT64_C(1) << from)) == 0ULL) continue;
+            const char piece = snapshot.board.enginePieces[from];
+            const bool adjacentPawn = (piece == 'P' || piece == 'p') && from / 8U == victim / 8U;
+            // The legal mask can include both an ordinary capture and a pawn
+            // taking en passant. Only the latter uses the separate landing.
+            const uint8_t target = adjacentPawn ? interaction.captureFirstEnPassantLanding : victim;
+            if (target >= 64U) continue;
+            const int ranks = std::abs(int(target / 8U) - int(from / 8U));
+            const int files = std::abs(int(target % 8U) - int(from % 8U));
+            const uint8_t distance = piece == 'N' || piece == 'n' ? 3U : std::max(ranks, files);
+            const uint32_t duration = std::max(DIRECTED_MIN_TRAVEL_MS,
+                DIRECTED_SQUARE_TRAVEL_MS * distance) + DIRECTED_DESTINATION_DWELL_MS;
+            if (pass == 0U) cycleMs += duration;
+            else if (elapsed < duration) return {from, target};
+            else elapsed -= duration;
+        }
+        if (cycleMs == 0U) return {};
+        elapsed %= cycleMs;
+    }
+    return {};
 }
 
 } // namespace
@@ -225,7 +278,10 @@ void ApplyDirectedMoveLanding(const ComposeContext& ctx,
         return;
     }
 
-    ApplyDuckMoveTravel(ctx, board);
+    if (interaction.taggedState.tag == runtime::ChessInteractionPhase::DuckRelocation) {
+        ApplyDuckMoveTravel(ctx, board);
+        return;
+    }
 
     uint8_t source = 255U;
     uint8_t target = 255U;
@@ -236,7 +292,15 @@ void ApplyDirectedMoveLanding(const ComposeContext& ctx,
         interaction.taggedState.tag == runtime::ChessInteractionPhase::ExecutingPlan &&
         IsHumanPickupGuidanceActive(interaction);
     const auto& plan = interaction.taggedState.plan;
-    if (ctx.cpuTargetOccValid || ctx.partialCastlingTargetOccValid || humanPlacement || ctx.undoPromptActive) {
+    const bool captureFirst = interaction.taggedState.tag == runtime::ChessInteractionPhase::CaptureStaged;
+    if (captureFirst) {
+        // Minimal already marks all legal capturers and the vacated square.
+        // Cycling their destinations would animate the choice before pickup.
+        if (ctx.minimalAnimations) return;
+        const auto route = CaptureFirstRoute(ctx, elapsed);
+        source = route.from;
+        target = route.to;
+    } else if (ctx.cpuTargetOccValid || ctx.partialCastlingTargetOccValid || humanPlacement || ctx.undoPromptActive) {
         runtime::DirectedPhysicalPrompt prompt;
         if (interaction.cpuPromotionValid ||
             plan.kind == runtime::PhysicalTransitionKind::Promotion ||
@@ -269,13 +333,13 @@ void ApplyDirectedMoveLanding(const ComposeContext& ctx,
         return square < 64U && (ctx.physicalOcc64 & (1ULL << square)) != 0ULL;
     };
     const bool victimPending =
-        (ctx.renderIntent.hintPromptVisible && present(ctx.hintCaptureSquare)) ||
+        IsHintCaptureRemovalSquare(ctx, ctx.hintCaptureSquare) ||
         (plan.removalRequired && !plan.progress.removalComplete && present(plan.removalSquare)) ||
         (ctx.pendingCaptureSquareValid && present(ctx.pendingCaptureSquare));
     if (source >= 64U || target >= 64U || alpha == 0U) {
         return;
     }
-    // An occupied removal victim keeps its white cue. Once the mover is placed,
+    // An occupied removal victim keeps its removal cue. Once the mover is placed,
     // no route may compete with settling or outstanding off-destination removal.
     if (present(target) && (PhysicalRemovalSquareMask(ctx) & (1ULL << target)) == 0ULL) {
         return;
@@ -294,28 +358,18 @@ void ApplyDirectedMoveLanding(const ComposeContext& ctx,
     }
     const bool knight = piece == 'N' || piece == 'n';
     const bool knightVector = (ranks == 2 && files == 1) || (ranks == 1 && files == 2);
-    // Knights follow their long leg first; unknown or unsupported geometry
-    // cannot invent a route. Landing shares travel only on a vertical last leg.
+    // Knights follow their long leg first. Only supported moves own a travel path.
     const bool canTravel = !ctx.minimalAnimations && piece != '\0' &&
         (knight ? knightVector : (dr == 0 || df == 0 || ranks == files)) &&
         (ranks != 0 || files != 0);
     const auto moverSide = piece >= 'a' && piece <= 'z'
         ? modules::LitchMaxEngine::PieceSide::Black : modules::LitchMaxEngine::PieceSide::White;
-    const uint8_t incomingVertical = dr > 0 ? 1U : 3U;
-    const uint8_t incomingHorizontal = df > 0 ? 0U : 2U;
-    const uint8_t outgoingVertical = dr > 0 ? 3U : 1U;
-    const uint8_t outgoingHorizontal = df > 0 ? 2U : 0U;
-    const std::array<uint8_t, 4U> order = dr == 0
-        ? std::array<uint8_t, 4U>{incomingHorizontal, outgoingHorizontal, 0U, 0U}
-        : df == 0 ? std::array<uint8_t, 4U>{incomingVertical, outgoingVertical, 0U, 0U}
-        : std::array<uint8_t, 4U>{incomingVertical, incomingHorizontal, outgoingVertical, outgoingHorizontal};
     const DirectedTravel cue{source, target, alpha, elapsed,
         (dr > 0) - (dr < 0), (df > 0) - (df < 0),
         static_cast<uint8_t>(knight ? 3 : ranks > files ? ranks : files),
-        static_cast<uint8_t>(!knight && dr != 0 && df != 0 ? 4U : 2U), knight, false, victimPending, order,
+        knight, false, victimPending || (captureFirst && target == interaction.taggedState.selectedSquare),
         PieceRgbForPieceSide(ctx, moverSide)};
-    if (!victimPending) ApplyDirectedLanding(ctx, cue,
-        canTravel && (knight ? files == 2 : dr != 0), board);
+    if (!cue.landingPending) ApplyDirectedLanding(ctx, cue, canTravel, board);
     if (canTravel) ApplyDirectedTravel(ctx, cue, board);
 }
 
@@ -372,24 +426,6 @@ void ApplyHintMovePrompt(const ComposeContext& ctx,
         ioFinalSquare = modules::AlphaBlendRgb(ioFinalSquare,
             duckRelocation ? modules::RGB_YELLOW : ctx.availablePromptRgb,
             ctx.hintRefinementAlpha255);
-    }
-
-    if (!ctx.hintDuckMoveValid) {
-        return;
-    }
-    if (logicalSq == ctx.hintDuckFromSquare) {
-        ioFinalSquare = modules::AlphaBlendRgb(
-            ioFinalSquare,
-            modules::RGB_YELLOW,
-            static_cast<uint8_t>((ctx.minimalAnimations ? DUCK_HINT_SOURCE_MAX_ALPHA : HintPromptPulseAlpha(runtime)) *
-                ctx.hintRefinementAlpha255 / 255U));
-    }
-    if (logicalSq == ctx.hintDuckToSquare && !ReservesChessLandingRails(ctx, logicalSq)) {
-        ioFinalSquare = modules::AlphaBlendRgb(
-            ioFinalSquare,
-            modules::RGB_YELLOW,
-            static_cast<uint8_t>(DUCK_HINT_DESTINATION_ALPHA *
-                ctx.hintRefinementAlpha255 / 255U));
     }
 }
 

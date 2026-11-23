@@ -98,6 +98,93 @@ void main() {
     expect(compound.duckMove, (from: 24, to: 35));
     expect(remaining.move, isNull);
     expect(remaining.duckMove, compound.duckMove);
+    final chess = HomeBoardSnapshot(
+      position: HomeChessPosition.tryParse('7k/8/8/8/8/8/4P3/K7 w - - 0 1'),
+      assistance: compound,
+    );
+    expect(
+      chess.visibleAssistance?.presentation,
+      HomeAssistancePresentation.ready,
+    );
+    expect(chess.visibleAssistance?.move, compound.move);
+    expect(chess.visibleAssistance?.duckMove, isNull);
+    expect(
+      chess.assistance,
+      same(compound),
+      reason: 'The legacy wire state stays intact.',
+    );
+    expect(chess.visibleAssistance?.requested, compound.requested);
+    expect(chess.visibleAssistance?.manualAvailable, compound.manualAvailable);
+    expect(chess.visibleAssistance?.coachingOwned, compound.coachingOwned);
+    final duck = chess.copyWith(
+      homeStateAction: HomeStateAction.duck,
+      gameStatus: const HomeGameStatus(
+        variant: 'duck',
+        duckSquare: 24,
+        duckMovePending: true,
+        outcome: 'none',
+        winner: 'none',
+      ),
+    );
+    expect(
+      duck.visibleAssistance?.presentation,
+      HomeAssistancePresentation.duck,
+    );
+    expect(duck.visibleAssistance?.move, isNull);
+    expect(duck.visibleAssistance?.duckMove, compound.duckMove);
+    for (final action in [
+      HomeStateAction.cpu,
+      HomeStateAction.correction,
+      HomeStateAction.settle,
+    ]) {
+      expect(
+        duck
+            .copyWith(homeStateAction: action, assistance: remaining)
+            .visibleAssistance,
+        isNull,
+      );
+    }
+    expect(
+      duck
+          .copyWith(
+            duckRelocationPrompt: const HomeDuckRelocationPrompt(
+              owner: HomeDuckRelocationOwner.cpu,
+              fromSquare: 24,
+              toSquare: 35,
+            ),
+          )
+          .visibleAssistance,
+      isNull,
+    );
+    expect(
+      duck
+          .copyWith(
+            gameStatus: const HomeGameStatus(
+              variant: 'duck',
+              duckSquare: 24,
+              duckMovePending: false,
+              outcome: 'none',
+              winner: 'none',
+            ),
+            assistance: remaining,
+          )
+          .visibleAssistance,
+      isNull,
+    );
+    expect(
+      duck
+          .copyWith(
+            homeStateAction: HomeStateAction.idle,
+            assistance: remaining,
+          )
+          .visibleAssistance,
+      isNull,
+    );
+    expect(
+      chess.copyWith(assistance: remaining).visibleAssistance,
+      same(remaining),
+      reason: 'A Duck-only legacy hint stays usable when the phase is unknown.',
+    );
     expect(compound.isReady, isTrue);
     expect(remaining.isReady, isTrue);
   });
@@ -119,6 +206,48 @@ void main() {
     expect(held.legalDestinations, BigInt.parse('10EF101000000000', radix: 16));
     expect(held.move, (from: 52, to: 36));
     expect(held.isReady, isFalse);
+    final legalWithFutureDuck = HomeAssistanceState(
+      requested: held.requested,
+      manualAvailable: held.manualAvailable,
+      coachingOwned: held.coachingOwned,
+      presentation: held.presentation,
+      move: held.move,
+      legalSource: held.legalSource,
+      legalDestinations: held.legalDestinations,
+      duckMove: (from: 24, to: 35),
+    );
+    final chess = HomeBoardSnapshot(
+      position: HomeChessPosition.tryParse('7k/8/8/8/8/8/4P3/K7 w - - 0 1'),
+      assistance: legalWithFutureDuck,
+    );
+    expect(
+      chess.visibleAssistance?.presentation,
+      HomeAssistancePresentation.legal,
+    );
+    expect(chess.visibleAssistance?.duckMove, isNull);
+    expect(chess.visibleAssistance?.move, held.move);
+    expect(chess.visibleAssistance?.legalSource, held.legalSource);
+    expect(chess.visibleAssistance?.legalDestinations, held.legalDestinations);
+    expect(chess.visibleAssistance?.requested, held.requested);
+    expect(chess.visibleAssistance?.manualAvailable, held.manualAvailable);
+    expect(chess.visibleAssistance?.coachingOwned, held.coachingOwned);
+    final duck = chess
+        .copyWith(
+          homeStateAction: HomeStateAction.duck,
+          gameStatus: const HomeGameStatus(
+            variant: 'duck',
+            duckSquare: 24,
+            duckMovePending: true,
+            outcome: 'none',
+            winner: 'none',
+          ),
+        )
+        .visibleAssistance!;
+    expect(duck.presentation, HomeAssistancePresentation.duck);
+    expect(duck.duckMove, legalWithFutureDuck.duckMove);
+    expect(duck.move, isNull);
+    expect(duck.legalSource, isNull);
+    expect(duck.legalDestinations, isNull);
     for (final invalid in [
       '0le210EF101000000000e4', // no requested Hint
       '1le210EF101000000000e2', // selected source is not a destination

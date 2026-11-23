@@ -190,7 +190,8 @@ void Compose(const ComposeInputs& in,
              modules::GridForegroundLayer* outMenuForeground = nullptr,
              uint64_t* outCaptureRemovalMask = nullptr,
              uint64_t* outDuckReminderMask = nullptr,
-             HintPresentationOutcome* outHint = nullptr);
+             HintPresentationOutcome* outHint = nullptr,
+             uint64_t* outCaptureTapMask = nullptr);
 
 void ComposeStartupGrid(const fxe::SettingsStore& settings, modules::BoardLedFrame& out);
 

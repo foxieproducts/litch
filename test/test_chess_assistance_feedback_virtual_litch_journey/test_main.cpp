@@ -552,7 +552,14 @@ void DirectionalTravelJourney(const TravelCase& route, bool firstP2, bool rotate
     uint64_t routeMask = 0ULL;
     for (uint8_t step = 0U; step <= distance; ++step) routeMask |= Bit(squareAt(step));
     const uint32_t duration = std::max(900U, 480U * distance), pass = duration + 240U;
-    const uint8_t nodes = static_cast<uint8_t>((distance + 1U) * route.slots);
+    const bool diagonal = dr != 0 && df != 0;
+    const uint8_t phases = route.slots;
+    const uint8_t nodes = static_cast<uint8_t>((distance + 1U) * phases);
+    const auto maskAt = [&](uint8_t local) {
+        if (diagonal) return static_cast<uint8_t>((1U << route.order[local * 2U]) | (1U << route.order[local * 2U + 1U]));
+        return local == 1U ? static_cast<uint8_t>((1U << route.order[1U]) | (1U << route.order[2U]))
+            : static_cast<uint8_t>(1U << route.order[local == 0U ? 0U : 3U]);
+    };
     const auto moverComponent = [firstP2](virtual_litch_color color) { return firstP2 ? color.g : color.r; };
     bool sourceOn = false, sourceOff = false;
     for (const bool held : {false, true}) {
@@ -571,40 +578,48 @@ void DirectionalTravelJourney(const TravelCase& route, bool firstP2, bool rotate
                 if (node > 0U) {
                     const uint32_t midpoint = cycle * pass + ((2U * node - 1U) * duration) / (2U * (nodes - 1U));
                     Check(Align(s, start + midpoint), run, "sample the continuous midpoint before the next emitter peak");
-                    const uint8_t priorSquare = squareAt((node - 1U) / route.slots);
-                    const uint8_t nextSquare = squareAt(node / route.slots);
-                    if (priorSquare != from && nextSquare != from) {
-                        Check(Energy(Emitter(s, priorSquare, route.order[(node - 1U) % route.slots])) > 20U &&
-                            Energy(Emitter(s, nextSquare, route.order[node % route.slots])) > 20U, run,
-                            "adjacent directional emitters crossfade together instead of jumping between peaks");
-                    }
-                    if (!firstP2 && !rotate && cycle == 0U && node % route.slots == 0U) {
-                        const auto a = Emitter(s, priorSquare, route.order[(node - 1U) % route.slots]);
-                        const auto b = Emitter(s, nextSquare, route.order[node % route.slots]);
-                        std::printf("[DIRECTIONAL_HANDOFF] run=%s held=%u age=%u previous=%u:%u:%u,%u,%u next=%u:%u:%u,%u,%u\n",
-                            run, held, midpoint, priorSquare, route.order[(node - 1U) % route.slots], a.r,a.g,a.b,
-                            nextSquare,route.order[node % route.slots],b.r,b.g,b.b);
+                    const uint8_t priorSquare = squareAt((node - 1U) / phases);
+                    const uint8_t nextSquare = squareAt(node / phases);
+                    if (priorSquare != from && nextSquare != from && priorSquare != to && nextSquare != to) {
+                        bool priorLit = false, nextLit = false;
+                        for (uint8_t pos = 0U; pos < 4U; ++pos) {
+                            priorLit = priorLit || ((maskAt((node - 1U) % phases) & (1U << pos)) && Energy(Emitter(s, priorSquare, pos)) > 20U);
+                            nextLit = nextLit || ((maskAt(node % phases) & (1U << pos)) && Energy(Emitter(s, nextSquare, pos)) > 20U);
+                        }
+                        Check(priorLit && nextLit, run, "adjacent directional phases crossfade instead of jumping between peaks");
                     }
                 }
-                Check(Align(s, start + age), run, "advance existing owner clock to an emitter handoff");
-                const uint8_t square = squareAt(node / route.slots);
+                Check(Align(s, start + age), run, "advance existing owner clock to a directional phase peak");
+                const uint8_t square = squareAt(node / phases);
                 const bool occupied = (route.occupancy & Bit(square)) != 0ULL && !(held && square == from);
-                const uint8_t routeSlot = route.order[node % route.slots];
-                const uint8_t slot = occupied && (routeSlot == 1U || routeSlot == 3U)
-                    ? (routeSlot == 1U ? 0U : 2U) : routeSlot;
-                const auto color = Emitter(s, square, slot);
-                Check(Energy(color) >= 115U, run, "the expected directional emitter receives the full mapped moving head");
-                if (occupied) Check(moverComponent(color) >= 115U &&
-                    (firstP2 ? color.r : color.g) <= 3U && color.b == 0U && color.w == 0U, run,
-                    "occupied route head stays full mover color on its resolved rail without changing the PiecePair");
-                for (uint8_t pos = 0U; pos < 4U; ++pos) {
-                    if (pos == slot || (occupied && (pos == 1U || pos == 3U)) || (route.slots == 2U &&
-                        (dr == 0 ? pos == 1U || pos == 3U : pos == 0U || pos == 2U))) continue;
-                    // Ordinary PiecePair and orange legal floors can have more
-                    // total energy; directional order follows the mover color.
-                    Check(moverComponent(color) >= moverComponent(Emitter(s, square, pos)), run,
-                          "emitter order follows source-to-target geometry instead of a fixed single rail");
+                const uint8_t mask = maskAt(node % phases);
+                uint8_t slot = 0U;
+                while (slot < 4U && (mask & (1U << slot)) == 0U) ++slot;
+                if (occupied) {
+                    Check(Energy(Emitter(s, square, 0U)) > 0U || Energy(Emitter(s, square, 2U)) > 0U, run,
+                          "occupied route head uses side rails without disturbing piece identity");
+                } else {
+                    for (uint8_t pos = 0U; pos < 4U; ++pos) if ((mask & (1U << pos)) != 0U) {
+                        const auto color = Emitter(s, square, pos);
+                        Check(Energy(color) >= 115U, run, "each expected mapped emitter receives the moving head");
+                        for (uint8_t other = 0U; other < 4U; ++other) if ((mask & (1U << other)) == 0U) {
+                            const auto leading = moverComponent(color);
+                            const auto trailing = moverComponent(Emitter(s, square, other));
+                            const bool middleTransit = !diagonal && node % phases == 1U &&
+                                square != from && square != to;
+                            Check(middleTransit ? int(leading) > int(trailing) + 20 : leading >= trailing, run,
+                                  "the mapped middle pair visibly leads entry and exit on empty cardinal transit");
+                        }
+                    }
+                    if ((mask & (mask - 1U)) != 0U) {
+                        uint8_t partner = slot + 1U;
+                        while (partner < 4U && (mask & (1U << partner)) == 0U) ++partner;
+                        Check(std::abs(int(moverComponent(Emitter(s, square, slot))) -
+                                       int(moverComponent(Emitter(s, square, partner)))) <= 3, run,
+                              "the middle cardinal pair or diagonal entry/exit pair peaks together");
+                    }
                 }
+                const auto color = Emitter(s, square, slot);
                 Check(Energy(Emitter(s, to, 1U)) > 0U && Energy(Emitter(s, to, 3U)) > 0U, run,
                       "both actual target Piece emitters retain a visible landing floor throughout travel");
                 for (uint8_t sq = 0U; sq < 64U; ++sq) {
@@ -639,8 +654,8 @@ void DirectionalTravelJourney(const TravelCase& route, bool firstP2, bool rotate
                         }
                     }
                     if (transit != square) {
-                        const bool nextHandoff = node % route.slots + 1U == route.slots &&
-                            node + 1U < nodes && transit == squareAt(node / route.slots + 1U);
+                        const bool nextHandoff = node % phases + 1U == phases &&
+                            node + 1U < nodes && transit == squareAt(node / phases + 1U);
                         Check(nextHandoff
                             ? Energy(Emitter(s, transit, 1U)) <= 2U && Energy(Emitter(s, transit, 3U)) <= 2U
                             : EmptyPieceTargets(s, transit), run,
@@ -656,10 +671,10 @@ void DirectionalTravelJourney(const TravelCase& route, bool firstP2, bool rotate
                     sourceOff = sourceOff || (top == 0U && bottom == 0U);
                 }
                 if ((cycle == 0U && ((!firstP2 && !rotate) || node == 0U ||
-                     node == route.slots || node + 1U == nodes)) || (cycle == 1U && node == 0U)) {
+                     node == phases || node + 1U == nodes)) || (cycle == 1U && node == 0U)) {
                     std::printf("[DIRECTIONAL_EMITTER] run=%s held=%u age=%u node=%u square=%u slot=%u rgb=%u,%u,%u,%u\n",
                         run, held, age, node, square, slot, color.r, color.g, color.b, color.w);
-                    if (node % route.slots == 0U || node + 1U == nodes)
+                    if (node % phases == 0U || node + 1U == nodes)
                         Checkpoint(s, run, cycle == 1U ? (held ? "held-source-repeat" : "idle-source-repeat")
                             : held ? "held-forward-head" : "idle-forward-head",
                             "follow-Hint-or-choose-any-legal-move", "accepted", routeMask);
@@ -704,22 +719,24 @@ void DirectionalTravelJourney(const TravelCase& route, bool firstP2, bool rotate
     if (!firstP2 && !rotate) Checkpoint(s, run, "position-invalidated-ordinary-restored", "choose-any-legal-move", "accepted", routeMask);
 }
 void BishopSingleDestinationJourney() {
-    const std::array<TravelCase, 6U> cases{{
-        {"b6-f2-SE", "7k/8/1B6/8/8/5P2/6K1/8 w - - 0 1", Bit(7)|Bit(17)|Bit(45)|Bit(54), 17U,53U,{1U,0U,3U,2U},4U},
-        {"f2-b6-NW", "7k/8/8/8/8/5P2/5BK1/8 w - - 0 1", Bit(7)|Bit(45)|Bit(53)|Bit(54),53U,17U,{3U,2U,1U,0U},4U},
-        {"b2-f6-NE", "k7/8/8/8/8/5P2/1B6/7K w - - 0 1", Bit(0)|Bit(45)|Bit(49)|Bit(63),49U,21U,{3U,0U,1U,2U},4U},
-        {"f6-b2-SW", "k7/8/5B2/8/8/5P2/8/7K w - - 0 1", Bit(0)|Bit(21)|Bit(45)|Bit(63),21U,49U,{1U,2U,3U,0U},4U},
-        {"a4-d4-right", "7k/8/8/8/R7/8/8/7K w - - 0 1", Bit(7)|Bit(32)|Bit(63),32U,35U,{0U,2U,0U,0U},2U},
-        {"d4-a4-left", "7k/8/8/8/3R4/8/8/7K w - - 0 1", Bit(7)|Bit(35)|Bit(63),35U,32U,{2U,0U,0U,0U},2U}
+    const std::array<TravelCase, 8U> cases{{
+        {"b6-f2-SE", "7k/8/1B6/8/8/5P2/6K1/8 w - - 0 1", Bit(7)|Bit(17)|Bit(45)|Bit(54), 17U,53U,{1U,0U,3U,2U},2U},
+        {"f2-b6-NW", "7k/8/8/8/8/5P2/5BK1/8 w - - 0 1", Bit(7)|Bit(45)|Bit(53)|Bit(54),53U,17U,{3U,2U,1U,0U},2U},
+        {"b2-f6-NE", "k7/8/8/8/8/5P2/1B6/7K w - - 0 1", Bit(0)|Bit(45)|Bit(49)|Bit(63),49U,21U,{3U,0U,1U,2U},2U},
+        {"f6-b2-SW", "k7/8/5B2/8/8/5P2/8/7K w - - 0 1", Bit(0)|Bit(21)|Bit(45)|Bit(63),21U,49U,{1U,2U,3U,0U},2U},
+        {"a4-d4-right", "7k/8/8/8/R7/8/8/7K w - - 0 1", Bit(7)|Bit(32)|Bit(63),32U,35U,{0U,1U,3U,2U},3U},
+        {"d4-a4-left", "7k/8/8/8/3R4/8/8/7K w - - 0 1", Bit(7)|Bit(35)|Bit(63),35U,32U,{2U,1U,3U,0U},3U},
+        {"a2-a5-up", "7k/8/8/8/8/8/R7/7K w - - 0 1", Bit(7)|Bit(48)|Bit(63),48U,24U,{3U,0U,2U,1U},3U},
+        {"a5-a2-down", "7k/8/8/R7/8/8/8/7K w - - 0 1", Bit(7)|Bit(24)|Bit(63),24U,48U,{1U,0U,2U,3U},3U}
     }};
     for (const auto& route : cases) for (bool first : {false,true}) for (bool rotate : {false,true})
         DirectionalTravelJourney(route, first, rotate);
 }
 void AdjacentMoveTravelJourney(bool firstP2, bool rotated) {
     DirectionalTravelJourney({"e2-e3-up", "7k/8/8/8/8/8/4P3/K7 w - - 0 1",
-        Bit(7)|Bit(52)|Bit(56),52U,44U,{3U,1U,0U,0U},2U}, firstP2, rotated);
+        Bit(7)|Bit(52)|Bit(56),52U,44U,{3U,0U,2U,1U},3U}, firstP2, rotated);
     DirectionalTravelJourney({"e3-e2-down", "7k/8/8/8/8/4R3/8/K7 w - - 0 1",
-        Bit(7)|Bit(44)|Bit(56),44U,52U,{1U,3U,0U,0U},2U}, firstP2, rotated);
+        Bit(7)|Bit(44)|Bit(56),44U,52U,{1U,0U,2U,3U},3U}, firstP2, rotated);
 }
 
 void EnPassantRemovalBeforeLandingJourney() {
@@ -782,94 +799,73 @@ void CaptureEdgeBlockedBracketJourney(const RemovalFadeCase profile) {
     Check(s.Advance(600U)==VIRTUAL_LITCH_OK && s.TryGetHintMoveSquares(from,to) && from==48U && to==24U,
         run,"real legality publishes the edge capture with occupied b5 neighbor");
     if(from!=48U || to!=24U)return;
-    const uint32_t start=(s.State().now_ms/600U+1U)*600U;
-    bool leftPeak=false,rightPeak=false,overlap=false;
-    for(uint8_t sample=0U;sample<=16U;++sample){
-        Check(Align(s,start+sample*75U),run,"sample two full removal cycles at explicit handoff checkpoints");
+    const uint32_t start=s.State().now_ms;
+    bool strike=false,floor=false,nearHead=false,farHead=false,routeCleared=false;
+    bool shortGap=false,longRest=false,seenStrike=false;
+    uint8_t strikeFrames=0U,floorFrames=0U,dimRun=0U;
+    uint8_t brightestMappedStrike=0U,brightestMappedRest=0U;
+    uint32_t previousFrame=s.PhysicalFrame().frame_sequence;
+    for(uint8_t sample=0U;sample<=120U;++sample){
+        Check(Align(s,start+sample*20U),run,"sample two complete prompt-owned removal cycles");
         const auto target=AllSquarePixels(s,24U);const auto left=target.semantic[0U],right=target.semantic[2U];
-        const uint16_t phase=sample*75U%600U;
-        const uint16_t towardRight=phase<=300U?phase:600U-phase;
-        const uint16_t expectedRight=towardRight<=30U?0U:towardRight>=270U?255U:
-            static_cast<uint16_t>(((towardRight-30U)*255U+120U)/240U);
-        const auto close=[](uint16_t x,uint16_t y){return std::abs(int(x)-int(y))<=2;};
-        Check(EmptyPieceTargets(s,24U) && left.r==left.g && left.g==left.b && right.r==right.g && right.g==right.b &&
-            close(left.r,255U-expectedRight) && close(right.r,expectedRight),run,
-            "neutral WHITE follows a complementary600ms fade with300ms handoffs, no floor, intentional60ms endpoint dwell and no accidental clipping plateau");
-        Check(target.mapped[0U].r==target.mapped[0U].g && target.mapped[0U].g==target.mapped[0U].b &&
-            target.mapped[3U].r==target.mapped[3U].g && target.mapped[3U].g==target.mapped[3U].b,run,
-            "both independently mapped V3.3 side emitters remain neutral white at every fade checkpoint");
-        if(phase==0U || phase==300U){
-            const uint8_t on=phase==0U?0U:3U,off=phase==0U?3U:0U;
-            Check(Energy(target.mapped[off])==0U && Energy(target.mapped[on])>0U &&
-                (phase==0U?right.r==0U && left.r==255U:left.r==0U && right.r==255U),run,
-                "one victim rail is exactly off when the other reaches full target-cue strength");
-            leftPeak=leftPeak || phase==0U;rightPeak=rightPeak || phase==300U;
-        }else overlap=overlap || (Energy(target.mapped[0U])>0U && Energy(target.mapped[3U])>0U);
-        if(currentLimit)Check(s.PhysicalFrame().power_limited && s.PhysicalFrame().applied_led_current_ma<=currentLimit,run,
-            "actual white fade obeys the hard current cap throughout its full cycle");
+        const auto close=[](int x,int y){return std::abs(x-y)<=2;};
+        const bool isStrike=close(left.r,255) && close(left.g,101);
+        const bool isFloor=close(left.r,63) && close(left.g,25);
+        Check(EmptyPieceTargets(s,24U) && Equal(left,right) && left.b==0U && left.w==0U &&
+            (isStrike||isFloor),run,
+            "both victim rails show synchronized amber strikes or their dim amber rest while Piece LEDs stay dark");
+        Check(Equal(target.mapped[0U],target.mapped[3U]) && Energy(target.mapped[0U])>0U &&
+            target.mapped[0U].b==0U && target.mapped[0U].w==0U,run,
+            "both actual V3.3 rails remain synchronized and visible at every pulse and floor checkpoint");
+        strike=strike||isStrike; floor=floor||isFloor;
+        strikeFrames+=isStrike;floorFrames+=isFloor;
+        if(isStrike) {
+            brightestMappedStrike=std::max(brightestMappedStrike,target.mapped[0U].r);
+            if(seenStrike && dimRun>0U) {
+                shortGap=shortGap || (dimRun>=5U && dimRun<=7U);
+                longRest=longRest || (dimRun>=40U && dimRun<=44U);
+            }
+            seenStrike=true;dimRun=0U;
+        } else if(isFloor) {
+            brightestMappedRest=std::max(brightestMappedRest,target.mapped[0U].r);
+            if(seenStrike) ++dimRun;
+        }
+        const auto& physical=s.PhysicalFrame();
+        if(sample!=0U)Check(physical.now_ms==start+sample*20U && physical.frame_sequence!=previousFrame,run,
+            "each sample is a fresh actual mapped frame");
+        previousFrame=physical.frame_sequence;
+        const auto near=AllSquarePixels(s,40U),far=AllSquarePixels(s,32U);
+        nearHead=nearHead || Energy(near.mapped[1U])+Energy(near.mapped[2U])>0U;
+        farHead=farHead || Energy(far.mapped[1U])+Energy(far.mapped[2U])>0U;
+        routeCleared=routeCleared || (EmptyPieceTargets(s,40U) && EmptyPieceTargets(s,32U));
+        if(currentLimit)Check(physical.power_limited && physical.applied_led_current_ma<=currentLimit,run,
+            "actual warm pulses obey the hard current cap throughout the cycle");
         const auto currentNeighbor=AllSquarePixels(s,25U);bool ordinary=true;
         for(uint8_t slot=0U;slot<3U;++slot)ordinary=ordinary && Equal(currentNeighbor.semantic[slot],neighbor.semantic[slot]);
         Check(currentLimit?ordinary:SameSquarePixels(currentNeighbor,neighbor),run,
             "occupied neighbor keeps every rail and both Piece identities; only global current scaling may vary");
-        if(sample<=4U || sample==8U){
-            std::printf("[CAPTURE_WHITE_FADE] run=%s age=%u semanticL=%u,%u,%u semanticR=%u,%u,%u mappedL=%u,%u,%u mappedR=%u,%u,%u pieces=%u,%u current=%u scale=%u\n",
-                run,sample*75U,left.r,left.g,left.b,right.r,right.g,right.b,target.mapped[0].r,target.mapped[0].g,target.mapped[0].b,
-                target.mapped[3].r,target.mapped[3].g,target.mapped[3].b,Energy(target.mapped[1]),Energy(target.mapped[2]),
-                s.PhysicalFrame().applied_led_current_ma,s.PhysicalFrame().applied_brightness_scale_65535);
-            Checkpoint(s,run,"edge-white-fade","remove-a5-victim-or-hide-Hint","accepted",Bit(24U)|Bit(25U)|Bit(48U));
-        }
+        if(sample%20U==0U)Checkpoint(s,run,"edge-warm-removal","remove-a5-victim-or-hide-Hint","accepted",Bit(24U)|Bit(25U)|Bit(48U));
     }
-    Check(leftPeak && rightPeak && overlap,run,"both exact endpoints and the smooth overlapping handoff are visible");
-    for(const uint8_t offset:{7U,19U}){
-        const uint32_t base=(s.State().now_ms/600U+1U)*600U+offset;
-        uint8_t leftFull=0U,rightFull=0U;uint32_t previousFrame=s.PhysicalFrame().frame_sequence;
-        bool nearHead=false,farHead=false,routeCleared=false;
-        for(uint8_t sample=0U;sample<=60U;++sample){
-            Check(Align(s,base+sample*20U),run,"sample actual production rendering at20ms with arbitrary phase offset");
-            const auto cell=AllSquarePixels(s,24U);const auto& physical=s.PhysicalFrame();
-            Check(physical.now_ms==base+sample*20U && physical.frame_sequence!=previousFrame && EmptyPieceTargets(s,24U),run,
-                "every20ms sample is a fresh mapped frame and both victim Piece emitters remain zero");
-            previousFrame=physical.frame_sequence;
-            const auto near=AllSquarePixels(s,40U),far=AllSquarePixels(s,32U);
-            const bool nearNow=Energy(near.mapped[0U])>0U && Energy(near.mapped[1U])>0U &&
-                Energy(near.mapped[2U])>0U && Energy(near.mapped[3U])>0U;
-            const bool farNow=Energy(far.mapped[0U])>0U && Energy(far.mapped[1U])>0U &&
-                Energy(far.mapped[2U])>0U && Energy(far.mapped[3U])>0U;
-            if((nearNow && !nearHead) || (farNow && !farHead))
-                Checkpoint(s,run,nearNow&&!nearHead?"pending-near-route-head":"pending-far-route-head",
-                    "remove-a5-victim","accepted",Bit(24U)|Bit(32U)|Bit(40U)|Bit(48U));
-            nearHead=nearHead || nearNow;farHead=farHead || farNow;
-            routeCleared=routeCleared || (EmptyPieceTargets(s,40U) && EmptyPieceTargets(s,32U));
-            const bool left=cell.semantic[0U].r==255U && cell.semantic[0U].g==255U && cell.semantic[0U].b==255U &&
-                Energy(cell.semantic[2U])==0U;
-            const bool right=cell.semantic[2U].r==255U && cell.semantic[2U].g==255U && cell.semantic[2U].b==255U &&
-                Energy(cell.semantic[0U])==0U;
-            if(left || right){
-                ++(left?leftFull:rightFull);const uint8_t on=left?0U:3U,off=left?3U:0U;
-                Check(Energy(cell.mapped[off])==0U && Energy(cell.mapped[on])>0U,run,
-                    "actual20ms frames display fully OFF opposite the full WHITE target-strength rail");
-            }
-            if(currentLimit)Check(physical.applied_led_current_ma<=currentLimit,run,
-                "phase-offset endpoint dwell never bypasses the hard current limit");
-        }
-        Check(leftFull>=6U && rightFull>=6U,run,
-            "both60ms poles render at least three normal frames percycle at7ms and19ms offsets");
-        Check(nearHead && farHead && routeCleared,run,
-            "capture Hint travels over both empty route cells using all four actual LEDs and clears them behind the head while the victim remains WHITE");
-        std::printf("[CAPTURE_FRAME_CADENCE] run=%s offset=%u step=20 cycles=2 left_full_frames=%u right_full_frames=%u\n",
-            run,offset,leftFull,rightFull);
-        Checkpoint(s,run,"20ms-phase-offset-dwell","remove-victim-or-hide-Hint","accepted",Bit(24U)|Bit(25U));
-    }
-    Check(Setting(s,"MINIMAL_ANIMATIONS","true") && s.Advance(20U)==VIRTUAL_LITCH_OK,run,"Minimal freezes both victim rails white");
+    Check(strike && floor && strikeFrames>=22U && floorFrames>=90U && shortGap && longRest,run,
+        "paired 120ms amber strikes are separated by 120ms dim then an extended 840ms dim rest");
+    Check(nearHead && farHead && routeCleared,run,
+        "capture Hint crosses both empty route cells and clears behind the head while the victim remains warm");
+    Check(Setting(s,"MINIMAL_ANIMATIONS","true") && s.Advance(20U)==VIRTUAL_LITCH_OK,run,"Minimal freezes both victim rails orange");
     const auto still=AllSquarePixels(s,24U);
-    Check(still.semantic[0].r==255U && still.semantic[0].g==255U && still.semantic[0].b==255U &&
+    Check(still.semantic[0].r==255U && std::abs(int(still.semantic[0].g)-85)<=2 && still.semantic[0].b==0U &&
         Equal(still.semantic[0],still.semantic[2]) && EmptyPieceTargets(s,24U) &&
         EmptyPieceTargets(s,32U) && EmptyPieceTargets(s,40U) && s.Advance(650U)==VIRTUAL_LITCH_OK,run,
-        "Minimal is full static white on both rails with both actual victim Piece LEDs zero");
+        "Minimal is static orange on both rails with both actual victim Piece LEDs zero");
     const auto later=AllSquarePixels(s,24U);
+    if(!currentLimit && profile.brightness<256U) {
+        Check(brightestMappedStrike>still.mapped[0U].r,run,
+            "actual removal strikes use spare output headroom to exceed steady Minimal brightness");
+        Check(std::abs(int(brightestMappedRest)*4-int(still.mapped[0U].r))<=6,run,
+            "dim amber rest uses one-quarter ordinary output without the strike-only accent");
+    }
     Check(currentLimit?Equal(still.semantic[0],later.semantic[0]) && Equal(still.semantic[2],later.semantic[2]):SameSquarePixels(still,later),run,
-        "Minimal has no local fade; hard current arbitration retains authority");
-    Checkpoint(s,run,"Minimal-static-white","remove-victim-or-hide-Hint","accepted",Bit(24U)|Bit(25U));
+        "Minimal has no local pulse; hard current arbitration retains authority");
+    Checkpoint(s,run,"Minimal-static-orange","remove-victim-or-hide-Hint","accepted",Bit(24U)|Bit(25U));
     uint8_t replayFrom=64U,replayTo=64U;
     Check(Tap(s)&&!s.HintDisplayRequested(),run,"manual O hides the optional capture Hint through its existing toggle owner");
     Check(Tap(s)&&s.HintDisplayRequested()&&s.TryGetHintMoveSquares(replayFrom,replayTo)&&
@@ -944,7 +940,7 @@ struct KnightRoute {
     std::array<uint8_t, 4U> squares;
     std::array<uint8_t, 8U> positions;
 };
-const std::array<KnightRoute, 8U> KNIGHT_ROUTES{{
+const std::array<KnightRoute, 9U> KNIGHT_ROUTES{{
     {"up-two-left", {35U,27U,19U,18U}, {3U,1U,3U,1U,3U,0U,2U,0U}},
     {"up-two-right", {35U,27U,19U,20U}, {3U,1U,3U,1U,3U,2U,0U,2U}},
     {"down-two-left", {35U,43U,51U,50U}, {1U,3U,1U,3U,1U,0U,2U,0U}},
@@ -952,7 +948,8 @@ const std::array<KnightRoute, 8U> KNIGHT_ROUTES{{
     {"left-two-up", {35U,34U,33U,25U}, {2U,0U,2U,0U,2U,1U,3U,1U}},
     {"left-two-down", {35U,34U,33U,41U}, {2U,0U,2U,0U,2U,3U,1U,3U}},
     {"right-two-up", {35U,36U,37U,29U}, {0U,2U,0U,2U,0U,1U,3U,1U}},
-    {"right-two-down", {35U,36U,37U,45U}, {0U,2U,0U,2U,0U,3U,1U,3U}}
+    {"right-two-down", {35U,36U,37U,45U}, {0U,2U,0U,2U,0U,3U,1U,3U}},
+    {"reverse-c6-d4", {18U,26U,34U,35U}, {1U,3U,1U,3U,1U,2U,0U,2U}}
 }};
 std::string KnightFen(const KnightRoute& route, bool cpu, bool blocked, bool capture) {
     std::array<char, 64U> pieces{}; pieces[0U]='k'; pieces[63U]='K'; pieces[15U]='p'; pieces[48U]='P';
@@ -1018,37 +1015,49 @@ void KnightTravelJourney(const KnightRoute& route, bool cpu, bool firstP2, bool 
         for(uint8_t square=0U;square<64U;++square) baseline[square]=held?AllSquarePixels(s,square):ordinary[square];
         const uint32_t start=s.State().now_ms;
         bool ordinaryRevealCompleted = false;
-        for(uint8_t cycle=0U;cycle<2U;++cycle)for(uint8_t node=0U;node<8U;++node) {
-            const uint32_t age=cycle*1680U+(node*1440U+6U)/7U;
+        const auto phaseMask = [&](uint8_t step, uint8_t local) {
+            const uint8_t incoming=static_cast<uint8_t>(1U<<route.positions[step*2U]);
+            const uint8_t outgoing=static_cast<uint8_t>(1U<<route.positions[step*2U+1U]);
+            return local==0U?incoming:local==2U?outgoing:static_cast<uint8_t>(15U & ~(incoming|outgoing));
+        };
+        for(uint8_t cycle=0U;cycle<2U;++cycle)for(uint8_t node=0U;node<12U;++node) {
+            const uint32_t age=cycle*1680U+(node*1440U+10U)/11U;
             if(node>1U) {
-                const uint32_t midpoint=cycle*1680U+((2U*node-1U)*1440U)/14U;
+                const uint32_t midpoint=cycle*1680U+((2U*node-1U)*1440U)/22U;
                 Check(Align(s,start+midpoint),run,"sample continuous axis handoff before its next peak");
-                const uint8_t previous=route.squares[(node-1U)/2U],next=route.squares[node/2U];
-                if(previous!=route.squares[0U] && !blocked)
-                    Check(Energy(Emitter(s,previous,route.positions[node-1U]))>0U && Energy(Emitter(s,next,route.positions[node]))>0U,
-                        run,"the existing crossfade joins both L legs and the elbow without a hard peak jump");
+                const uint8_t previous=route.squares[(node-1U)/3U],next=route.squares[node/3U];
+                if(previous!=route.squares[0U] && next!=route.squares[3U] && !blocked) {
+                    bool priorLit=false,nextLit=false;
+                    for(uint8_t pos=0U;pos<4U;++pos) {
+                        priorLit=priorLit || ((phaseMask((node-1U)/3U,(node-1U)%3U)&(1U<<pos)) && Energy(Emitter(s,previous,pos))>0U);
+                        nextLit=nextLit || ((phaseMask(node/3U,node%3U)&(1U<<pos)) && Energy(Emitter(s,next,pos))>0U);
+                    }
+                    Check(priorLit && nextLit,run,"the crossfade joins both L legs and the elbow");
+                }
             }
-            Check(Align(s,start+age),run,"sample the existing request-relative clock at each L-route emitter peak");
-            const uint8_t square=route.squares[node/2U];
-            const bool occupiedTransit=node/2U>0U && node/2U<3U && blocked;
-            const uint8_t routePosition=route.positions[node];
-            const uint8_t position=occupiedTransit && (routePosition==1U||routePosition==3U)
-                ? (routePosition==1U?0U:2U) : routePosition;
+            Check(Align(s,start+age),run,"sample each three-beat L-route phase");
+            const uint8_t step=node/3U, square=route.squares[step];
+            const bool occupied=(occupancy&Bit(square))!=0ULL && !(held && step==0U);
+            const uint8_t mask=phaseMask(step,node%3U);
+            uint8_t position=0U;while(position<4U && (mask&(1U<<position))==0U)++position;
             const auto color=Emitter(s,square,position);
-            const bool sourceDark=!held && square==route.squares[0U] && (position==1U||position==3U) &&
-                Energy(Emitter(s,square,1U))==0U && Energy(Emitter(s,square,3U))==0U;
-            if(!sourceDark) {
-                const bool allFour=occupiedTransit || (square==route.squares[0U]&&!held) ||
-                    (Energy(Emitter(s,square,0U))>0U && Energy(Emitter(s,square,1U))>0U &&
-                     Energy(Emitter(s,square,2U))>0U && Energy(Emitter(s,square,3U))>0U);
-                Check(Energy(color)>=(currentLimit?1U:115U) && allFour,run,
-                    "the directional head reaches every L step; empty cells use all four LEDs and occupied transit uses only Square LEDs");
+            if(occupied) {
+                Check(Energy(Emitter(s,square,0U))>0U || Energy(Emitter(s,square,2U))>0U,run,
+                    "occupied route phases use side rails while preserving Piece identity");
+            } else {
                 const auto mover=ordinary[route.squares[0U]].mapped[1U];
-                const int tolerance=3*std::max({mover.r,mover.g,mover.b});
-                Check(std::abs(int(color.r*mover.g)-int(color.g*mover.r))<=tolerance &&
-                    std::abs(int(color.r*mover.b)-int(color.b*mover.r))<=tolerance &&
-                    std::abs(int(color.g*mover.b)-int(color.b*mover.g))<=tolerance,run,
-                    "L travel retains the actual moving player's RGB through physical mapping");
+                for(uint8_t pos=0U;pos<4U;++pos) if(mask&(1U<<pos)) {
+                    const auto head=Emitter(s,square,pos);
+                    Check(Energy(head)>=(currentLimit?1U:115U),run,
+                        "incoming, middle pair and outgoing use the actual mapped L-route emitters");
+                    if(!currentLimit && step!=3U) {
+                        const int tolerance=3*std::max({mover.r,mover.g,mover.b});
+                        Check(std::abs(int(head.r*mover.g)-int(head.g*mover.r))<=tolerance &&
+                            std::abs(int(head.r*mover.b)-int(head.b*mover.r))<=tolerance &&
+                            std::abs(int(head.g*mover.b)-int(head.b*mover.g))<=tolerance,run,
+                            "L travel retains the actual moving player's RGB through physical mapping");
+                    }
+                }
             }
             Check(Energy(Emitter(s,route.squares[3U],1U))>0U && Energy(Emitter(s,route.squares[3U],3U))>0U,
                 run,"both actual destination Piece LEDs retain a visible landing floor");
@@ -1084,7 +1093,7 @@ void KnightTravelJourney(const KnightRoute& route, bool cpu, bool firstP2, bool 
             }
             if(currentLimit)Check(s.PhysicalFrame().applied_led_current_ma<=currentLimit,run,"actual L-route output remains within the unchanged hard current cap");
             for(uint8_t step=1U;step<3U;++step)if(!blocked && route.squares[step]!=square) {
-                const bool roundedHandoff=node%2U==1U && node+1U<8U && route.squares[step]==route.squares[node/2U+1U];
+                const bool roundedHandoff=node%3U==2U && node+1U<12U && route.squares[step]==route.squares[node/3U+1U];
                 Check(roundedHandoff?Energy(Emitter(s,route.squares[step],1U))<=2U && Energy(Emitter(s,route.squares[step],3U))<=2U:
                     EmptyPieceTargets(s,route.squares[step]),run,"only the current L head or its immediate handoff may light empty transit Piece LEDs");
             }
@@ -1094,14 +1103,14 @@ void KnightTravelJourney(const KnightRoute& route, bool cpu, bool firstP2, bool 
                     "source Piece LEDs retain their authoritative 600/200 ON and completely OFF cadence");
                 sourceOn=sourceOn||(top>0U&&bottom>0U);sourceOff=sourceOff||(top==0U&&bottom==0U);
             } else Check(s.State().valid_destination_mask==legal,run,"L travel cannot change ordinary held-piece legal admission");
-            if(cycle==0U && (!firstP2&&!rotate || node==2U || node==5U || node==7U) || cycle==1U&&node==0U) {
+            if(cycle==0U && (!firstP2&&!rotate || node==3U || node==7U || node==11U) || cycle==1U&&node==0U) {
                 std::printf("[KNIGHT_L_EMITTER] run=%s held=%u age=%u node=%u logical=%u position=%u mapped=%u rgb=%u,%u,%u,%u current=%u limited=%u\n",
                     run,held,age,node,square,position,runtime::MapSquareIndex(square,Rotated(s))*4U+(Rotated(s)?(position+2U)%4U:position),
                     color.r,color.g,color.b,color.w,s.PhysicalFrame().applied_led_current_ma,s.PhysicalFrame().power_limited);
-                if(node==2U||node==5U||node==7U||cycle==1U)Checkpoint(s,run,cycle==1U?"one-way-source-repeat":"L-head",
+                if(node==3U||node==7U||node==11U||cycle==1U)Checkpoint(s,run,cycle==1U?"one-way-source-repeat":"L-head",
                     cpu?"move-the-computer-knight-to-its-target":"follow-Hint-or-choose-any-legal-move","accepted",routeMask);
             }
-            if(node==7U)for(const uint32_t dwell:{1560U,1660U}) {
+            if(node==11U)for(const uint32_t dwell:{1560U,1660U}) {
                 Check(Align(s,start+cycle*1680U+dwell),run,"hold the head at the destination through its existing240ms dwell");
                 Check(Energy(Emitter(s,route.squares[3U],route.positions[7U]))>=(currentLimit?1U:115U),run,
                     "destination dwell retains a visible mover-color head instead of starting reverse travel");
@@ -1157,7 +1166,7 @@ void KnightDirectionalMatrix() {
     for(const auto& route:KNIGHT_ROUTES)for(const bool cpu:{false,true})for(const bool first:{false,true})for(const bool rotate:{false,true})
         KnightTravelJourney(route,cpu,first,rotate);
     for(const bool cpu:{false,true})for(const bool first:{false,true})for(const bool rotate:{false,true})
-        KnightTravelJourney(KNIGHT_ROUTES[0U],cpu,first,rotate,true);
+        KnightTravelJourney(KNIGHT_ROUTES[1U],cpu,first,rotate,true);
     for(const bool cpu:{false,true})KnightTravelJourney(KNIGHT_ROUTES[0U],cpu,false,true,false,80U);
 }
 
@@ -1177,14 +1186,11 @@ void KnightCaptureJourney(bool cpu, bool sourceFirst, bool firstP2, bool rotate)
         bool longLeg=false,elbow=false,routeCleared=false;
         for(uint8_t sample=0U;sample<85U;++sample) {
             const auto left=Emitter(s,18U,0U),right=Emitter(s,18U,2U);
-            Check(EmptyPieceTargets(s,18U) && left.r==left.g && left.g==left.b && right.r==right.g && right.g==right.b &&
-                Energy(left)+Energy(right)>0U,run,"pending victim keeps both actual Piece LEDs fully dark and only its own WHITE fading side rails");
+            Check(EmptyPieceTargets(s,18U) && Equal(left,right) && left.r>0U && left.b==0U && left.w==0U,run,
+                "pending victim keeps both actual Piece LEDs dark and its synchronized warm side rails visible");
             const auto transit=AllSquarePixels(s,27U),corner=AllSquarePixels(s,19U);
-            const auto allLit=[](const SquarePixels& square) {
-                for(const auto color:square.mapped) if(Energy(color)==0U)return false;
-                return true;
-            };
-            const bool longNow=allLit(transit),elbowNow=allLit(corner);
+            const bool longNow=Energy(transit.mapped[1U])+Energy(transit.mapped[2U])>0U;
+            const bool elbowNow=Energy(corner.mapped[1U])+Energy(corner.mapped[2U])>0U;
             if((longNow && !longLeg) || (elbowNow && !elbow))
                 Checkpoint(s,run,longNow&&!longLeg?"pending-long-leg":"pending-elbow",
                     "remove-c6-victim","accepted",Bit(35U)|Bit(27U)|Bit(19U)|Bit(18U));
@@ -1193,10 +1199,10 @@ void KnightCaptureJourney(bool cpu, bool sourceFirst, bool firstP2, bool rotate)
             Check(s.Advance(20U)==VIRTUAL_LITCH_OK,run,"sample one physical L pass while awaiting Hall removal");
         }
         Check(longLeg && elbow && routeCleared,run,
-            "pending capture keeps its moving L route on all four empty-cell LEDs without relighting the WHITE victim's Piece LEDs");
+            "pending capture keeps its moving L route through both empty cells without relighting the victim's Piece LEDs");
     };
     pending();
-    Checkpoint(s,run,"WHITE-victim-L-active","remove-the-captured-piece","accepted",Bit(35U)|Bit(27U)|Bit(19U)|Bit(18U));
+    Checkpoint(s,run,"warm-victim-L-active","remove-the-captured-piece","accepted",Bit(35U)|Bit(27U)|Bit(19U)|Bit(18U));
     if(sourceFirst) {
         occupancy&=~Bit(35U);Check(Observe(s,occupancy),run,"raw source-first knight lift keeps victim-removal priority");pending();
         occupancy&=~Bit(18U);Check(Observe(s,occupancy),run,"actual victim removal releases the waiting landing pair beside the continuing L cue");
@@ -1229,7 +1235,7 @@ void KnightCaptureJourney(bool cpu, bool sourceFirst, bool firstP2, bool rotate)
         Check(!s.IsUndoActionPending() && s.State().interaction_phase==static_cast<uint8_t>(runtime::ChessInteractionPhase::ExecutingPlan) &&
             s.State().required_action==static_cast<uint8_t>(runtime::RequiredPhysicalAction::LiftPrimary) &&
             home.physicalMoveValid && home.physicalFromSquare==35U && home.physicalToSquare==18U && EmptyPieceTargets(s,18U),run,
-            "completed CPU Undo retires its return prompts and admits the same real CPU capture with WHITE removal guidance");
+            "completed CPU Undo retires its return prompts and admits the same real CPU capture with warm removal guidance");
     } else {
         Check(EmptyPieceTargets(s,27U)&&EmptyPieceTargets(s,19U)&&Energy(Emitter(s,18U,1U))>0U&&Energy(Emitter(s,18U,3U))>0U,run,
             "completed human Undo restores victim identity and leaves no phantom L or removal cue");
@@ -1336,12 +1342,18 @@ void CaptureFirstGuidanceJourney(const CaptureCase& position, bool rotate) {
           position.name, "raw victim lift enters authoritative capture-first stage");
     Check(Read(s).capturers == position.capturers && Read(control).capturers == position.capturers,
           position.name, "completed-position cache includes all and only legal still-present capturers");
-    uint64_t shownSources = 0ULL;
+    uint64_t shownSources = 0ULL, sweptOrigins = 0ULL;
+    bool rookTransitLit = false, rookTransitCleared = false, epLandingLit = false, epLandingCleared = false;
     std::array<std::array<uint16_t, 2U>, 64U> lowPiece{}, highPiece{};
     for (auto& low : lowPiece) low.fill(65535U);
-    for (uint8_t frame = 0U; frame <= 9U; ++frame) {
+    for (uint8_t frame = 0U; frame <= 45U; ++frame) {
+        uint8_t sweepingSources = 0U;
         for (uint8_t sq = 0U; sq < 64U; ++sq) if ((position.capturers & Bit(sq)) != 0ULL) {
             if (!SameSquarePixels(AllSquarePixels(s, sq), ordinarySquares[sq])) shownSources |= Bit(sq);
+            if (!Equal(Emitter(s, sq, 0U), Emitter(s, sq, 2U))) {
+                sweptOrigins |= Bit(sq);
+                ++sweepingSources;
+            }
             Check(SameSquarePixels(AllSquarePixels(s, sq), AllSquarePixels(control, sq)),
                   position.name, "Coaching off and on use the same semantic and actual V3 capture pulse");
             const auto targets = hardware::MapSemanticSquareLedTargets(
@@ -1358,6 +1370,8 @@ void CaptureFirstGuidanceJourney(const CaptureCase& position, bool rotate) {
                   (ordinaryPiece.w != 0U || piece.w == 0U),
                   position.name, "capture source pulse preserves ordinary own-piece color channels");
         }
+        Check(sweepingSources <= 1U, position.name,
+              "ambiguous capture choices never launch competing source sweeps at once");
         const auto victim = AllSquarePixels(s, position.victim);
         Check(!Equal(victim.semantic[0U], ordinarySquares[position.victim].semantic[0U]) &&
               !Equal(victim.semantic[2U], ordinarySquares[position.victim].semantic[2U]) &&
@@ -1369,8 +1383,24 @@ void CaptureFirstGuidanceJourney(const CaptureCase& position, bool rotate) {
               position.name, "removed victim never keeps a false piece-presence light");
         if (position.excluded < 64U)
             Check(SameSquarePixels(AllSquarePixels(s, position.excluded), ordinarySquares[position.excluded]), position.name, "pinned noncapturer retains ordinary identity and square");
+        if (position.victim == 35U && position.capturers == Bit(51U)) {
+            rookTransitLit = rookTransitLit || !EmptyPieceTargets(s, 43U);
+            rookTransitCleared = rookTransitCleared || (rookTransitLit && EmptyPieceTargets(s, 43U));
+        }
+        if (position.capturers == (Bit(26U) | Bit(28U) | Bit(51U))) {
+            const auto landing=AllSquarePixels(control,19U);
+            const bool visible=!Equal(landing.mapped[0U],ordinarySquares[19U].mapped[0U]) ||
+                               !Equal(landing.mapped[3U],ordinarySquares[19U].mapped[3U]);
+            epLandingLit=epLandingLit || visible;
+            epLandingCleared=epLandingCleared || (epLandingLit && !visible);
+            for(const uint8_t side:{0U,2U}) {
+                const auto rail=landing.semantic[side];
+                Check(!(rail.r>0U && rail.g<=rail.r && rail.b==0U),position.name,
+                      "separate en-passant landing never displays the warm victim-removal cue");
+            }
+        }
         checkpoint("capture-pulse-Coaching-off", "lift-one-legal-capturer-or-return-victim");
-        if (frame != 9U) Check(s.Advance(100U) == VIRTUAL_LITCH_OK && Align(control, s.State().now_ms), position.name, "sample capture-first assistance pulse");
+        if (frame != 45U) Check(s.Advance(100U) == VIRTUAL_LITCH_OK && Align(control, s.State().now_ms), position.name, "sample capture-first assistance pulse");
     }
     for (uint8_t sq = 0U; sq < 64U; ++sq) if ((position.capturers & Bit(sq)) != 0ULL) {
         for (uint8_t target = 0U; target < 2U; ++target) {
@@ -1381,6 +1411,32 @@ void CaptureFirstGuidanceJourney(const CaptureCase& position, bool rotate) {
                         lowPiece[sq][target], highPiece[sq][target]);
         }
     }
+    Check(sweptOrigins == position.capturers, position.name,
+          "one complete cycle visits every legal origin, including en-passant pawns with their separate landing");
+    if (position.capturers == (Bit(26U) | Bit(28U) | Bit(51U)))
+        Check(epLandingLit && epLandingCleared, position.name,
+              "en-passant travel reaches its separate d6 landing then clears it while the d5 victim socket stays dark");
+    if (position.victim == 35U && position.capturers == Bit(51U))
+        Check(rookTransitLit && rookTransitCleared, position.name,
+              "victim-first rook travel crosses the actual empty d3 Piece LEDs then clears them");
+    Check(Setting(s, "MINIMAL_ANIMATIONS", "true") && s.Advance(20U) == VIRTUAL_LITCH_OK,
+          position.name, "Minimal keeps source invitations and victim rails without travel");
+    const auto minimalVictim = AllSquarePixels(s, position.victim);
+    std::array<SquarePixels,64U> minimalSources{};
+    for(uint8_t sq=0U;sq<64U;++sq) if((position.capturers&Bit(sq))!=0ULL)
+        minimalSources[sq]=AllSquarePixels(s,sq);
+    const auto minimalEpLanding=AllSquarePixels(s,19U);
+    Check(EmptyPieceTargets(s, position.victim) && s.Advance(4500U) == VIRTUAL_LITCH_OK &&
+              SameSquarePixels(minimalVictim, AllSquarePixels(s, position.victim)),
+          position.name, "Minimal leaves the unchosen victim socket steady with its Piece LEDs dark over a full selection cycle");
+    for(uint8_t sq=0U;sq<64U;++sq) if((position.capturers&Bit(sq))!=0ULL)
+        Check(SameSquarePixels(minimalSources[sq],AllSquarePixels(s,sq)),position.name,
+              "Minimal keeps each legal capturer invitation steady across a full selection cycle");
+    if(position.capturers == (Bit(26U) | Bit(28U) | Bit(51U)))
+        Check(SameSquarePixels(minimalEpLanding,AllSquarePixels(s,19U)) && EmptyPieceTargets(s,19U),position.name,
+              "Minimal keeps the separate unchosen en-passant landing steady and dark across a full selection cycle");
+    Check(Setting(s, "MINIMAL_ANIMATIONS", "false") && s.Advance(20U) == VIRTUAL_LITCH_OK &&
+              Align(control, s.State().now_ms), position.name, "resume ordinary capture choices after Minimal");
     Check(shownSources == position.capturers && s.UndoHistoryMoveCount() == 0U && s.State().correction_mask == 0ULL &&
           s.State().expected_occupied_mask == position.occupancy,
           position.name, "Coaching-off legal capturers visibly pulse without changing game authority");
@@ -1568,12 +1624,10 @@ void DuckCaptureFirstJourney() {
             if (energy > high[target]) high[target] = energy;
         }
         const auto socket = AllSquarePixels(s, 27U);
-        Check(Equal(socket.semantic[0U], legalTarget.semantic[0U]) &&
-              Equal(socket.semantic[2U], legalTarget.semantic[2U]) &&
-              Equal(socket.mapped[0U], legalTarget.mapped[0U]) &&
-              Equal(socket.mapped[3U], legalTarget.mapped[3U]) &&
-              Energy(socket.mapped[0U]) > 0U && EmptyPieceTargets(s, 27U), run,
-              "Duck empty victim matches the normal legal destination on both side emitters; piece LEDs stay black");
+        Check(Energy(socket.semantic[0U]) > 0U && Energy(socket.semantic[2U]) > 0U &&
+              Energy(socket.mapped[0U]) > 0U && Energy(socket.mapped[3U]) > 0U &&
+              Energy(legalTarget.mapped[0U]) > 0U && EmptyPieceTargets(s, 27U), run,
+              "Duck victim-first travel reaches both visible side rails while the unchosen Piece pair stays black");
         Checkpoint(s, run, "Duck-victim-first-Coaching-off", "lift-e4-pawn-or-restore-d5", "accepted", Bit(27U) | Bit(36U));
         if (frame != 9U) Check(s.Advance(100U) == VIRTUAL_LITCH_OK, run, "sample Duck capture-source pulse");
     }
@@ -2101,6 +2155,144 @@ void DirectedTravelUsesActualMoverPalette() {
             }
         }
     }
+    // The cached future Duck destination may overlap the chess path. Until
+    // DuckRelocation owns the turn, it cannot reserve or color that square.
+    for(uint8_t stage=0U;stage<3U;++stage) {
+        modules::led_frame_composer::ComposeInputs inputs;
+        runtime::InteractionModelSnapshot snapshot;
+        ComposeContext context;context.snapshot=&snapshot;context.in=&inputs;
+        snapshot.game.variant=modules::GameVariant::Duck;
+        snapshot.board.enginePiecesValid=true;snapshot.board.enginePieces[52U]='P';
+        snapshot.render.hintFeedbackTimingValid=true;snapshot.render.hintFeedbackElapsedMs=480U;
+        snapshot.interaction.lastInteractionElapsedMs=480U;
+        snapshot.interaction.cpuMovePromptElapsedMs=480U;
+        context.p1PieceRgb={243U,17U,61U};context.availablePromptRgb={0U,191U,23U};
+        context.hintMoveValid=true;context.hintFromSquare=52U;context.hintToSquare=36U;
+        context.hintRefinementAlpha255=255U;context.renderIntent.hintPromptVisible=true;
+        context.hintDuckFromSquare=24U;context.hintDuckToSquare=44U;
+        context.physicalOcc64=Bit(24U)|(stage==1U?0ULL:Bit(52U));
+        auto& interaction=snapshot.interaction.taggedState;
+        interaction.tag=stage==0U?runtime::ChessInteractionPhase::Idle:
+            stage==1U?runtime::ChessInteractionPhase::PieceLifted:runtime::ChessInteractionPhase::ExecutingPlan;
+        interaction.selectedSquare=52U;
+        if(stage==2U) {
+            context.cpuTargetOccValid=true;
+            interaction.requiredAction=runtime::RequiredPhysicalAction::LiftPrimary;
+            interaction.plan.kind=runtime::PhysicalTransitionKind::QuietMove;
+            interaction.plan.source=runtime::PhysicalTransitionSource::Directed;
+            interaction.plan.relocationCount=1U;interaction.plan.relocations[0U]={52U,36U};
+        }
+        modules::BoardLedFrame chessOnly{},withCachedDuck{};
+        context.hintDuckMoveValid=false;ApplyDirectedMoveLanding(context,chessOnly);
+        context.hintDuckMoveValid=true;ApplyDirectedMoveLanding(context,withCachedDuck);
+        bool unchanged=true;
+        for(uint8_t sq=0U;sq<64U;++sq) {
+            const auto& a=chessOnly[sq];const auto& b=withCachedDuck[sq];
+            unchanged=unchanged && same(a.left,b.left) && same(a.top,b.top) &&
+                same(a.right,b.right) && same(a.bottom,b.bottom);
+        }
+        Check(unchanged && (chessOnly[44U].left.r>0U || chessOnly[44U].right.r>0U),run,
+              "idle, held and fixed chess movement ignore the future Duck route even where its target overlaps chess transit");
+    }
+    // Once DuckRelocation owns the next action, check both fixed CPU and
+    // human Hint routes through their actual entry, middle and exit emitters.
+    struct DuckDirection {uint8_t from,to,transit,entry,exit,phases;};
+    const std::array<DuckDirection,8U> routes{{
+        {27U,29U,28U,1U<<0U,1U<<2U,3U},{29U,27U,28U,1U<<2U,1U<<0U,3U},
+        {27U,43U,35U,1U<<1U,1U<<3U,3U},{43U,27U,35U,1U<<3U,1U<<1U,3U},
+        {27U,45U,36U,(1U<<0U)|(1U<<1U),(1U<<2U)|(1U<<3U),2U},
+        {45U,27U,36U,(1U<<2U)|(1U<<3U),(1U<<0U)|(1U<<1U),2U},
+        {29U,43U,36U,(1U<<1U)|(1U<<2U),(1U<<0U)|(1U<<3U),2U},
+        {43U,29U,36U,(1U<<0U)|(1U<<3U),(1U<<1U)|(1U<<2U),2U}
+    }};
+    for(const auto& route:routes)for(const bool fixed:{false,true})for(const bool rotated:{false,true}) {
+        modules::led_frame_composer::ComposeInputs inputs;
+        runtime::InteractionModelSnapshot snapshot;
+        ComposeContext context;context.snapshot=&snapshot;context.in=&inputs;
+        snapshot.game.variant=modules::GameVariant::Duck;
+        auto& interaction=snapshot.interaction.taggedState;
+        interaction.tag=runtime::ChessInteractionPhase::DuckRelocation;
+        interaction.requiredAction=runtime::RequiredPhysicalAction::PlacePrimary;
+        interaction.plan.kind=runtime::PhysicalTransitionKind::DuckRelocation;
+        interaction.plan.source=fixed?runtime::PhysicalTransitionSource::Cpu:runtime::PhysicalTransitionSource::Human;
+        interaction.plan.relocationCount=1U;interaction.plan.moveFrom=route.from;
+        interaction.plan.relocations[0U]={route.from,fixed?route.to:runtime::CHESS_INTERACTION_INVALID_SQUARE};
+        context.renderIntent.hintPromptVisible=true;context.hintMoveValid=true;
+        context.hintFromSquare=route.from;context.hintToSquare=route.to;
+        context.hintRefinementAlpha255=255U;
+        snapshot.render.hintFeedbackTimingValid=true;
+        const auto render=[&](uint32_t age) {
+            snapshot.render.hintFeedbackElapsedMs=age;snapshot.interaction.lastInteractionElapsedMs=age;
+            modules::BoardLedFrame board{};ApplyDirectedMoveLanding(context,board);return board;
+        };
+        for(uint8_t phase=0U;phase<(route.phases==3U?1U:2U);++phase) {
+            const uint32_t age=route.phases==3U?480U:phase==0U?384U:576U;
+            const uint8_t mask=route.phases==3U?static_cast<uint8_t>(15U & ~(route.entry|route.exit)):
+                phase==0U?route.entry:route.exit;
+            const auto board=render(age);const auto& cell=board[route.transit];
+            const std::array<modules::Rgb,4U> logical{{cell.left,cell.top,cell.right,cell.bottom}};
+            const auto physical=hardware::MapSemanticLedFrame(
+                {hardware::BoardRevision::V3_3S3,rotated,rotated},board,
+                std::array<modules::Rgb,modules::EDGE_LED_COUNT>{});
+            for(uint8_t pos=0U;pos<4U;++pos) {
+                const uint16_t index=runtime::MapSquareIndex(route.transit,rotated)*4U+
+                    (rotated?(pos+2U)%4U:pos);
+                Check(same(physical[index],logical[pos]),run,
+                      "actual Duck-phase directional emitters map through physical 180-degree rotation");
+                if(mask&(1U<<pos)) {
+                    Check(logical[pos].r>150U && logical[pos].r==logical[pos].g && logical[pos].b==0U,run,
+                          "Duck-phase paired diagonal or cardinal-middle emitters lead in yellow");
+                    for(uint8_t other=0U;other<4U;++other) if(!(mask&(1U<<other)))
+                        Check(int(logical[pos].r)>int(logical[other].r)+20,run,
+                              "Duck-phase head visibly leads its opposite directional emitters");
+                }
+            }
+        }
+        context.minimalAnimations=true;
+        const auto initial=render(0U),later=render(1200U);
+        const auto& a=initial[route.transit];const auto& b=later[route.transit];
+        Check(same(a.left,b.left)&&same(a.top,b.top)&&same(a.right,b.right)&&same(a.bottom,b.bottom) &&
+            a.left.r==0U && a.top.r==0U && a.right.r==0U && a.bottom.r==0U &&
+            initial[route.to].top.r>0U && same(initial[route.to].top,later[route.to].top),run,
+            "Minimal retains the fixed Duck landing but suppresses its moving route");
+    }
+    // A 2:1 Duck line crosses a half-cell tie. Reverse traversal must visit
+    // the same logical cell in the real Duck phase, including fixed CPU moves.
+    for(const bool reverse:{false,true})for(const bool fixed:{false,true})for(const bool rotated:{false,true}) {
+        modules::led_frame_composer::ComposeInputs inputs;runtime::InteractionModelSnapshot snapshot;
+        ComposeContext context;context.snapshot=&snapshot;context.in=&inputs;
+        snapshot.game.variant=modules::GameVariant::Duck;
+        auto& interaction=snapshot.interaction.taggedState;
+        interaction.tag=runtime::ChessInteractionPhase::DuckRelocation;
+        interaction.requiredAction=runtime::RequiredPhysicalAction::PlacePrimary;
+        interaction.plan.kind=runtime::PhysicalTransitionKind::DuckRelocation;
+        interaction.plan.source=fixed?runtime::PhysicalTransitionSource::Cpu:runtime::PhysicalTransitionSource::Human;
+        interaction.plan.relocationCount=1U;
+        const uint8_t source=reverse?41U:24U,target=reverse?24U:41U;
+        interaction.plan.moveFrom=source;
+        interaction.plan.relocations[0U]={source,fixed?target:runtime::CHESS_INTERACTION_INVALID_SQUARE};
+        snapshot.render.hintFeedbackTimingValid=true;snapshot.render.hintFeedbackElapsedMs=480U;
+        snapshot.interaction.lastInteractionElapsedMs=480U;
+        context.renderIntent.hintPromptVisible=true;context.hintMoveValid=true;
+        context.hintFromSquare=source;context.hintToSquare=target;context.hintRefinementAlpha255=255U;
+        modules::BoardLedFrame board{};ApplyDirectedMoveLanding(context,board);
+        const auto physical=hardware::MapSemanticLedFrame(
+            {hardware::BoardRevision::V3_3S3,rotated,rotated},board,
+            std::array<modules::Rgb,modules::EDGE_LED_COUNT>{});
+        const auto lit=[](modules::Rgb c){return c.r!=0U || c.g!=0U || c.b!=0U;};
+        const auto& chosen=board[32U];const auto& other=board[33U];
+        Check((lit(chosen.left)||lit(chosen.top)||lit(chosen.right)||lit(chosen.bottom)) &&
+              !lit(other.left)&&!lit(other.top)&&!lit(other.right)&&!lit(other.bottom),run,
+              "both directions of the 2:1 Duck-phase tie cross the same even-color cell");
+        const std::array<modules::Rgb,4U> logical{{chosen.left,chosen.top,chosen.right,chosen.bottom}};
+        for(uint8_t position=0U;position<4U;++position){
+            const uint16_t index=runtime::MapSquareIndex(32U,rotated)*4U+
+                (rotated?(position+2U)%4U:position);
+            Check(same(physical[index],logical[position]),run,
+                  "2:1 Duck-phase tie maps each selected emitter through physical rotation");
+        }
+    }
+
 }
 
 void RemovalFadeRefinementSupportingControl(){
@@ -2111,27 +2303,37 @@ void RemovalFadeRefinementSupportingControl(){
     ComposeContext context; context.snapshot = &contextSnapshot;context.in=&inputs;
     context.physicalOcc64=Bit(27U);context.renderIntent.hintPromptVisible=true;context.hintMoveValid=true;
     context.hintCaptureSquare=27U;
-    for(const uint8_t alpha:{1U,128U,255U})for(const uint32_t age:{0U,1U,75U,150U,225U,299U,300U,599U,600U,UINT32_MAX-1U,UINT32_MAX}){
-        context.hintRefinementAlpha255=alpha;BoardComposeRuntime runtime;runtime.illegalAnim.elapsedMs=age;
+    for(const uint8_t alpha:{1U,128U,255U})for(const uint32_t age:{0U,1U,119U,120U,239U,240U,359U,360U,1199U,1200U,UINT32_MAX-1U,UINT32_MAX}){
+        context.hintRefinementAlpha255=alpha;contextSnapshot.render.hintFeedbackTimingValid=true;
+        contextSnapshot.render.hintFeedbackElapsedMs=age;
         modules::BoardLedFrame board{};board[27U].left=modules::RGB_RED;board[27U].right=modules::RGB_BLUE;
         modules::SetPiecePair(board[27U],modules::RGB_RED);
-        ApplyPhysicalRemovalBrackets(context,runtime,board);ApplyGlobalBrightnessBoost(board);
+        const uint64_t tapMask=ApplyPhysicalRemovalBrackets(context,board);ApplyGlobalBrightnessBoost(board);
         const auto left=board[27U].left,right=board[27U].right;
-        Check(left.r==left.g && left.g==left.b && right.r==right.g && right.g==right.b &&
-            std::abs(int(left.r+right.r)-int(alpha))<=3 &&
-            modules::RoundedPieceAverage(board[27U]).r==0U && PhysicalRemovalSquareMask(context)==Bit(27U),run,
-            "refinement intensity owns a neutral fade without ordinary colors relighting its zero end, including clock wrap");
-        if(age%600U==0U || age%600U==300U){
-            const auto on=age%600U==0U?left:right,off=age%600U==0U?right:left;
-            Check(off.r==0U && off.g==0U && off.b==0U && std::abs(int(on.r)-int(alpha))<=2 &&
-                (alpha!=255U || on.r==255U),run,
-                "refinement preserves exact zero; stable Hint reaches full WHITE and partial Hint retains its existing fade");
-        }
+        const auto close=[](int x,int y){return std::abs(x-y)<=3;};
+        const uint16_t phase=age%1200U;
+        const bool dim=phase>=360U || (phase>=120U && phase<240U);
+        const int expectedR=(dim?63:255)*int(alpha)/255;
+        const int expectedG=(dim?25:101)*int(alpha)/255;
+        Check(left.r==right.r && left.g==right.g && left.b==right.b && close(left.r,expectedR) && close(left.g,expectedG) && left.b==0U &&
+            modules::RoundedPieceAverage(board[27U]).r==0U && PhysicalRemovalSquareMask(context)==Bit(27U) &&
+            tapMask==(dim?0ULL:Bit(27U)),run,
+            "refinement scales paired amber strikes and dim rest while retaining persistent ownership and strike-only accent across clock wrap");
     }
-    context.undoPromptActive=true;BoardComposeRuntime runtime;modules::BoardLedFrame restored{};
+    context.minimalAnimations=true;context.hintRefinementAlpha255=255U;
+    contextSnapshot.render.hintFeedbackElapsedMs=0U;
+    modules::BoardLedFrame minimal{};
+    const uint64_t minimalTapMask=ApplyPhysicalRemovalBrackets(context,minimal);
+    ApplyGlobalBrightnessBoost(minimal);
+    Check(minimalTapMask==0ULL && PhysicalRemovalSquareMask(context)==Bit(27U) &&
+        minimal[27U].left.r==255U && std::abs(int(minimal[27U].left.g)-85)<=2 &&
+        minimal[27U].left.b==0U && minimal[27U].right.r==minimal[27U].left.r &&
+        minimal[27U].right.g==minimal[27U].left.g,run,
+        "Minimal retains ordinary steady orange ownership and never requests the strike accent");
+    context.minimalAnimations=false;context.undoPromptActive=true;modules::BoardLedFrame restored{};
     restored[27U].left=modules::RGB_RED;restored[27U].right=modules::RGB_BLUE;modules::SetPiecePair(restored[27U],modules::RGB_GREEN);
-    ApplyPhysicalRemovalBrackets(context,runtime,restored);
-    Check(PhysicalRemovalSquareMask(context)==0ULL && restored[27U].left.r==255U && restored[27U].right.b==255U &&
+    const uint64_t restoredTapMask=ApplyPhysicalRemovalBrackets(context,restored);
+    Check(restoredTapMask==0ULL && PhysicalRemovalSquareMask(context)==0ULL && restored[27U].left.r==255U && restored[27U].right.b==255U &&
         restored[27U].top.g==255U && restored[27U].bottom.g==255U,run,
         "Undo victim restoration preserves its own return colors and Piece identity, never WHITE removal");
 }
@@ -2735,9 +2937,9 @@ void PinnedCaptureJourney(bool victimFirst) {
               run, "source-first lift warns about the pin without rejecting the legal capture");
         const auto left = s.SemanticFrame().board[4U][0U];
         const auto right = s.SemanticFrame().board[4U][2U];
-        Check((left.r == left.g && left.g == left.b && Energy(left) > 0U) ||
-                  (right.r == right.g && right.g == right.b && Energy(right) > 0U),
-              run, "visible capture Hint keeps its WHITE removal brackets during the king warning");
+        Check(Equal(left, right) && left.r > 0U && left.g <= left.r && left.b == 0U &&
+                  EmptyPieceTargets(s, 4U),
+              run, "visible capture Hint keeps its synchronized warm removal rails during the king warning");
         Checkpoint(s, run, "pinned-mover-held-Hint-removal", "remove-e8-pinner", "accepted", Bit(4U)|Bit(52U)|Bit(60U));
         occupancy &= ~Bit(4U);
         Check(Observe(s, occupancy), run, "raw pinner removal hands ownership to capture landing");

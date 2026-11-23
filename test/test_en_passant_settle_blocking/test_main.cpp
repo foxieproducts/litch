@@ -29,13 +29,18 @@ bool RgbEq(const modules::Rgb a, const modules::Rgb b) {
     return a.r == b.r && a.g == b.g && a.b == b.b;
 }
 
-modules::Rgb ComposeLed(const runtime::GameStateMachine& stateMachine,
-                        const modules::SettingsStore& settings,
-                        const uint8_t logicalSquare,
-                        const hardware::SquareLedSlot slot,
-                        const bool flipSides,
-                        const bool firstPlayerIsP2,
-                        const modules::IEngine* engine) {
+struct SquareLeds {
+    modules::Rgb left;
+    modules::Rgb piece;
+    modules::Rgb right;
+};
+
+SquareLeds ComposeSquareLeds(const runtime::GameStateMachine& stateMachine,
+                             const modules::SettingsStore& settings,
+                             const uint8_t logicalSquare,
+                             const bool flipSides = false,
+                             const bool firstPlayerIsP2 = false,
+                             const modules::IEngine* engine = nullptr) {
     const modules::EngineDerivedState derived;
     runtime::InteractionModelSnapshot snapshot =
         test_support::BuildInteractionSnapshot(
@@ -52,39 +57,13 @@ modules::Rgb ComposeLed(const runtime::GameStateMachine& stateMachine,
     const auto physicalFrame = hardware::MapSemanticLedFrame(
         {hardware::BoardRevision::V2S3, flipSides, flipSides},
         ledFrame, edgeFrame);
-    const auto target=hardware::MapSemanticSquareLedTargets(hardware::BoardRevision::V2S3,
-        logicalSquare,slot,flipSides);
-    return physicalFrame[target.indices[0U]];
-}
-
-modules::Rgb ComposeSquareLed(const runtime::GameStateMachine& stateMachine,
-                              const modules::SettingsStore& settings,
-                              const uint8_t logicalSquare,
-                              const bool flipSides = false,
-                              const bool firstPlayerIsP2 = false,
-                              const modules::IEngine* engine = nullptr) {
-    return ComposeLed(stateMachine,
-                      settings,
-                      logicalSquare,
-                      hardware::SquareLedSlot::Square0,
-                      flipSides,
-                      firstPlayerIsP2,
-                      engine);
-}
-
-modules::Rgb ComposePieceLed(const runtime::GameStateMachine& stateMachine,
-                             const modules::SettingsStore& settings,
-                             const uint8_t logicalSquare,
-                             const bool flipSides = false,
-                             const bool firstPlayerIsP2 = false,
-                             const modules::IEngine* engine = nullptr) {
-    return ComposeLed(stateMachine,
-                      settings,
-                      logicalSquare,
-                      hardware::SquareLedSlot::Piece,
-                      flipSides,
-                      firstPlayerIsP2,
-                      engine);
+    const auto pixel = [&](const hardware::SquareLedSlot slot) {
+        const auto target = hardware::MapSemanticSquareLedTargets(
+            hardware::BoardRevision::V2S3, logicalSquare, slot, flipSides);
+        return physicalFrame[target.indices[0U]];
+    };
+    return {pixel(hardware::SquareLedSlot::Square0), pixel(hardware::SquareLedSlot::Piece),
+            pixel(hardware::SquareLedSlot::Square2)};
 }
 
 } // namespace
@@ -184,17 +163,19 @@ int main() {
     sm.Reset();
     sm.DebugSetExpectedPositionModel(position);
     sm.DebugSetPhysicalOccupancyMask(position.occupiedMask);
-    const modules::Rgb sourceSquareBefore =
-        ComposeSquareLed(sm, settings, 28U, false, false, &renderEngine);
-    const modules::Rgb alternativeSquareBefore =
-        ComposeSquareLed(sm, settings, 20U, false, false, &renderEngine);
-    const modules::Rgb sourcePieceBefore =
-        ComposePieceLed(sm, settings, 28U, false, false, &renderEngine);
-    const modules::Rgb p2SourcePieceBefore =
-        ComposePieceLed(sm, settings, 28U, false, true, &renderEngine);
+    const auto sourceBefore = ComposeSquareLeds(sm, settings, 28U, false, false, &renderEngine);
+    const auto alternativeBefore = ComposeSquareLeds(sm, settings, 20U, false, false, &renderEngine);
+    const auto p2SourceBefore = ComposeSquareLeds(sm, settings, 28U, false, true, &renderEngine);
     sm.HandleSensorChange(28, false);
     sm.SetValidDestMask((1ULL << 21) | (1ULL << 20));
     sm.HandleSensorChange(21, true);
+    const uint32_t promptStart = clock.NowMs();
+    constexpr modules::Rgb STRIKE{255U, 101U, 0U}, REST{64U, 25U, 0U};
+    const auto firstHuman = ComposeSquareLeds(sm, settings, 29U, false, false, &renderEngine);
+    const auto firstCpu = ComposeSquareLeds(cpuCaptureSm, settings, 29U, false, false, &renderEngine);
+    Check(RgbEq(firstHuman.left, STRIKE) && RgbEq(firstHuman.right, STRIKE) &&
+              RgbEq(firstCpu.left, STRIKE) && RgbEq(firstCpu.right, STRIKE),
+          "newly required human and CPU removal cues both begin with an amber strike");
 
     clock.SetNowMs(1200U);
     fxe::ManualMillis::SetNowMs(clock.NowMs());
@@ -210,133 +191,56 @@ int main() {
           "blocked en-passant retains pending capture-square metadata");
     Check(runtime::IsSettlingActive(blockedSnapshot),
           "blocked en-passant is visible as an active settle animation");
-    const modules::Rgb sourceSquarePending =
-        ComposeSquareLed(sm, settings, 28U, false, false, &renderEngine);
-    const modules::Rgb alternativeSquarePending =
-        ComposeSquareLed(sm, settings, 20U, false, false, &renderEngine);
-    const modules::Rgb targetPiecePending =
-        ComposePieceLed(sm, settings, 21U, false, false, &renderEngine);
-    const modules::Rgb rotatedTargetPiecePending =
-        ComposePieceLed(sm, settings, 21U, true, false, &renderEngine);
-    const modules::Rgb p2TargetPiecePending =
-        ComposePieceLed(sm, settings, 21U, false, true, &renderEngine);
-    Check(RgbEq(sourceSquarePending, sourceSquareBefore),
+    // The default 560 ms placement ripple can briefly cross these squares.
+    // Check retired move highlights after that separate effect has finished.
+    clock.SetNowMs(1600U);
+    fxe::ManualMillis::SetNowMs(clock.NowMs());
+    sm.Tick();
+    const auto sourcePending = ComposeSquareLeds(sm, settings, 28U, false, false, &renderEngine);
+    const auto alternativePending = ComposeSquareLeds(sm, settings, 20U, false, false, &renderEngine);
+    Check(RgbEq(sourcePending.left, sourceBefore.left) && RgbEq(sourcePending.right, sourceBefore.right),
           "en-passant removal phase clears the original-source highlight");
-    Check(RgbEq(alternativeSquarePending, alternativeSquareBefore),
+    Check(RgbEq(alternativePending.left, alternativeBefore.left) &&
+              RgbEq(alternativePending.right, alternativeBefore.right),
           "en-passant removal phase clears alternative legal-move highlights");
-    Check(RgbEq(targetPiecePending, sourcePieceBefore),
+    Check(RgbEq(ComposeSquareLeds(sm, settings, 21U, false, false, &renderEngine).piece, sourceBefore.piece),
           "en-passant destination piece uses the mover's color");
-    Check(RgbEq(rotatedTargetPiecePending, sourcePieceBefore),
+    Check(RgbEq(ComposeSquareLeds(sm, settings, 21U, true, false, &renderEngine).piece, sourceBefore.piece),
           "rotated en-passant destination piece uses the mover's color");
-    Check(RgbEq(p2TargetPiecePending, p2SourcePieceBefore),
+    Check(RgbEq(ComposeSquareLeds(sm, settings, 21U, false, true, &renderEngine).piece, p2SourceBefore.piece),
           "P2 mover's en-passant destination uses the P2 color");
-    // Observe the next full/off pole, then its opposite. The former 1200/1400
-    // samples are symmetric on the approved 600 ms complementary fade.
-    constexpr uint32_t REMOVAL_CYCLE_MS = 600U;
-    clock.SetNowMs(clock.NowMs() + REMOVAL_CYCLE_MS -
-                   sm.GetIllegalFlashElapsedMs() % REMOVAL_CYCLE_MS);
-    fxe::ManualMillis::SetNowMs(clock.NowMs());
-    const modules::Rgb capturedPawnFrameA =
-        ComposeSquareLed(sm, settings, 29U, false, false, &renderEngine);
-    const modules::Rgb rotatedCapturedPawnFrameA =
-        ComposeSquareLed(sm, settings, 29U, true, false, &renderEngine);
-    const modules::Rgb capturedPawnRightFrameA = ComposeLed(
-        sm, settings, 29U, hardware::SquareLedSlot::Square2,
-        false, false, &renderEngine);
-    const modules::Rgb rotatedCapturedPawnRightFrameA = ComposeLed(
-        sm, settings, 29U, hardware::SquareLedSlot::Square2,
-        true, false, &renderEngine);
-    const modules::Rgb capturedPawnPieceFrameA =
-        ComposePieceLed(sm, settings, 29U, false, false, &renderEngine);
-    const modules::Rgb cpuCapturedPawnFrameA =
-        ComposeSquareLed(cpuCaptureSm, settings, 29U, false, false,
-                         &renderEngine);
-    const modules::Rgb cpuCapturedPawnPieceFrameA =
-        ComposePieceLed(cpuCaptureSm, settings, 29U, false, false,
-                        &renderEngine);
-    const modules::Rgb rotatedCpuCapturedPawnFrameA =
-        ComposeSquareLed(cpuCaptureSm, settings, 29U, true, false,
-                         &renderEngine);
-    const modules::Rgb p2CapturedPawnFrameA =
-        ComposeSquareLed(sm, settings, 29U, false, true, &renderEngine);
-    const modules::Rgb p2CapturedPawnPieceFrameA =
-        ComposePieceLed(sm, settings, 29U, false, true, &renderEngine);
-    const modules::Rgb p2CpuCapturedPawnFrameA =
-        ComposeSquareLed(cpuCaptureSm, settings, 29U, false, true,
-                         &renderEngine);
-    const modules::Rgb p2CpuCapturedPawnPieceFrameA =
-        ComposePieceLed(cpuCaptureSm, settings, 29U, false, true,
-                        &renderEngine);
 
-    clock.SetNowMs(clock.NowMs() + 300U);
-    fxe::ManualMillis::SetNowMs(clock.NowMs());
-    const modules::Rgb capturedPawnFrameB =
-        ComposeSquareLed(sm, settings, 29U, false, false, &renderEngine);
-    const modules::Rgb rotatedCapturedPawnFrameB =
-        ComposeSquareLed(sm, settings, 29U, true, false, &renderEngine);
-    const modules::Rgb capturedPawnRightFrameB = ComposeLed(
-        sm, settings, 29U, hardware::SquareLedSlot::Square2,
-        false, false, &renderEngine);
-    const modules::Rgb rotatedCapturedPawnRightFrameB = ComposeLed(
-        sm, settings, 29U, hardware::SquareLedSlot::Square2,
-        true, false, &renderEngine);
-    const modules::Rgb capturedPawnPieceFrameB =
-        ComposePieceLed(sm, settings, 29U, false, false, &renderEngine);
-    const modules::Rgb cpuCapturedPawnFrameB =
-        ComposeSquareLed(cpuCaptureSm, settings, 29U, false, false,
-                         &renderEngine);
-    const modules::Rgb cpuCapturedPawnPieceFrameB =
-        ComposePieceLed(cpuCaptureSm, settings, 29U, false, false,
-                        &renderEngine);
-    const modules::Rgb rotatedCpuCapturedPawnFrameB =
-        ComposeSquareLed(cpuCaptureSm, settings, 29U, true, false,
-                         &renderEngine);
-    const modules::Rgb p2CapturedPawnFrameB =
-        ComposeSquareLed(sm, settings, 29U, false, true, &renderEngine);
-    const modules::Rgb p2CapturedPawnPieceFrameB =
-        ComposePieceLed(sm, settings, 29U, false, true, &renderEngine);
-    const modules::Rgb p2CpuCapturedPawnFrameB =
-        ComposeSquareLed(cpuCaptureSm, settings, 29U, false, true,
-                         &renderEngine);
-    const modules::Rgb p2CpuCapturedPawnPieceFrameB =
-        ComposePieceLed(cpuCaptureSm, settings, 29U, false, true,
-                        &renderEngine);
-    Check(RgbEq(capturedPawnFrameA, modules::RGB_WHITE) &&
-              RgbEq(capturedPawnRightFrameA, modules::RGB_BLACK) &&
-              RgbEq(capturedPawnFrameB, modules::RGB_BLACK) &&
-              RgbEq(capturedPawnRightFrameB, modules::RGB_WHITE),
-          "en-passant removal rails reach neutral full-white/off then off/full-white");
-    Check(RgbEq(rotatedCapturedPawnFrameA, modules::RGB_WHITE) &&
-              RgbEq(rotatedCapturedPawnRightFrameA, modules::RGB_BLACK) &&
-              RgbEq(rotatedCapturedPawnFrameB, modules::RGB_BLACK) &&
-              RgbEq(rotatedCapturedPawnRightFrameB, modules::RGB_WHITE),
-          "rotated en-passant removal rails retain both exact white/off poles");
-    for (const auto piece : {capturedPawnPieceFrameA, capturedPawnPieceFrameB,
-                            cpuCapturedPawnPieceFrameA, cpuCapturedPawnPieceFrameB,
-                            p2CapturedPawnPieceFrameA, p2CapturedPawnPieceFrameB,
-                            p2CpuCapturedPawnPieceFrameA, p2CpuCapturedPawnPieceFrameB}) {
-        Check(RgbEq(piece, modules::RGB_BLACK),
-              "present en-passant victim Piece remains off for human/CPU/P1/P2");
+    constexpr uint32_t PERIOD_MS = 1200U;
+    struct Sample { uint32_t offset; modules::Rgb expected; };
+    constexpr Sample SAMPLES[] = {
+        {0U, STRIKE}, {119U, STRIKE}, {120U, REST}, {239U, REST},
+        {240U, STRIKE}, {359U, STRIKE}, {360U, REST}, {1199U, REST},
+        {1200U, STRIKE},
+    };
+    const uint32_t start = promptStart + PERIOD_MS;
+    for (const auto& sample : SAMPLES) {
+        clock.SetNowMs(start + sample.offset);
+        fxe::ManualMillis::SetNowMs(clock.NowMs());
+        for (const auto* state : {&sm, &cpuCaptureSm}) {
+            const auto expectVictim = [&](const bool rotated, const bool p2) {
+                const auto leds = ComposeSquareLeds(*state, settings, 29U, rotated, p2, &renderEngine);
+                if (!RgbEq(leds.left, sample.expected) || !RgbEq(leds.right, sample.expected) ||
+                    !RgbEq(leds.piece, modules::RGB_BLACK)) {
+                    std::printf("[FAIL] f5 removal +%ums cpu=%u rotated=%u p2=%u "
+                                "expected=%u/%u/%u left=%u/%u/%u right=%u/%u/%u piece=%u/%u/%u\n",
+                                sample.offset, state == &cpuCaptureSm, rotated, p2,
+                                sample.expected.r, sample.expected.g, sample.expected.b,
+                                leds.left.r, leds.left.g, leds.left.b,
+                                leds.right.r, leds.right.g, leds.right.b,
+                                leds.piece.r, leds.piece.g, leds.piece.b);
+                    ++g_failures;
+                }
+            };
+            expectVictim(false, false);
+            expectVictim(true, false);
+            expectVictim(false, true);
+        }
     }
-    Check(RgbEq(capturedPawnFrameA, rotatedCapturedPawnFrameA) &&
-              RgbEq(capturedPawnFrameB, rotatedCapturedPawnFrameB),
-          "en-passant removal cue maps to the rotated physical square");
-    Check(RgbEq(capturedPawnFrameA, cpuCapturedPawnFrameA) &&
-              RgbEq(capturedPawnFrameB, cpuCapturedPawnFrameB),
-          "en-passant removal square exactly matches CPU capture cue");
-    Check(RgbEq(capturedPawnPieceFrameA, cpuCapturedPawnPieceFrameA) &&
-              RgbEq(capturedPawnPieceFrameB, cpuCapturedPawnPieceFrameB),
-          "en-passant captured piece LED exactly matches CPU capture cue");
-    Check(RgbEq(rotatedCapturedPawnFrameA, rotatedCpuCapturedPawnFrameA) &&
-              RgbEq(rotatedCapturedPawnFrameB, rotatedCpuCapturedPawnFrameB),
-          "rotated en-passant removal exactly matches CPU capture cue");
-    Check(RgbEq(p2CapturedPawnFrameA, p2CpuCapturedPawnFrameA) &&
-              RgbEq(p2CapturedPawnFrameB, p2CpuCapturedPawnFrameB) &&
-              RgbEq(p2CapturedPawnPieceFrameA,
-                    p2CpuCapturedPawnPieceFrameA) &&
-              RgbEq(p2CapturedPawnPieceFrameB,
-                    p2CpuCapturedPawnPieceFrameB),
-          "P1/P2-swapped en-passant removal exactly matches CPU capture cue");
 
     const uint32_t removedAtMs = clock.NowMs();
     sm.HandleSensorChange(29, false);
@@ -348,16 +252,14 @@ int main() {
 
     // The completed placement now owns a bounded 560 ms ripple afterglow,
     // which can legitimately pass through the adjacent captured-pawn square.
-    // Endpoint sampling moves removal later than the old absolute baseline.
-    // Keep both quiet observations beyond its legitimate 560 ms afterglow.
-    clock.SetNowMs(removedAtMs + 600U);
-    fxe::ManualMillis::SetNowMs(clock.NowMs());
-    const modules::Rgb removedFrameA = ComposeSquareLed(sm, settings, 29U);
-    clock.SetNowMs(removedAtMs + 650U);
-    fxe::ManualMillis::SetNowMs(clock.NowMs());
-    const modules::Rgb removedFrameB = ComposeSquareLed(sm, settings, 29U);
-    Check(RgbEq(removedFrameA, removedFrameB),
-          "captured-pawn square stops flashing after removal");
+    for (const uint32_t delay : {600U, 650U}) {
+        clock.SetNowMs(removedAtMs + delay);
+        fxe::ManualMillis::SetNowMs(clock.NowMs());
+        const auto cleared = ComposeSquareLeds(sm, settings, 29U);
+        Check(RgbEq(cleared.left, alternativeBefore.left) && RgbEq(cleared.right, alternativeBefore.right) &&
+                  RgbEq(cleared.piece, modules::RGB_BLACK),
+              "after the placement ripple the empty f5 returns to ordinary board lighting");
+    }
 
     if (g_failures == 0) {
         std::puts("[EN_PASSANT_SETTLE_BLOCKING] ok");

@@ -505,26 +505,70 @@ void CheckCompoundDuckHint(const fxe::SettingsStore& settings) {
 
     std::array<modules::Rgb, hardware::TOTAL_LED_COUNT> frame{};
     Compose(MakeInputs(settings, snapshot, false), frame);
+    auto chessOnly = snapshot;
+    chessOnly.render.hintDuckMoveValid = false;
+    std::array<modules::Rgb, hardware::TOTAL_LED_COUNT> chessOnlyFrame{};
+    Compose(MakeInputs(settings, chessOnly, false), chessOnlyFrame);
     const modules::Rgb chessSource =
         LedAt(frame, CHESS_FROM, hardware::SquareLedSlot::Square0);
     const modules::Rgb chessDestination =
         LedAt(frame, CHESS_TO, hardware::SquareLedSlot::Square0);
+    Check(RgbEnergy(chessSource) != 0U &&
+              RgbEnergy(chessDestination) != 0U,
+          "cached compound Duck Hint first shows only its chess movement");
+    for (const uint8_t square : {DUCK_FROM, DUCK_TO, uint8_t{25U}}) {
+        for (const auto slot : {hardware::SquareLedSlot::Square0,
+                                hardware::SquareLedSlot::Piece,
+                                hardware::SquareLedSlot::Square2}) {
+            Check(RgbEq(LedAt(frame, square, slot),
+                        LedAt(chessOnlyFrame, square, slot)),
+                  "unplayed chess Hint leaves Duck endpoints and route at their ordinary baseline");
+        }
+    }
+
+    snapshot.board.expectedOccupiedMask =
+        (1ULL << CHESS_TO) | (1ULL << DUCK_FROM);
+    snapshot.board.physicalOccupiedMask = snapshot.board.expectedOccupiedMask;
+    snapshot.board.enginePieces[CHESS_FROM] = '\0';
+    snapshot.board.enginePieces[CHESS_TO] = 'P';
+    snapshot.game.duckTurnPhase = modules::DuckTurnPhase::DuckRelocation;
+    auto& interaction = snapshot.interaction.taggedState;
+    interaction.tag = runtime::ChessInteractionPhase::DuckRelocation;
+    interaction.requiredAction = runtime::RequiredPhysicalAction::LiftPrimary;
+    interaction.selectedSquare = runtime::CHESS_INTERACTION_INVALID_SQUARE;
+    interaction.plan.kind = runtime::PhysicalTransitionKind::DuckRelocation;
+    interaction.plan.source = runtime::PhysicalTransitionSource::Human;
+    interaction.plan.moveFrom = DUCK_FROM;
+    interaction.plan.moveTo = runtime::CHESS_INTERACTION_INVALID_SQUARE;
+    snapshot.render.hintMoveFromSquare = DUCK_FROM;
+    snapshot.render.hintMoveToSquare = DUCK_TO;
+    snapshot.render.hintDuckMoveValid = false;
+    Compose(MakeInputs(settings, snapshot, false), frame);
     const modules::Rgb duckSource =
         LedAt(frame, DUCK_FROM, hardware::SquareLedSlot::Square0);
     const modules::Rgb duckDestination =
         LedAt(frame, DUCK_TO, hardware::SquareLedSlot::Square0);
     const modules::Rgb duckRoute =
         LedAt(frame, 25U, hardware::SquareLedSlot::Piece);
-    Check(RgbEnergy(chessSource) != 0U &&
-              RgbEnergy(chessDestination) != 0U,
-          "compound Duck Hint shows both chess endpoints together");
     Check(duckSource.r > duckSource.b && duckSource.g > duckSource.b &&
               duckDestination.r > duckDestination.b &&
               duckDestination.g > duckDestination.b &&
               duckRoute.r > 0U && duckRoute.r == duckRoute.g && duckRoute.b == 0U,
-          "compound Duck Hint traces its arbitrary a5-to-d4 relocation through yellow b5 as well as both endpoints");
-    Check(!RgbEq(chessDestination, duckDestination),
-          "compound Hint keeps chess and Duck destinations visually distinct");
+          "after chess acknowledgement the Duck-only Hint traces a5-to-d4 through yellow b5");
+    auto ordinary = snapshot;
+    ordinary.render.hintDisplayRequested = false;
+    ordinary.render.hintMoveValid = false;
+    std::array<modules::Rgb, hardware::TOTAL_LED_COUNT> ordinaryFrame{};
+    Compose(MakeInputs(settings, ordinary, false), ordinaryFrame);
+    for (const uint8_t square : {CHESS_FROM, CHESS_TO}) {
+        for (const auto slot : {hardware::SquareLedSlot::Square0,
+                                hardware::SquareLedSlot::Piece,
+                                hardware::SquareLedSlot::Square2}) {
+            Check(RgbEq(LedAt(frame, square, slot),
+                        LedAt(ordinaryFrame, square, slot)),
+                  "Duck relocation does not replay the completed chess Hint endpoints");
+        }
+    }
 }
 
 void CheckHumanAndCpuSettlePresentationMatches(

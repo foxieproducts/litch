@@ -100,6 +100,48 @@ def require_tag_source(tag: str, source: str) -> None:
         raise PublicationError("Release tag does not point to the approved source")
 
 
+def require_approved_history(notes: bytes, version: str, releases: list) -> None:
+    """Require the source seed to retain approved published customer history."""
+    sections = candidate.history_sections(notes, version)
+    previous = {}
+    for release in releases:
+        tag = release.get("tag_name", "")
+        match = re.fullmatch(r"fw-(?:beta|stable)-(\d+\.\d+\.\d+(?:-\d+)?)", tag)
+        old_version = candidate.release_identity.canonical_version(match[1]) if match else ""
+        if match:
+            try:
+                candidate.release_identity.sequence(old_version)
+            except ValueError:
+                continue
+        if (release.get("draft") is False and match
+                and old_version != candidate.release_identity.canonical_version(version)
+                and candidate.history_version_key(old_version) < candidate.history_version_key(version)
+                and tuple(map(int, old_version.split("-", 1)[0].split("."))) >= (1, 0, 2)):
+            if not release.get("published_at"):
+                raise PublicationError("Published firmware release is missing its publication time")
+            earlier = previous.get(old_version)
+            if earlier is None or release["published_at"] > earlier["published_at"]:
+                previous[old_version] = release
+    if not previous:
+        raise PublicationError("No prior published firmware notes to verify; reconcile release history")
+    tail = {section.split(b"\n", 1)[0]: section for section in sections[1:]}
+    for old_version, release in previous.items():
+        body = release.get("body")
+        if not isinstance(body, str) or not body.strip():
+            raise PublicationError("Prior published firmware release has no customer notes")
+        raw = body.encode("utf-8")
+        if len(raw) > candidate.artifact.MAX_NOTES_SIZE:
+            raise PublicationError("Prior published firmware notes exceed the admission limit")
+        raw = re.sub(rb"\n\n\[Source and licenses\]\(https://updates\.foxieproducts\.com/fw/firmware_notices_[0-9a-f]{64}\.md\)\n?$", b"", raw)
+        heading = f"## {old_version}\n".encode()
+        approved = raw if raw.startswith(heading) else heading + b"\n" + raw
+        if raw.startswith(heading):
+            approved = candidate.history_sections(raw, old_version)[0]
+        saved = tail.get(heading.rstrip(b"\n"))
+        if saved is None or saved.rstrip(b"\n") != approved.rstrip(b"\n"):
+            raise PublicationError("Source history differs from published customer notes; synchronize prior approved text before building")
+
+
 def summary(message: str) -> None:
     message = re.sub(r"(?i)[0-9a-f]{64}", "[redacted]", message)
     print(message)
@@ -521,6 +563,13 @@ class Promotion:
             raise PublicationError('Channel/version tag already exists without a frozen archive; reconcile before publication')
         base = candidate.resolve_notes_base(Path.cwd(), releases, self.channel,
                                              os.environ.get("BOOTSTRAP_BASE", ""))
+        if candidate.HISTORY_NOTES in self.build.get("input_sha256", {}):
+            alias = "version_beta.md" if self.build["channel"] == "beta" else "version.md"
+            original = (self.original / "assets" / alias).read_bytes()
+            prefix = f"Version: {self.build['version']}\n\n".encode()
+            if not original.startswith(prefix):
+                raise PublicationError("Candidate notes lack their version header")
+            require_approved_history(original[len(prefix):], self.build["version"], releases)
         if release:
             if not any(item["name"] == "notes-context.json" for item in release["assets"]):
                 if operation != "prepare-notes":

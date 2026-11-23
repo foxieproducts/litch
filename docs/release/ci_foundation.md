@@ -10,8 +10,8 @@ the firmware available on each channel.
 
 ## Rebuild, relink and install
 
-Open the catalog for the channel you use and check its `version`. For 1.0.2,
-follow `source.url` in that catalog to the notices and the download link for
+Open the catalog for the channel you use and check its `version`. For 1.0.2
+and later, follow `source.url` in that catalog to the notices and download link for
 its corresponding source and relinking bundle. For earlier firmware, follow
 the source link in the release notes for that version. These downloads are
 hosted on the update server.
@@ -46,11 +46,11 @@ catalog and `stable` serves Release. Contributors can build the same source
 locally. Publishing requires access to the repository's `firmware-publishing`
 environment.
 
-The first release in the 1.0.2 series is written `1.0.2` in app and firmware
-source, native packages, release tags and ordinary manifests. It occupies
-sequence zero; the retained `1.0.2-0` spelling identifies that same slot and
-cannot allocate or publish another image. The next new Beta is `1.0.2-1`.
-Earlier series keep their existing spellings. Local retries and stable promotions
+The first releases in the 1.0.2 and 1.0.3 series use the bare version in app
+and firmware source, native packages, release tags and manifests. Each occupies
+sequence zero. For example, `1.0.3` and `1.0.3-0` identify the same slot and
+the next Beta in that series is `1.0.3-1`. Earlier series keep their existing
+spellings. Local retries and stable promotions
 do not advance the sequence; native package codes remain independently checked
 against prior store uploads. Prepare all source identities together with
 `tools/release/release_identity.py` after reconciling complete release history
@@ -63,6 +63,16 @@ The update catalogs identify the separate source notice by URL, size and
 checksum. For each public release starting with 1.0.2, keep its GitHub release,
 tag and successful candidate build run so the verifier can check its archived files.
 
+Starting with 1.0.3, maintain [firmware release notes](firmware_notes.md) in
+source. Add each new version at the top, keep earlier sections unchanged, and
+retain the complete 1.0.2 launch text. The draft uses this history for both
+channels. The current section may be edited in the GitHub draft; earlier
+sections must match the latest approved text for each version. Before preparing
+a later release, carry any approved draft edits back into source. Version
+headings use the exact firmware version. The builder still adds the leading
+`Version:` line for older apps, and historical candidates
+retain their original notes and verification behavior.
+
 1. Commit the intended version and build inputs. Verify the source locally,
    including `./litch release check`. For a new version, check the live catalogs
    as well as the repository's release history.
@@ -73,8 +83,9 @@ tag and successful candidate build run so the verifier can check its archived fi
    from the summary. GitHub retains this candidate artifact for 14 days. Complete
    any planned channel promotions that use it within that window. Building a
    candidate leaves both app catalogs as they were.
-3. Run `prepare-notes` with those identifiers. Edit the draft release notes on
-   GitHub. Run `prepare-notes` again to get the digest of the text you approved.
+3. Run `prepare-notes` with those identifiers. Edit the current release section
+   in the draft on GitHub if needed. Run `prepare-notes` again to get the digest
+   of the text you approved.
    Run the [firmware host check](../../.github/workflows/firmware_host_check.yml)
    to verify authenticated access to both catalogs and obtain their current
    digests.

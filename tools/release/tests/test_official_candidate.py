@@ -88,6 +88,102 @@ class OfficialCandidateTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.fixture = CandidateFixture(self.temporary.name)
 
+    def test_curated_history_is_newest_first_and_keeps_original_launch(self):
+        f = self.fixture
+        launch = b"Initial release\n\nOriginal customer notes.\n"
+        (f.root / candidate.INITIAL_NOTES).write_bytes(launch)
+        history = b"## 1.0.3\n\n- Improved movement animation cues.\n\n## 1.0.2\n\n" + launch
+        (f.root / candidate.HISTORY_NOTES).write_bytes(history)
+        f.git("add", ".")
+        f.git("-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+              "commit", "--quiet", "-m", "Add release notes")
+        source = f.git("rev-parse", "HEAD").decode().strip()
+        with patch.object(candidate.release_identity, "source_identity", return_value={
+                "version": "1.0.3", "native_version": "1.0.3"}):
+            self.assertEqual(candidate.draft_notes(f.root, source, f.source_sha), history)
+        newer = b"## 1.0.3-1\n\nNewer beta.\n\n" + history
+        self.assertEqual(len(candidate.history_sections(newer, "1.0.3-1")), 3)
+        with self.assertRaisesRegex(ValueError, "newest first"):
+            candidate.history_sections(history, "1.0.3-1")
+        with self.assertRaisesRegex(ValueError, "newest first"):
+            candidate.history_sections(b"## 1.0.3\n\nA\n\n## 1.0.3-1\n\nB\n", "1.0.3")
+        with self.assertRaisesRegex(ValueError, "newest first"):
+            candidate.history_sections(b"## 1.0.3\n\nA\n\n## 1.0.3-0\n\nB\n", "1.0.3")
+        for invalid in (b"", b"x" * (candidate.artifact.MAX_NOTES_SIZE + 1)):
+            with self.assertRaisesRegex(ValueError, "size"):
+                candidate.history_sections(invalid, "1.0.3")
+        with self.assertRaisesRegex(ValueError, "UTF-8"):
+            candidate.history_sections(b"## 1.0.3\n\n\xff", "1.0.3")
+        candidate.validate_reviewed_history(history.replace(b"Improved", b"Polished"), history, "1.0.3")
+        with self.assertRaisesRegex(ValueError, "preserve earlier"):
+            candidate.validate_reviewed_history(history.replace(b"Original", b"Changed"), history, "1.0.3")
+
+    def test_curated_history_survives_beta_to_stable_with_same_image(self):
+        f = self.fixture
+        launch = b"Initial release\n\nOriginal customer notes.\n"
+        history = b"## 1.0.3\n\n- Improved movement animation cues.\n\n## 1.0.2\n\n" + launch
+        (f.root / candidate.INITIAL_NOTES).write_bytes(launch)
+        (f.root / candidate.HISTORY_NOTES).write_bytes(history)
+        f.git("add", ".")
+        f.git("-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+              "commit", "--quiet", "-m", "Prepare customer history")
+        f.source_sha = f.git("rev-parse", "HEAD").decode().strip()
+        identity = {"version": "1.0.3", "native_version": "1.0.3", "package_code": 52}
+        with patch.object(candidate.release_identity, "source_identity", return_value=identity), \
+             patch.object(candidate.release_identity, "release_series", return_value="1.0.3"):
+            digest = f.prepare("beta")
+            beta_manifest = json.loads((f.output / "catalog/manifest_beta.json").read_text())
+            review = f.base / "stable-review"
+            candidate.prepare_notes(f.root, f.output, f.source_sha, digest,
+                                    "stable", f.base_sha, review)
+            edited = history.replace(b"Improved", b"Polished")
+            (review / "notes.md").write_bytes(edited)
+            final = f.base / "stable-final"
+            final_sha = candidate.finalize_notes(f.output, f.source_sha, digest,
+                review / "notes.md", final, review / "notes-context.json")
+            receipt = candidate.verify(final, f.source_sha, final_sha)
+        self.assertIn(candidate.HISTORY_NOTES, receipt["input_sha256"])
+        self.assertEqual((final / "assets/version.md").read_bytes(), b"Version: 1.0.3\n\n" + edited)
+        self.assertEqual((final / "assets/firmware.bin").read_bytes(), f.firmware.read_bytes())
+        self.assertEqual(candidate.source_footer(receipt), b"")
+        stable_manifest = json.loads((final / "catalog/manifest.json").read_text())
+        for manifest in (beta_manifest, stable_manifest):
+            self.assertIn("source", manifest)
+            self.assertIn("/firmware_notices_", manifest["source"]["url"])
+
+    def test_published_history_requires_prior_reviewed_text(self):
+        import github_promotion as promotion
+        launch = "Initial release\n\nOriginal customer notes.\n"
+        seed = b"## 1.0.3\n\nCurrent.\n\n## 1.0.2\n\n" + launch.encode()
+        releases = [{"tag_name": "fw-stable-1.0.2", "draft": False,
+                     "published_at": "2026-01-01T00:00:00Z", "body": launch}]
+        promotion.require_approved_history(seed, "1.0.3", releases)
+        # A first promotion to the other channel does not treat this same
+        # version as an older release.
+        edited = seed.replace(b"Current.", b"Reviewed current.")
+        footer = "\n\n[Source and licenses](https://updates.foxieproducts.com/fw/firmware_notices_" + "a" * 64 + ".md)\n"
+        releases.append({"tag_name": "fw-beta-1.0.3", "draft": False,
+                         "published_at": "2026-01-02T00:00:00Z", "body": edited.decode() + footer})
+        promotion.require_approved_history(seed, "1.0.3", releases)
+        releases.append({"tag_name": "fw-beta-1.0.3-1", "draft": False,
+                         "published_at": "2026-01-03T00:00:00Z", "body": "Future beta"})
+        promotion.require_approved_history(seed, "1.0.3", releases)
+        next_seed = b"## 1.0.3-1\n\nNext.\n\n" + edited
+        promotion.require_approved_history(next_seed, "1.0.3-1", releases)
+        with self.assertRaisesRegex(promotion.PublicationError, "synchronize"):
+            promotion.require_approved_history(b"## 1.0.3-1\n\nNext.\n\n" + seed, "1.0.3-1", releases)
+        # A later Stable promotion may refine its own current section after a
+        # Beta successor has already retained the prior Beta wording.
+        beta_successor = b"## 1.0.3-1\n\nNext.\n\n" + edited
+        releases[-1]["body"] = beta_successor.decode()
+        stable_edit = edited.replace(b"Reviewed current.", b"Stable refinement.")
+        releases.append({"tag_name": "fw-stable-1.0.3", "draft": False,
+                         "published_at": "2026-01-04T00:00:00Z", "body": stable_edit.decode()})
+        next_release = b"## 1.0.4\n\nNext release.\n\n## 1.0.3-1\n\nNext.\n\n" + stable_edit
+        # This test fixture needs a known 1.0.4 release series.
+        with patch.object(candidate.release_identity, "sequence", side_effect=lambda _: 0):
+            promotion.require_approved_history(next_release, "1.0.4", releases)
+
     def test_new_candidates_require_compliance_bound_to_exact_source_and_firmware(self):
         f = self.fixture
         with self.assertRaisesRegex(ValueError, "require --compliance-bundle"):

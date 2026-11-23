@@ -233,6 +233,9 @@ class FirmwarePublicationTests(unittest.TestCase):
 
     def test_previous_catalog_can_temporarily_remain_visible_after_replacement(self):
         expected = (self.final / "catalog/manifest.json").read_bytes()
+        artifact = json.loads(expected)["artifact"]
+        image_name = Path(artifact["url"]).name
+        recognition_name, _ = publisher.recognition(artifact["image_sha256"])
         previous = self.host.files["manifest.json"]
         # The prior response can be shorter or longer than the new catalog.
         for old in (previous, previous + b" " * len(expected), None):
@@ -253,8 +256,11 @@ class FirmwarePublicationTests(unittest.TestCase):
                 self.assertEqual(sleep.call_count, 2)
                 self.assertEqual(self.host.events.count(("replace", "manifest.json")), 1)
                 manifest_write = self.host.events.index(("replace", "manifest.json"))
-                self.assertEqual(self.host.events[manifest_write + 1:],
-                                 [("read", "manifest.json")] * 3 + [("unlock",), ("close",)])
+                self.assertEqual(self.host.events[manifest_write + 1:], [
+                    ("read", "manifest.json"), ("read", "manifest.json"), ("read", "manifest.json"),
+                    ("read", image_name), ("replace", recognition_name), ("read", recognition_name),
+                    ("unlock",), ("close",),
+                ])
                 self.assertFalse(self.host.locked)
 
     def test_catalog_that_stays_on_previous_bytes_is_unverified(self):

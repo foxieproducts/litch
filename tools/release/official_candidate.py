@@ -24,6 +24,7 @@ REPOSITORY = "foxieproducts/litch"
 SOURCE_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 VERSION_HEADER = "include/firmware/firmware_version.hpp"
 INITIAL_NOTES = "docs/release/initial_1.0.2.txt"
+HISTORY_NOTES = "docs/release/firmware_notes.md"
 BUILD_INPUTS = (
     "LICENSE",
     "lib/litch-max/LICENSE",
@@ -80,6 +81,46 @@ def check_source(root: Path, expected_sha: str) -> None:
         fail("candidate requires a clean checkout, including untracked source")
 
 
+def history_version_key(version: str) -> tuple[int, int, int, int]:
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9]+)?", version):
+        fail("invalid firmware notes version")
+    series, _, sequence = version.partition("-")
+    try:
+        major, minor, patch = map(int, series.split("."))
+        return major, minor, patch, int(sequence) if sequence else 0
+    except ValueError:
+        fail("invalid firmware notes version")
+
+
+def history_sections(data: bytes, version: str) -> list[bytes]:
+    """Validate a customer history while keeping its section bytes intact."""
+    if not data or len(data) > artifact.MAX_NOTES_SIZE:
+        fail("firmware notes history size is outside the admission limit")
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        fail("firmware notes history must be UTF-8")
+    matches = list(re.finditer(rb"(?m)^## ([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9]+)?)\n", data))
+    if not matches or matches[0].start() != 0:
+        fail("firmware notes history must start with a version heading")
+    versions = [m.group(1).decode("ascii") for m in matches]
+    keys = [history_version_key(v) for v in versions]
+    if (versions[0] != version or any(a <= b for a, b in zip(keys, keys[1:]))):
+        fail("firmware notes must start with the current version and be newest first")
+    sections = [data[m.start():matches[i + 1].start() if i + 1 < len(matches) else len(data)]
+                for i, m in enumerate(matches)]
+    if any(not section.split(b"\n", 1)[1].strip() for section in sections):
+        fail("firmware notes sections must not be empty")
+    return sections
+
+
+def validate_reviewed_history(data: bytes, original: bytes, version: str) -> None:
+    sections = history_sections(data, version)
+    prior = history_sections(original, version)
+    if sections[1:] != prior[1:]:
+        fail("reviewed notes must preserve earlier release sections")
+
+
 def draft_notes(root: Path, source_sha: str, base_sha: str) -> bytes:
     if not SOURCE_PATTERN.fullmatch(base_sha):
         fail("notes base must be the full source SHA of the last official release")
@@ -89,6 +130,16 @@ def draft_notes(root: Path, source_sha: str, base_sha: str) -> bytes:
         name: git(root, "show", f"{source_sha}:{name}").decode("utf-8")
         for name in release_identity.SOURCE_PATHS
     })
+    if tuple(map(int, identity["native_version"].split("."))) >= (1, 0, 3):
+        if base_sha == source_sha:
+            fail("no commits since the selected release; choose a newer candidate")
+        git(root, "merge-base", "--is-ancestor", base_sha, source_sha)
+        notes = git(root, "show", f"{source_sha}:{HISTORY_NOTES}")
+        sections = history_sections(notes, identity["version"])
+        initial = git(root, "show", f"{source_sha}:{INITIAL_NOTES}")
+        if sections[-1] != b"## 1.0.2\n\n" + initial:
+            fail("firmware notes must retain the complete original 1.0.2 text")
+        return notes
     parents = git(root, "rev-list", "--parents", "-n", "1", source_sha).decode().split()
     if identity["version"] == "1.0.2" and len(parents) == 1:
         git(root, "rev-parse", "--verify", base_sha + "^{commit}")
@@ -295,6 +346,7 @@ def prepare(root: Path, firmware: Path, channel: str,
         expected_litch_max_license_sha256=sha256(litch_max_license),
         expected_litch_max_snapshot_sha256=sha256(litch_max_snapshot))
     notes_bytes = draft_notes(root, expected_sha, base_sha)
+    manifest_source = tuple(map(int, identity["native_version"].split("."))) >= (1, 0, 2)
     if output.exists() or output.is_symlink():
         fail("candidate output already exists; use a new run directory")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -303,7 +355,10 @@ def prepare(root: Path, firmware: Path, channel: str,
         stage.mkdir()
         write_payloads(stage, firmware_bytes, notes_bytes, channel, version,
                        compliance, compliance_bundle, separate_notice=True,
-                       manifest_source=version == "1.0.2")
+                       manifest_source=manifest_source)
+        inputs = BUILD_INPUTS
+        if tuple(map(int, identity["native_version"].split("."))) >= (1, 0, 3):
+            inputs = (*inputs, HISTORY_NOTES)
         receipt = {
             "schema_version": 2,
             "repository": REPOSITORY,
@@ -314,14 +369,14 @@ def prepare(root: Path, firmware: Path, channel: str,
             "target": "esp32s3",
             "notes_base_sha": base_sha,
             "notes_status": "draft",
-            "notes_presentation": ("customer-text-with-manifest-source" if version == "1.0.2"
+            "notes_presentation": ("customer-text-with-manifest-source" if manifest_source
                                    else "customer-text-with-source-asset"),
             "compliance_bundle": compliance,
             "input_sha256": {
                 path: sha256(litch_max_snapshot if path == "lib/litch-max.snapshot.json"
                              else litch_max_license if path == "lib/litch-max/LICENSE"
                              else git(root, "show", f"{expected_sha}:{path}"))
-                for path in BUILD_INPUTS
+                for path in inputs
             },
         }
         execution = {"run_id": os.environ.get("GITHUB_RUN_ID"),
@@ -401,6 +456,12 @@ def finalize_notes(directory: Path, expected_sha: str, receipt_sha: str,
         data = data[:-len(footer)]
     if not data.strip():
         fail("reviewed customer notes must not be blank")
+    if HISTORY_NOTES in receipt.get("input_sha256", {}):
+        original_notes = (directory / "assets" / ("version_beta.md" if original_channel == "beta" else "version.md")).read_bytes()
+        prefix = f"Version: {receipt['version']}\n\n".encode()
+        if not original_notes.startswith(prefix):
+            fail("candidate notes lack their version header")
+        validate_reviewed_history(data, original_notes[len(prefix):], receipt["version"])
     if output.exists() or output.is_symlink():
         fail("final candidate already exists; use a new output directory")
     alias = "firmware_beta.bin" if original_channel == "beta" else "firmware.bin"

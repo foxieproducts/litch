@@ -21,6 +21,8 @@ class _CollectionBle implements LitchBleService {
 
   @override
   bool get isConnected => true;
+  @override
+  bool get identifyConnectionActive => false;
   // These adapter-lifecycle cases isolate collection from an authorized board.
   // Owner-pending and recovery-only access use the real collector journeys.
   @override

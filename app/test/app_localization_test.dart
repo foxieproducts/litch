@@ -459,7 +459,8 @@ void main() {
   testWidgets('failed language save stays live and same choice retries', (
     tester,
   ) async {
-    final storage = _PreferencesPlatform()..rejectNextWrite = true;
+    final storage = _PreferencesPlatform()
+      ..rejectNextWriteForKey = 'flutter.app_locale_mode';
     storage.install(tester);
     tester.platformDispatcher.localesTestValue = const <Locale>[Locale('en')];
     addTearDown(tester.platformDispatcher.clearLocalesTestValue);
@@ -478,6 +479,7 @@ void main() {
       findsOneWidget,
     );
     expect(storage.values['flutter.app_locale_mode'], isNull);
+    expect(storage.rejectNextWriteForKey, isNull);
     await tester.tap(dropdown);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Deutsch').last);
@@ -513,7 +515,8 @@ void main() {
   testWidgets('failed tips save stays live and reports a localized retry', (
     tester,
   ) async {
-    final storage = _PreferencesPlatform()..rejectNextWrite = true;
+    final storage = _PreferencesPlatform()
+      ..rejectNextWriteForKey = 'flutter.app_show_tips';
     storage.install(tester);
     await _pumpOfflineApp(tester);
     await _openOfflineSetup(tester);
@@ -528,6 +531,7 @@ void main() {
       findsOneWidget,
     );
     expect(storage.values['flutter.app_show_tips'], isNull);
+    expect(storage.rejectNextWriteForKey, isNull);
 
     await tester.tap(tips);
     await tester.pumpAndSettle();
@@ -953,7 +957,7 @@ final class _PreferencesPlatform {
   static const channel = MethodChannel('plugins.flutter.io/shared_preferences');
   final values = <String, Object>{};
   Completer<void>? holdLoad;
-  bool rejectNextWrite = false;
+  String? rejectNextWriteForKey;
   bool failNextLoad = false;
   bool snapshotLoadBeforeHold = false;
 
@@ -974,12 +978,14 @@ final class _PreferencesPlatform {
           return snapshot ?? Map<String, Object>.from(values);
         case 'setString':
         case 'setBool':
-          if (rejectNextWrite) {
-            rejectNextWrite = false;
+          final arguments = call.arguments as Map<Object?, Object?>;
+          final key = arguments['key']! as String;
+          // Startup also persists app identity; fail only the setting under test.
+          if (rejectNextWriteForKey == key) {
+            rejectNextWriteForKey = null;
             return false;
           }
-          final arguments = call.arguments as Map<Object?, Object?>;
-          values[arguments['key']! as String] = arguments['value']!;
+          values[key] = arguments['value']!;
           return true;
         default:
           throw StateError('Unexpected preference operation: ${call.method}');

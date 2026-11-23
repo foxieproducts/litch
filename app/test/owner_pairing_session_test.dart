@@ -3483,23 +3483,22 @@ void main() {
           );
           await tester.pump();
           final message = find.textContaining(
-            'Litch already has three paired Bluetooth devices.',
+            'Litch already has three saved Bluetooth devices.',
           );
           expect(message, findsOneWidget);
           final copy = tester.widget<Text>(message).data!;
           for (final step in [
-            'Play mode',
-            'long press X',
+            'all phones, tablets and other devices',
+            'Your game and other settings stay intact',
+            'in Play, hold X for about one second',
             'Quick Setup',
-            'Left/Right',
-            'Bluetooth icon',
+            'Left or Right to select Bluetooth',
             'same end',
-            'X + O',
-            'two seconds',
-            'blue/orange',
-            'then release',
-            'Wait for clearing to finish',
-            'try again',
+            'X and Circle together for two seconds',
+            'Release both buttons when the blue-and-orange animation starts',
+            'three success flashes',
+            'Return to Foxie Litch, choose your board',
+            'try connecting again in the app',
           ]) {
             expect(copy, contains(step));
           }
@@ -3557,7 +3556,7 @@ void main() {
       expect(service.isConnected, isFalse);
       expect(find.byKey(const ValueKey('owner-pairing-gate')), findsOneWidget);
       expect(
-        find.textContaining('three paired Bluetooth devices'),
+        find.textContaining('three saved Bluetooth devices'),
         findsOneWidget,
       );
       expect(find.byType(CircularProgressIndicator), findsNothing);

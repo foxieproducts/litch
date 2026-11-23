@@ -330,8 +330,12 @@ class _SdkCharacteristic implements Characteristic {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Future<void> _turns(WidgetTester tester, bool Function() done) async {
-  for (var turn = 0; turn < 80 && !done(); turn++) {
+Future<void> _turns(
+  WidgetTester tester,
+  bool Function() done, {
+  int maxTurns = 80,
+}) async {
+  for (var turn = 0; turn < maxTurns && !done(); turn++) {
     await tester.pump(const Duration(milliseconds: 20));
     await tester.runAsync(() async {});
   }
@@ -771,7 +775,12 @@ void main() {
             reason: 'New native admission waits for old cleanup.',
           );
           board.cleanupFinished.complete();
-          await _turns(tester, () => board.connections.length == 2);
+          // The selected-board retry runs at 3s, after the native cleanup barrier.
+          await _turns(
+            tester,
+            () => board.connections.length == 2,
+            maxTurns: 200,
+          );
           board.connected(1);
           await _turns(tester, () => board.sessionActivated);
           expect(service.connectionSessionToken, isNot(oldToken));
@@ -985,7 +994,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         expect(board.connections, hasLength(1));
         board.cleanupFinished.complete();
-        await _turns(tester, () => board.connections.length == 2);
+        // Keep cleanup ordered while allowing the existing 3s selected-board retry.
+        await _turns(
+          tester,
+          () => board.connections.length == 2,
+          maxTurns: 200,
+        );
         board.connected(1);
         await _turns(tester, () => board.sessionActivated);
         expect(service.connectionSessionToken, isNot(oldToken));

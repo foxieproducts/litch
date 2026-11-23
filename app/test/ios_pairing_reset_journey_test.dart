@@ -74,7 +74,7 @@ Future<void> _until(WidgetTester tester, bool Function() done) async {
 void main() {
   for (final activeCommitted in [false, true]) {
     testWidgets(
-      'iOS second-phone reset ${activeCommitted ? 'after Active commit' : 'before Active commit'} settles setup and preserves claim fencing',
+      'iOS second-phone reset ${activeCommitted ? 'after Active commit' : 'before Active commit'} keeps bounded retry and preserves claim fencing',
       (tester) async {
         debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
         SharedPreferences.setMockInitialValues({
@@ -135,7 +135,12 @@ void main() {
           await tester.pump(const Duration(seconds: 2));
           expect(find.text('Connecting to Foxie Litch...'), findsNothing);
           expect(
-            find.textContaining('Connection ended before setup finished.'),
+            find.descendant(
+              of: find.byKey(const ValueKey('connection-progress-overlay')),
+              matching: find.textContaining(
+                'Connection ended before setup finished.',
+              ),
+            ),
             findsOneWidget,
           );
           expect(service.productReady, isFalse);
@@ -146,11 +151,15 @@ void main() {
             board.connections,
             hasLength(1),
             reason:
-                'A reset before Ready cannot silently rearm the consumed pairing intent.',
+                'An advertisement does not bypass the selected-board retry interval.',
           );
-          final connect = find.widgetWithText(FilledButton, 'Connect');
-          expect(connect, findsOneWidget);
-          await tester.tap(connect);
+          expect(board.pairingCommands, hasLength(1));
+          expect(
+            find.byKey(const ValueKey('chosen-board-cancel')).hitTestable(),
+            findsOneWidget,
+          );
+          // The visible selected-board journey retries its link. It must not
+          // grant a new pairing claim just because the native link returns.
           await _until(tester, () => board.connections.length == 2);
           board.connection(1, DeviceConnectionState.connected);
           await _until(tester, () => board.sessionActivated);

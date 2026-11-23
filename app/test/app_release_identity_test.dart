@@ -310,9 +310,20 @@ void main() {
       final migrationNotice = await migrated.pendingNotice();
       expect(migrationNotice?.version, '1.0.3');
       expect(migrationNotice?.buildNumber, '52');
+      final bundledNotes = await rootBundle.loadString(
+        AppUpgradeNoticeService.notesAsset,
+      );
+      final storeCatalog = jsonDecode(bundledNotes) as Map<String, dynamic>;
+      final storeRelease = (storeCatalog['releases'] as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .singleWhere(
+            (release) =>
+                release['version'] == '1.0.3' &&
+                release['build_number'] == '52',
+          );
       expect(
         migrationNotice?.notes,
-        contains('clearer Bluetooth pairing help'),
+        storeRelease['platform_notes']?['iOS'] ?? storeRelease['notes'],
       );
       expect(jsonDecode(nativeIdentity!)['build'], '51');
       expect(

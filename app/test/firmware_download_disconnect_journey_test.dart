@@ -369,6 +369,7 @@ void main() {
         final ble = RebootReplyBle()
           ..dropFirstVersionReply = false
           ..beginReply = null;
+        final originalBootNonce = ble.bootNonce;
         final service = LitchBleService(
           ble: ble,
           pendingOtaStore: MemoryOtaTargetStore(),
@@ -386,7 +387,11 @@ void main() {
           expect(ble.received, 0);
           expect(service.pendingOtaVerification, isNull);
           expect(service.failedOtaVerification, isNull);
-          expect(ble.acceptanceRequests, 0);
+          // Runtime acceptance can be read for ordinary firmware provenance.
+          // The update-specific attempt proof must still wait for Update.
+          expect(ble.proofRequests, 0);
+          expect(ble.admissionPhase, 0);
+          expect(ble.bootNonce, originalBootNonce);
           expect(verificationEntries, 0);
           expect(
             find.text('Selected firmware verified on this board.'),
@@ -469,13 +474,19 @@ void main() {
           );
           expect(cached.single.path, isNot(endsWith('.part')));
 
+          final acceptanceBeforeReconnect = ble.acceptanceRequests;
           await connectBoard(service, ble);
           final retryGeneration = service.connectionSessionToken;
           expect(retryGeneration, isNot(originalGeneration));
           await service.fetchDeviceCapabilities(deviceId: 'board-1');
           await service.openConnectionSession('board-1');
           await pumpUntil(tester, () => !card().updateDisabled);
+          await pumpUntil(
+            tester,
+            () => ble.acceptanceRequests > acceptanceBeforeReconnect,
+          );
           expect(updateButton().onPressed, isNotNull);
+          expect(card().verifying, isFalse);
           expectNoUpload();
           expect(httpClient.artifactGets, 1);
           expect(activity, [

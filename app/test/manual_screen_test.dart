@@ -102,33 +102,56 @@ void main() {
         );
         expect(controls, contains('X'));
         expect(start, contains('Bluetooth'));
-        expect(controls, contains('2'));
-        expect(controls, contains('3'));
-        final ownershipMessage = strings.ownerPairingOtherOwner
-            .split('.')
-            .first;
+        // Number words and prose directions are localized; the shared recovery
+        // paragraph, gesture order and capacity are the maintained contract.
+        final timings = switch (locale.languageCode) {
+          'de' => ['eine Sekunde', 'zwei Sekunden', 'drei Erfolgsblitze'],
+          'es' => ['un segundo', 'dos segundos', 'tres destellos'],
+          'fr' => ['une seconde', 'deux secondes', 'trois clignotements'],
+          'it' => ['un secondo', 'due secondi', 'tre lampeggi'],
+          _ => ['one second', 'two seconds', 'three success flashes'],
+        };
+        final clearHelp = strings.ownerVerificationRecoverySteps;
+        expect(strings.ownerPairingOtherOwner, contains(clearHelp));
+        expect(
+          strings.ownerPairingOtherOwner.split('\n\n').first,
+          contains(timings.last.split(' ').first),
+          reason: 'The saved-device limit remains three in $locale',
+        );
         for (final body in <String>[
           strings.manualControlsBody,
           strings.manualConnectionBody,
         ]) {
-          final clearHelp = body
-              .split('\n\n')
-              .singleWhere((paragraph) => paragraph.contains(ownershipMessage));
-          expect(clearHelp, contains(ownershipMessage));
+          expect(body.split('\n\n'), contains(clearHelp));
           expect(clearHelp, contains('X'));
           expect(clearHelp, contains('Bluetooth'));
-          expect(clearHelp, contains('2'));
-          expect(clearHelp, contains('3'));
-          expect(clearHelp, contains('/'));
+          for (final timing in timings) {
+            expect(clearHelp, contains(timing), reason: '$locale: $timing');
+          }
           expect(
             clearHelp.indexOf('X'),
-            lessThan(clearHelp.lastIndexOf('Bluetooth')),
+            lessThan(clearHelp.indexOf(timings[0])),
           );
           expect(
-            clearHelp.lastIndexOf('Bluetooth'),
-            lessThan(clearHelp.indexOf('2')),
+            clearHelp.indexOf(timings[0]),
+            lessThan(clearHelp.indexOf('Bluetooth')),
           );
-          expect(clearHelp.indexOf('2'), lessThan(clearHelp.indexOf('3')));
+          expect(
+            clearHelp.indexOf('Bluetooth'),
+            lessThan(clearHelp.lastIndexOf('X')),
+          );
+          expect(
+            clearHelp.lastIndexOf('X'),
+            lessThan(clearHelp.indexOf(timings[1])),
+          );
+          expect(
+            clearHelp.indexOf(timings[1]),
+            lessThan(clearHelp.indexOf(timings[2])),
+          );
+          expect(
+            clearHelp.indexOf(timings[2]),
+            lessThan(clearHelp.indexOf('Foxie Litch')),
+          );
         }
         final oneDevicePolicy = strings.connectionEndedBeforeReady
             .split('\n\n')
@@ -136,7 +159,7 @@ void main() {
         expect(strings.manualConnectionBody, contains(oneDevicePolicy));
         expect(
           strings.manualConnectionBody.indexOf(oneDevicePolicy),
-          lessThan(strings.manualConnectionBody.indexOf(ownershipMessage)),
+          lessThan(strings.manualConnectionBody.indexOf(clearHelp)),
         );
         expect(
           RegExp(

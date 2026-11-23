@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:litch_mobile/src/models/owner_pairing_session.dart';
@@ -138,6 +140,47 @@ void main() {
                   .isNotEmpty,
             );
           }
+          // Recovery's public-only connection can still discover a verified
+          // board update. Acknowledge the real first-connection offer before
+          // interacting with the Setup screen behind its modal route.
+          final offer = find.byKey(const ValueKey('firmware-update-offer'));
+          expect(offer, findsOneWidget);
+          expect(find.text('Board firmware update: 1.2.3'), findsOneWidget);
+          expect(
+            find.textContaining('Board software release notes.'),
+            findsOneWidget,
+          );
+          final later = find.widgetWithText(TextButton, 'Later');
+          expect(later.hitTestable(), findsOneWidget);
+          expect(tester.getSize(later).shortestSide, greaterThanOrEqualTo(48));
+          final semantics = tester.ensureSemantics();
+          try {
+            final laterSemantics = tester
+                .getSemantics(later)
+                .getSemanticsData();
+            expect(laterSemantics.label, 'Later');
+            expect(laterSemantics.flagsCollection.isButton, isTrue);
+            expect(laterSemantics.hasAction(SemanticsAction.tap), isTrue);
+          } finally {
+            semantics.dispose();
+          }
+          _expectPublicRecoveryAccess(service, board);
+          await tester.tap(later);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(offer, findsNothing);
+          final preferences = await SharedPreferences.getInstance();
+          expect(
+            preferences.getStringList('firmware_update_seen_versions'),
+            contains('1.2.3'),
+          );
+          expect(
+            preferences.getBool('firmware_update_notices_disabled') ?? false,
+            isFalse,
+          );
+          expect(service.connectionSessionToken, generation);
+          expect(board.connections, hasLength(1));
+          _expectPublicRecoveryAccess(service, board);
           expect(find.byType(SettingsScreen).hitTestable(), findsOneWidget);
           expect(find.byType(RuntimeHealthCard), findsOneWidget);
           expect(
@@ -207,6 +250,11 @@ void main() {
           await tester.tap(find.byKey(const ValueKey('firmware-back')));
           await tester.pump();
           expect(find.byType(SettingsScreen).hitTestable(), findsOneWidget);
+          expect(
+            offer,
+            findsNothing,
+            reason: 'The same seen offer does not interrupt Setup again.',
+          );
           expect(find.text('Recovery'), findsOneWidget);
           expect(
             board.requests,

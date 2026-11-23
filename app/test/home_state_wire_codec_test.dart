@@ -257,7 +257,29 @@ void main() {
       held.assistance!.legalDestinations,
       (BigInt.one << 36) | (BigInt.one << 44),
     );
-    expect(snapshot(held).visibleAssistance, same(held.assistance));
+    final heldSnapshot = snapshot(held);
+    final visibleHeld = heldSnapshot.visibleAssistance!;
+    expect(visibleHeld.presentation, HomeAssistancePresentation.legal);
+    expect(visibleHeld.move, held.assistance!.move);
+    expect(visibleHeld.legalSource, 52);
+    expect(visibleHeld.legalDestinations, held.assistance!.legalDestinations);
+    expect(visibleHeld.duckMove, isNull);
+    expect(visibleHeld.requested, isTrue);
+    expect(visibleHeld.coachingOwned, isTrue);
+    expect(heldSnapshot.assistanceGuidance, 'Legal moves from e2 are marked.');
+
+    // Current boards send only the chess step; older boards may retain the
+    // full tuple above. Both expose the same chess-only guidance while held.
+    final chessOnlyBytes = Uint8List.fromList(bytes)
+      ..[88] = 0xff
+      ..[89] = 0xff;
+    final chessOnly = HomeStateWireCodec.tryDecode(
+      chessOnlyBytes,
+      sequence: 2,
+    )!;
+    expect(chessOnly.assistance!.duckMove, isNull);
+    expect(snapshot(chessOnly).visibleAssistance, same(chessOnly.assistance));
+    expect(snapshot(chessOnly).visibleAssistance!.move, visibleHeld.move);
 
     bytes[1] = HomeStateAction.settle.index;
     bytes[85] = HomeAssistancePresentation.duck.index;
@@ -268,8 +290,8 @@ void main() {
     final settlingSnapshot = snapshot(settling);
     expect(settling.assistance!.move, isNull);
     expect(settling.assistance!.duckMove, held.assistance!.duckMove);
-    expect(settlingSnapshot.visibleAssistance, same(settling.assistance));
-    expect(settlingSnapshot.assistanceGuidance, 'Duck hint: d5 to d4.');
+    expect(settlingSnapshot.visibleAssistance, isNull);
+    expect(settlingSnapshot.assistanceGuidance, isNull);
     expect(
       settlingSnapshot.copyWith(assistance: held.assistance).visibleAssistance,
       isNull,
@@ -286,7 +308,16 @@ void main() {
     );
     expect(relocating.duckRelocationPrompt?.toSquare, isNull);
     expect(relocating.assistance!.duckMove, settling.assistance!.duckMove);
-    expect(snapshot(relocating).visibleAssistance, same(relocating.assistance));
+    final relocatingSnapshot = snapshot(relocating);
+    expect(relocatingSnapshot.visibleAssistance, same(relocating.assistance));
+    expect(relocatingSnapshot.assistanceGuidance, 'Duck hint: d5 to d4.');
+    final legacyRelocation = relocatingSnapshot
+        .copyWith(assistance: held.assistance)
+        .visibleAssistance!;
+    expect(legacyRelocation.presentation, HomeAssistancePresentation.duck);
+    expect(legacyRelocation.move, isNull);
+    expect(legacyRelocation.legalDestinations, isNull);
+    expect(legacyRelocation.duckMove, held.assistance!.duckMove);
   });
 
   test('rejects a semantically invalid assistance projection', () {

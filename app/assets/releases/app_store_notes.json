@@ -5,7 +5,7 @@
       "version": "1.0.3",
       "build_number": "52",
       "locale": "en-US",
-      "notes": "See release notes after an app update and when board firmware is available. Choose which notices to show. Get clearer Bluetooth pairing help and step-by-step Duck Chess hints. Board updates now clearly distinguish the available version from the version installed.",
+      "notes": "See what’s new after app updates and before installing board firmware. Choose which notices to show. Duck Chess hints now show where to move your piece, then where to place the duck. New Bluetooth pairing instructions help you reconnect your board.",
       "source": {
         "kind": "prepared_app_release_text",
         "intended_stores": ["app_store", "google_play"]

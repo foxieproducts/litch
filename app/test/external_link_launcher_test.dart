@@ -34,7 +34,7 @@ void main() {
     expect(calls, <String>[
       'https://foxieproducts.com/litch',
       'https://foxieproducts.com/policies/privacy-policy',
-      'https://github.com/foxieproducts',
+      'https://github.com/foxieproducts/litch',
       'https://duckchess.com',
     ]);
 
@@ -49,6 +49,7 @@ void main() {
       ExternalLinkLaunchResult.disallowed,
     );
     for (final url in [
+      'https://github.com/foxieproducts',
       'https://foxieproducts.com/pages/litch-app-privacy',
       'https://foxieproducts.com/policies/privacy-policy?redirect=x',
       'http://duckchess.com',
@@ -79,7 +80,7 @@ void main() {
       expect(urls, {
         'https://foxieproducts.com/litch',
         'https://foxieproducts.com/policies/privacy-policy',
-        'https://github.com/foxieproducts',
+        'https://github.com/foxieproducts/litch',
         'https://duckchess.com',
       }, reason: path);
     }

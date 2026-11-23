@@ -181,7 +181,7 @@ class MainActivity : FlutterActivity() {
             val allowedUrls = setOf(
                 "https://foxieproducts.com/litch",
                 "https://foxieproducts.com/policies/privacy-policy",
-                "https://github.com/foxieproducts",
+                "https://github.com/foxieproducts/litch",
                 "https://duckchess.com",
             )
             if (!allowedUrls.contains(url)) {

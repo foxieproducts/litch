@@ -526,7 +526,11 @@ void main() {
       const ValueKey<String>('about-github-link'),
     );
     await scrollIntoView(tester, githubLink);
-    expect(find.textContaining('github.com/foxieproducts'), findsOneWidget);
+    expect(find.text('Foxie Litch on GitHub'), findsOneWidget);
+    expect(
+      find.textContaining('github.com/foxieproducts/litch\n'),
+      findsOneWidget,
+    );
     await tester.tap(githubLink);
     await tester.pump();
 

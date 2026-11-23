@@ -9,7 +9,7 @@ abstract final class LitchExternalLinks {
   static final Uri privacyPolicy = Uri.parse(
     'https://foxieproducts.com/policies/privacy-policy',
   );
-  static final Uri github = Uri.parse('https://github.com/foxieproducts');
+  static final Uri github = Uri.parse('https://github.com/foxieproducts/litch');
   static final Uri duckChess = Uri.parse('https://duckchess.com');
 
   static final Set<String> _allowedUrls = <String>{

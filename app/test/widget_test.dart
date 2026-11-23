@@ -484,6 +484,16 @@ void main() {
       findsOneWidget,
     );
     expect(bleService.isConnected, isFalse);
+    await tester.pumpWidget(appHarness(update52, ready: false));
+    await tester.pumpAndSettle();
+    expect(appNotice, findsNothing);
+    await tester.pumpWidget(appHarness(update52));
+    await tester.pumpAndSettle();
+    expect(
+      appNotice,
+      findsOneWidget,
+      reason: 'The app notes must return when a startup reconnect finishes.',
+    );
     await captureHealthReview(
       tester,
       'app-upgrade-notice-200',

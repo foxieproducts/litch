@@ -245,7 +245,7 @@ enum AppUpgradeIdentityBootstrap {
         [
           "https://foxieproducts.com/litch",
           "https://foxieproducts.com/policies/privacy-policy",
-          "https://github.com/foxieproducts",
+          "https://github.com/foxieproducts/litch",
           "https://duckchess.com",
         ].contains(urlString),
         let url = URL(string: urlString),

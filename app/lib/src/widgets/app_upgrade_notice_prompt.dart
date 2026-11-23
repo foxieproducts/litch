@@ -118,7 +118,8 @@ class _AppUpgradeNoticePromptState extends State<AppUpgradeNoticePrompt>
       final route = _dialogRoute;
       if (route != null) {
         if ((!_ready || !_foreground) && route.isActive) {
-          route.navigator?.removeRoute(route);
+          // Resume this notice when a connection or lifecycle interruption ends.
+          route.navigator?.removeRoute(route, false);
         }
         return;
       }
@@ -179,12 +180,12 @@ class _AppUpgradeNoticePromptState extends State<AppUpgradeNoticePrompt>
         } catch (_) {}
       }
     });
-    await closed;
+    final result = await closed;
     await route.completed;
     if (!mounted) return;
     setState(() {
       _dialogRoute = null;
-      if (appeared) _notice = null;
+      if (appeared && result != false) _notice = null;
     });
     _scheduleNotice();
   }

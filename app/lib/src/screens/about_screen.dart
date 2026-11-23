@@ -370,7 +370,7 @@ class _AboutScreenState extends State<AboutScreen> {
                             icon: Icons.code_rounded,
                             title: litchStrings(context).aboutGithub,
                             subtitle:
-                                'github.com/foxieproducts\n${litchStrings(context).aboutGithubDescription}',
+                                '${LitchExternalLinks.github.host}${LitchExternalLinks.github.path}\n${litchStrings(context).aboutGithubDescription}',
                             onTap: () => _openLink(LitchExternalLinks.github),
                           ),
                         ],

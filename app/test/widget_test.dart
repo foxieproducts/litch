@@ -18,6 +18,9 @@ import 'package:litch_mobile/src/screens/about_screen.dart';
 import 'package:litch_mobile/src/screens/connection_gate_screen.dart';
 import 'package:litch_mobile/src/screens/firmware_screen.dart';
 import 'package:litch_mobile/src/services/firmware_download_service.dart';
+import 'package:litch_mobile/src/services/app_upgrade_notice_service.dart';
+import 'package:litch_mobile/src/widgets/app_upgrade_notice_prompt.dart';
+import 'package:litch_mobile/src/widgets/release_notes_dialog.dart';
 import 'package:litch_mobile/src/services/litch_ble_service.dart';
 import 'package:litch_mobile/src/theme/litch_theme.dart';
 import 'package:litch_mobile/src/theme/litch_appearance.dart';
@@ -25,6 +28,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/firmware_test_fixture.dart';
+import 'health_render_capture.dart';
 import 'support/console_session_board.dart';
 import 'support/reboot_reply_ble.dart';
 
@@ -45,17 +49,28 @@ class FakeLitchBleService extends LitchBleService {
   final StreamController<List<String>> _consoleController =
       StreamController<List<String>>.broadcast();
   List<LitchSetting> settingsToReturn = const <LitchSetting>[];
-  LitchSettingsReadAuthority settingsAuthority = LitchSettingsReadAuthority.confirmed;
+  LitchSettingsReadAuthority settingsAuthority =
+      LitchSettingsReadAuthority.confirmed;
   String boardVersion = '0.6.0';
+  bool connected = true;
+  bool authorized = false;
+  final readinessEvents = StreamController<bool>.broadcast(sync: true);
+
+  @override
+  bool get productReady => connected && authorized;
+  @override
+  BleAvailability get bleAvailability => BleAvailability.ready;
+  @override
+  Stream<bool> get productReadinessStream => readinessEvents.stream;
 
   @override
   Stream<List<String>> get consoleStream => _consoleController.stream;
 
   @override
-  bool get isConnected => true;
+  bool get isConnected => connected;
 
   @override
-  String? get connectedId => 'board-1';
+  String? get connectedId => connected ? 'board-1' : null;
 
   @override
   LitchDeviceCapabilities deviceCapabilities(String deviceId) =>
@@ -104,10 +119,12 @@ class FakeLitchBleService extends LitchBleService {
   }
 
   @override
-  LitchSettingsReadAuthority settingsReadAuthority(String deviceId) => settingsAuthority;
+  LitchSettingsReadAuthority settingsReadAuthority(String deviceId) =>
+      settingsAuthority;
 
   @override
   Future<void> dispose() async {
+    await readinessEvents.close();
     await _consoleController.close();
     await super.dispose();
   }
@@ -237,56 +254,72 @@ void main() {
         const FirmwareUpdateAvailability(),
     TextScaler textScaler = TextScaler.noScaling,
     bool useRealFirmwarePage = false,
+    AppUpgradeNoticeService? appUpgradeNoticeService,
+    bool noticeStartupReady = true,
     ThemeData? theme,
     LitchAppearanceMode appearanceMode = LitchAppearanceMode.system,
   }) {
+    Widget withAppNotes(Widget child) => appUpgradeNoticeService == null
+        ? child
+        : AppUpgradeNoticePrompt(
+            bleService: bleService,
+            service: appUpgradeNoticeService,
+            startupReady: noticeStartupReady,
+            child: child,
+          );
     return MaterialApp(
       theme: theme ?? buildLitchTheme(),
       builder: (BuildContext context, Widget? child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: textScaler),
-          child: child!,
+          child: RepaintBoundary(
+            key: const ValueKey<String>('release-notice-capture'),
+            child: child!,
+          ),
         );
       },
-      home: RepaintBoundary(
-        key: const ValueKey<String>('litch-shell-capture'),
-        child: LitchMainScaffold(
-          bleService: bleService,
-          boardId: boardId,
-          boards: const <LitchBoard>[],
-          onDisconnect: () async {},
-          initialCraftModeResolved: true,
-          loadAppConsolePreference: loadPreference,
-          saveAppConsolePreference: savePreference,
-          appearanceMode: appearanceMode,
-          onAppearanceModeChanged: (LitchAppearanceMode mode) async {},
-          firmwarePageBuilder:
-              (
-                LitchBleService bleService,
-                String boardId,
-                VoidCallback onRequestShowFirmwareTab,
-                ValueChanged<bool> onUpdateActivityChanged,
-                ValueChanged<FirmwareUpdateAvailability> onAvailabilityChanged,
-              ) {
-                if (useRealFirmwarePage) {
-                  return FirmwareScreen(
-                    bleService: bleService,
-                    boardId: boardId,
-                    onRequestShowFirmwareTab: onRequestShowFirmwareTab,
-                    onUpdateActivityChanged: onUpdateActivityChanged,
-                    onAvailabilityChanged: onAvailabilityChanged,
-                    downloadService: _WidgetFirmwareDownloadService(),
+      home: withAppNotes(
+        RepaintBoundary(
+          key: const ValueKey<String>('litch-shell-capture'),
+          child: LitchMainScaffold(
+            bleService: bleService,
+            boardId: boardId,
+            boards: const <LitchBoard>[],
+            onDisconnect: () async {},
+            initialCraftModeResolved: true,
+            loadAppConsolePreference: loadPreference,
+            saveAppConsolePreference: savePreference,
+            appearanceMode: appearanceMode,
+            onAppearanceModeChanged: (LitchAppearanceMode mode) async {},
+            firmwarePageBuilder:
+                (
+                  LitchBleService bleService,
+                  String boardId,
+                  VoidCallback onRequestShowFirmwareTab,
+                  ValueChanged<bool> onUpdateActivityChanged,
+                  ValueChanged<FirmwareUpdateAvailability>
+                  onAvailabilityChanged,
+                ) {
+                  if (useRealFirmwarePage) {
+                    return FirmwareScreen(
+                      bleService: bleService,
+                      boardId: boardId,
+                      onRequestShowFirmwareTab: onRequestShowFirmwareTab,
+                      onUpdateActivityChanged: onUpdateActivityChanged,
+                      onAvailabilityChanged: onAvailabilityChanged,
+                      downloadService: _WidgetFirmwareDownloadService(),
+                    );
+                  }
+                  return Builder(
+                    builder: (BuildContext context) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        onAvailabilityChanged(availability);
+                      });
+                      return const Center(child: Text('Firmware Placeholder'));
+                    },
                   );
-                }
-                return Builder(
-                  builder: (BuildContext context) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      onAvailabilityChanged(availability);
-                    });
-                    return const Center(child: Text('Firmware Placeholder'));
-                  },
-                );
-              },
+                },
+          ),
         ),
       ),
     );
@@ -335,6 +368,7 @@ void main() {
     final FakeLitchBleService bleService = FakeLitchBleService();
     addTearDown(bleService.dispose);
     _useViewport(tester, const Size(320, 700));
+    await loadHealthReviewFonts(tester, useSdkFonts: true);
 
     await tester.pumpWidget(
       buildHarness(
@@ -376,6 +410,332 @@ void main() {
     expect(find.text('Version 0.6.1 is ready'), findsOneWidget);
     expect(find.text('Installed version 0.6.0'), findsOneWidget);
     expect(find.text('Firmware Placeholder'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    // App notes use native package identity and work with no connected board.
+    await tester.pumpWidget(const SizedBox.shrink());
+    bleService.connected = false;
+    String? observedIdentity;
+    AppUpgradeNoticeService appRelease(int build) => AppUpgradeNoticeService(
+      platform: TargetPlatform.android,
+      loadPackageInfo: () async => PackageInfo(
+        appName: 'Foxie Litch',
+        packageName: 'com.foxieproducts.litchMobile',
+        version: '1.0.2',
+        buildNumber: '$build',
+        installTime: DateTime.utc(2026, 1, 1),
+        updateTime: DateTime.utc(2026, 1, build == 51 ? 1 : 2),
+      ),
+      readIdentity: () async => observedIdentity,
+      writeIdentity: (value) async {
+        observedIdentity = value;
+        return true;
+      },
+      loadReleaseNotes: () async => jsonEncode(<String, Object>{
+        'schema_version': 1,
+        'releases': <Object>[
+          <String, Object>{
+            'version': '1.0.2',
+            'build_number': '$build',
+            'notes':
+                'Exact store notes for build $build.\n${List<String>.filled(20, 'Play and review your games.').join('\n')}',
+          },
+        ],
+      }),
+    );
+    Widget appHarness(
+      AppUpgradeNoticeService release, {
+      bool ready = true,
+      bool withFirmware = false,
+    }) => buildHarness(
+      bleService: bleService,
+      loadPreference: () async => false,
+      savePreference: (_) async {},
+      textScaler: const TextScaler.linear(2),
+      appUpgradeNoticeService: release,
+      noticeStartupReady: ready,
+      useRealFirmwarePage: withFirmware,
+    );
+    final appNotice = find.byKey(const ValueKey<String>('app-upgrade-notice'));
+    final firmwareNotice = find.byKey(
+      const ValueKey<String>('firmware-update-offer'),
+    );
+    await tester.pumpWidget(appHarness(appRelease(51)));
+    await tester.pumpAndSettle();
+    expect(
+      appNotice,
+      findsNothing,
+      reason: 'Fresh installs establish a silent baseline.',
+    );
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool('firmware_update_notices_disabled', true);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    final update52 = appRelease(52);
+    await tester.pumpWidget(appHarness(update52, ready: false));
+    await tester.pumpAndSettle();
+    expect(appNotice, findsNothing, reason: 'Startup owns the first screen.');
+    await tester.pumpWidget(appHarness(update52));
+    await tester.pumpAndSettle();
+    expect(appNotice, findsOneWidget);
+    expect(find.text('App update: 1.0.2'), findsOneWidget);
+    expect(
+      find.textContaining('Exact store notes for build 52.'),
+      findsOneWidget,
+    );
+    expect(bleService.isConnected, isFalse);
+    await captureHealthReview(
+      tester,
+      'app-upgrade-notice-200',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('release-notice-capture'),
+      ),
+    );
+    tester.view.physicalSize = const Size(700, 320);
+    await tester.pumpAndSettle();
+    expect(
+      find
+          .byKey(const ValueKey<String>('release-notice-opt-out'))
+          .hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(FilledButton, 'Continue').hitTestable(),
+      findsOneWidget,
+    );
+    final appChoiceBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    final appContinueBefore = tester.getRect(
+      find.widgetWithText(FilledButton, 'Continue'),
+    );
+    final appBodyScroll = find
+        .ancestor(
+          of: find.text('App update: 1.0.2'),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.drag(appBodyScroll, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    expect(
+      tester.state<ScrollableState>(appBodyScroll).position.pixels,
+      greaterThan(0),
+    );
+    expect(
+      tester.getRect(
+        find.byKey(const ValueKey<String>('release-notice-opt-out')),
+      ),
+      appChoiceBefore,
+    );
+    expect(
+      tester.getRect(find.widgetWithText(FilledButton, 'Continue')),
+      appContinueBefore,
+    );
+    expect(
+      tester
+          .getRect(find.textContaining('Exact store notes for build 52.'))
+          .overlaps(tester.getRect(appBodyScroll)),
+      isTrue,
+    );
+    await captureHealthReview(
+      tester,
+      'app-upgrade-landscape-200-reading',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('release-notice-capture'),
+      ),
+    );
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(appHarness(appRelease(52)));
+    await tester.pumpAndSettle();
+    expect(
+      appNotice,
+      findsNothing,
+      reason: 'The same installed update is not repeated.',
+    );
+
+    tester.view.physicalSize = const Size(320, 700);
+    // Both are eligible: pairing finishes before app notes, and app notes
+    // fully close before the board offer. The opt-outs are independent.
+    await preferences.setBool('firmware_update_notices_disabled', false);
+    await tester.pumpWidget(const SizedBox.shrink());
+    bleService.connected = true;
+    bleService.authorized = false;
+    final update53 = appRelease(53);
+    await tester.pumpWidget(appHarness(update53, withFirmware: true));
+    await tester.pumpAndSettle();
+    expect(appNotice, findsNothing);
+    expect(firmwareNotice, findsNothing);
+    bleService.authorized = true;
+    bleService.readinessEvents.add(true);
+    await tester.pumpAndSettle();
+    expect(appNotice, findsOneWidget);
+    expect(firmwareNotice, findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    await tester.pumpAndSettle();
+    expect(preferences.getBool('app_update_notices_disabled'), isTrue);
+    expect(preferences.getBool('firmware_update_notices_disabled'), isFalse);
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    expect(
+      firmwareNotice,
+      findsNothing,
+      reason: 'Wait for the app dialog to finish closing.',
+    );
+    await tester.pumpAndSettle();
+    expect(appNotice, findsNothing);
+    expect(
+      firmwareNotice,
+      findsOneWidget,
+      reason: 'Disabling app notes does not disable board offers.',
+    );
+    // The compact dialog keeps actions fixed; a real outer-body drag brings
+    // the complete preference into view without scrolling through long notes.
+    await tester.drag(
+      find.text('Board firmware update: 0.6.1'),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find
+          .byKey(const ValueKey<String>('release-notice-opt-out'))
+          .hitTestable(),
+      findsOneWidget,
+    );
+    await captureHealthReview(
+      tester,
+      'firmware-offer-choice-200',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('release-notice-capture'),
+      ),
+    );
+    tester.view.physicalSize = const Size(700, 320);
+    await tester.pumpAndSettle();
+    expect(
+      find
+          .byKey(const ValueKey<String>('release-notice-opt-out'))
+          .hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(FilledButton, 'Review update').hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(TextButton, 'Later').hitTestable(),
+      findsOneWidget,
+    );
+    final choiceRect = tester.getRect(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    final dialogRect = tester.getRect(find.byType(AlertDialog));
+    expect(choiceRect.shortestSide, greaterThanOrEqualTo(48 - 1e-9));
+    expect(choiceRect.top, greaterThanOrEqualTo(dialogRect.top));
+    expect(choiceRect.bottom, lessThanOrEqualTo(dialogRect.bottom));
+    await captureHealthReview(
+      tester,
+      'firmware-offer-landscape-200-reading',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('release-notice-capture'),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(preferences.getBool('firmware_update_notices_disabled'), isTrue);
+    expect(preferences.getBool('app_update_notices_disabled'), isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    bleService.connected = false;
+    await tester.pumpWidget(appHarness(appRelease(54)));
+    await tester.pumpAndSettle();
+    expect(
+      appNotice,
+      findsNothing,
+      reason: 'The app opt-out applies to future updates.',
+    );
+
+    // A pending preference save cannot disappear behind an immediate dismiss;
+    // failure restores the old choice and leaves a normal exit available.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await preferences.setBool('app_update_notices_disabled', false);
+    var save = Completer<bool>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<bool>(
+              context: context,
+              builder: (_) => ReleaseNotesDialog(
+                title: 'App notes',
+                notes: const Text('Release notes'),
+                preferenceExplanation: 'App update notes only.',
+                suppressFuture: false,
+                primaryAction: 'Continue',
+                onSuppressFutureChanged: (value) async {
+                  if (!await save.future) return false;
+                  return preferences.setBool(
+                    'app_update_notices_disabled',
+                    value,
+                  );
+                },
+              ),
+            ),
+            child: const Text('Open notes'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open notes'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    await tester.pump();
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.byType(ReleaseNotesDialog), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'))
+          .onPressed,
+      isNull,
+    );
+    save.complete(false);
+    await tester.pumpAndSettle();
+    expect(find.text('Couldn’t save this choice. Try again.'), findsOneWidget);
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const ValueKey<String>('release-notice-opt-out')),
+          )
+          .value,
+      isFalse,
+    );
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReleaseNotesDialog), findsNothing);
+    save = Completer<bool>();
+    await tester.tap(find.text('Open notes'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    await tester.pump();
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.byType(ReleaseNotesDialog), findsOneWidget);
+    save.complete(true);
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(preferences.getBool('app_update_notices_disabled'), isTrue);
+    expect(find.byType(ReleaseNotesDialog), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

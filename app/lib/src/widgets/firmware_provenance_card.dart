@@ -4,9 +4,14 @@ import '../localization/litch_strings.dart';
 import '../models/firmware_provenance.dart';
 
 class FirmwareProvenanceCard extends StatelessWidget {
-  const FirmwareProvenanceCard({super.key, required this.provenance});
+  const FirmwareProvenanceCard({
+    super.key,
+    required this.provenance,
+    this.installedVersion,
+  });
 
   final FirmwareProvenance provenance;
+  final String? installedVersion;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +40,9 @@ class FirmwareProvenanceCard extends StatelessWidget {
       ),
       FirmwareProvenanceState.unverified => (
         strings.provenanceUnverifiedTitle,
-        strings.provenanceUnverifiedHelp,
+        installedVersion?.trim().isNotEmpty == true
+            ? strings.provenanceUnverifiedVersionHelp(installedVersion!)
+            : strings.provenanceUnverifiedHelp,
       ),
       FirmwareProvenanceState.offline => (
         strings.provenanceOfflineTitle,

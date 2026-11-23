@@ -103,6 +103,22 @@
   "boardDisconnected": "Not connected",
   "boardOffline": "Offline",
   "updateAvailable": "Update available",
+  "firmwareUpdateLater": "Later",
+  "dontShowReleaseNoticeAgain": "Don’t show this again",
+  "appNoticePreference": "App notes only.",
+  "firmwareNoticePreference": "Don't show new firmware update notes again.",
+  "firmwareReadyToInstall": "Ready to install. Your board is running {installedVersion}.",
+  "@firmwareReadyToInstall": {"description": "Confirms the offered board update is not installed; version is the currently installed board firmware.", "placeholders": {"installedVersion": {"type": "String"}}},
+  "releaseNoticePreferenceFailed": "Couldn’t save this choice. Try again.",
+  "appUpdateNotesTitle": "App update: {version}",
+  "releaseNotesContinue": "Continue",
+  "@appUpdateNotesTitle": {"description": "Release notes for the installed app update, not a board firmware offer.", "placeholders": {"version": {"type": "String"}}},
+  "reviewFirmwareUpdate": "Review update",
+  "boardFirmwareAvailable": "Board firmware update: {version}",
+  "@boardFirmwareAvailable": {
+    "description": "Title of the once-per-version board firmware offer; this is not an app update.",
+    "placeholders": {"version": {"type": "String"}}
+  },
   "connectedBoardOptions": "Connected. Open board options.",
   "connectedUpdateBoardOptions": "Connected. Update available. Open board options.",
   "appTitle": "Foxie Litch",
@@ -1150,7 +1166,8 @@
     }
   },
   "identifyUnavailable": "Couldn’t identify this Litch. Try again later.",
-  "findBoardHelp": "Get help finding your board",
+  "findBoardHelp": "Connection help",
+  "connectionHelpBasics": "Keep your Litch powered and nearby. Litch connects to one device at a time. If another phone or tablet is connected, open Foxie Litch on that device and tap Disconnect, then try again.",
   "identifyAction": "Identify",
   "identifyAllAction": "Identify all",
   "@identifyAllAction": {
@@ -1372,8 +1389,10 @@
   "updateMismatchRecovery": "The installed software does not match the selected release. Reconnect the original board and check its software before continuing.",
   "provenanceOfflineTitle": "Firmware status offline",
   "provenanceOfflineHelp": "Connect to a board to check its firmware.",
-  "provenanceUnverifiedTitle": "Firmware not verified",
-  "provenanceUnverifiedHelp": "The app could not verify where this firmware came from.",
+  "provenanceUnverifiedTitle": "Installed firmware source unverified",
+  "provenanceUnverifiedHelp": "The app could not confirm the source of the installed firmware.",
+  "provenanceUnverifiedVersionHelp": "The app could not confirm the source of installed firmware {version}.",
+  "@provenanceUnverifiedVersionHelp": {"description": "Unverified provenance help naming only the current installed board firmware version.", "placeholders": {"version": {"type": "String"}}},
   "provenanceOfficialTitle": "Official firmware",
   "provenanceOfficialHelp": "This board is running firmware recognized by Foxie Litch.",
   "provenanceCustomTitle": "Custom firmware",
@@ -1508,7 +1527,7 @@
   "@manualComputerTitle": {
     "description": "Manual topic: playing against the board computer."
   },
-  "manualControlsBody": "Each end has a four-direction D-pad, X, and Circle. In ordinary play, tap Circle for a Hint or X for Undo. Hold X for about one second to open Quick Setup. Left/Right chooses a setting, Up/Down changes it, and X closes the menu. On Bluetooth, move to another item before pressing X to close. Follow the lit controls when the board asks for a choice.\n\nIf the app says “Litch already has three paired Bluetooth devices”, clear its saved Bluetooth connections on the board. In Play, hold X for about one second to open Quick Setup. Use Left/Right to select Bluetooth. At that same end, hold X and Circle together for 2 seconds until the blue-and-orange perimeter animation starts. Release both buttons and wait for 3 success flashes, then reconnect in the app. Your game and other settings stay intact.\n\nIn Litchcraft, Left/Right opens the quick palette and Up/Down fine-adjusts the active color. Tap X for Undo or Circle for Redo. Hold Circle for about one second to switch between Paint and Erase. Use the app to select, add, and play frames.\n\nHold X and Circle together at the same end for about 1.5 seconds, then release to exit Litchcraft. Both individual actions are consumed. Lift the brush and close the palette, then shake the board for about one second to clear the frame. Painting, reconnect, and exit must be finished first. Only the selected frame clears; Undo restores it. You can also shake your device with Litchcraft open to clear the selected frame.",
+  "manualControlsBody": "Each end has a four-direction D-pad, X, and Circle. In ordinary play, tap Circle for a Hint or X for Undo. Hold X for about one second to open Quick Setup. Left/Right chooses a setting, Up/Down changes it, and X closes the menu. On Bluetooth, move to another item before pressing X to close. Follow the lit controls when the board asks for a choice.\n\nIf the app says that Litch already has three saved Bluetooth devices, clear the board’s saved pairings to add another device.\n\nIf you control this board and it still will not connect, clear its saved phones. This removes all phones, tablets and other devices paired with this board. Your game and other settings stay intact. On that board in Play, hold X for about one second to open Quick Setup. Use Left or Right to select Bluetooth. At the same end, hold X and Circle together for two seconds. Release both buttons when the blue-and-orange animation starts, then wait for three success flashes. Return to Foxie Litch, choose your board and try connecting again in the app.\n\nIn Litchcraft, Left/Right opens the quick palette and Up/Down fine-adjusts the active color. Tap X for Undo or Circle for Redo. Hold Circle for about one second to switch between Paint and Erase. Use the app to select, add, and play frames.\n\nHold X and Circle together at the same end for about 1.5 seconds, then release to exit Litchcraft. Both individual actions are consumed. Lift the brush and close the palette, then shake the board for about one second to clear the frame. Painting, reconnect, and exit must be finished first. Only the selected frame clears; Undo restores it. You can also shake your device with Litchcraft open to clear the selected frame.",
   "@manualControlsBody": {
     "description": "Overview of the physical controls and a pointer to mode-specific controls in their owning manual topics."
   },
@@ -1525,7 +1544,7 @@
   "@manualControlsRecovery": {
     "description": "Final Litchcraft physical-control recovery paragraph. Busy commands are rejected, never queued."
   },
-  "manualConnectionBody": "Keep the powered board nearby, enable Bluetooth on your device, and select your board in the app. Allow the requested permissions and follow the connection prompts.\n\nLitch connects to one device at a time. If another device is connected, open Litch on that device and tap Disconnect, then try again.\n\nIf the app says “Litch already has three paired Bluetooth devices”, clear its saved Bluetooth connections on the board. In Play, hold X for about one second to open Quick Setup. Use Left/Right to select Bluetooth. At that same end, hold X and Circle together for 2 seconds until the blue-and-orange perimeter animation starts. Release both buttons and wait for 3 success flashes, then reconnect in the app. Your game and other settings stay intact.\n\nFollow any connection recovery shown in the app. For a power or sensor problem, follow the Board health instructions. Use Contact Support in Setup, or the discovery screen’s help option if your board cannot connect. You can review and edit a report before opening an email draft.\n\nIf your board runs custom firmware, it must support the Litch connection protocol to work with the app. Use USB to restore the official firmware, or open Contact Support for help.",
+  "manualConnectionBody": "Keep the powered board nearby, enable Bluetooth on your device, and select your board in the app. Allow the requested permissions and follow the connection prompts.\n\nLitch connects to one device at a time. If another device is connected, open Litch on that device and tap Disconnect, then try again.\n\nIf connecting still fails, forget the correct Foxie Litch board in your phone’s Bluetooth settings. On iPhone or iPad: Settings → Bluetooth → ⓘ beside your board → Forget This Device. On Samsung: Settings → Connections → Bluetooth → gear beside your board → Unpair. On other Android phones, look under Connected devices or Bluetooth and choose Forget or Unpair for your board. If your board is not listed, continue with the board steps.\n\nIf you control this board and it still will not connect, clear its saved phones. This removes all phones, tablets and other devices paired with this board. Your game and other settings stay intact. On that board in Play, hold X for about one second to open Quick Setup. Use Left or Right to select Bluetooth. At the same end, hold X and Circle together for two seconds. Release both buttons when the blue-and-orange animation starts, then wait for three success flashes. Return to Foxie Litch, choose your board and try connecting again in the app.\n\nFollow any connection recovery shown in the app. For a power or sensor problem, follow the Board health instructions. Use Contact Support in Setup, or the discovery screen’s help option if your board cannot connect. You can review and edit a report before opening an email draft.\n\nIf your board runs custom firmware, it must support the Litch connection protocol to work with the app. Use USB to restore the official firmware, or open Contact Support for help.\n\nWhen newer board software is available, the app shows its release notes once for each version after connecting. Choose Later to continue, or Review update to open Board update. Review the notes there and choose Update Board when you are ready; opening the page never installs an update automatically. You can also open Board update from Setup or the Connected board menu.\n\nThe app shows its release notes once after an update. It does not appear on a first install. The app notes and board update offers have independent checkboxes for hiding future notices. You can still open Board update at any time.",
   "@manualConnectionBody": {
     "description": "Use existing discovery, Identify, Board health and Contact Support routes. A report is editable before email handoff; do not imply automatic sending."
   },
@@ -1537,7 +1556,7 @@
   "@manualDescription": {
     "description": "Short subtitle for the local manual entry. Opening it does not need internet or a board connection."
   },
-  "manualDuckBody": "Before the first move, complete the normal 32-piece setup and add one extra piece on any of the four empty rows between the players’ pawns. Litch recognizes that piece as the Duck and marks it in yellow.\n\nEach turn has a chess move followed by moving the Duck to a different empty square. Finish both steps before the other player starts. The Duck blocks squares and cannot be captured.\n\nThere is no check or checkmate. Capturing the opposing king wins immediately, without another Duck move. A player with no available chess move also wins.",
+  "manualDuckBody": "Before the first move, complete the normal 32-piece setup and add one extra piece on any of the four empty rows between the players’ pawns. Litch recognizes that piece as the Duck and marks it in yellow.\n\nEach turn has a chess move followed by moving the Duck to a different empty square. Finish both steps before the other player starts. With a hint, the lights guide your chess piece first. Once the board accepts that move, yellow lights show where to move the Duck. The Duck blocks squares and cannot be captured.\n\nThere is no check or checkmate. Capturing the opposing king wins immediately, without another Duck move. A player with no available chess move also wins.",
   "@manualDuckBody": {
     "description": "Litch Duck rules: initial extra piece on any empty rank 3 through 6; chess plus Duck is one turn; king capture or no available chess move wins. Duck remains recognizable in the topic title."
   },
@@ -2741,7 +2760,7 @@
   "@ownerPairingConfirmed": {
     "description": "Acknowledges accepted physical confirmation while Bluetooth security and durable ownership proof continue. The connection is not ready yet."
   },
-  "ownerPairingOtherOwner": "Litch already has three paired Bluetooth devices. Clear all Bluetooth pairings on the board before pairing this device. In Play mode, long press X to open Quick Setup. Use Left/Right to select the Bluetooth icon. At that same end, hold X + O for two seconds until the blue/orange clearing animation starts, then release. Wait for clearing to finish, then try again.",
+  "ownerPairingOtherOwner": "Litch already has three saved Bluetooth devices. To pair another device, clear the board’s saved pairings.\n\nIf you control this board and it still will not connect, clear its saved phones. This removes all phones, tablets and other devices paired with this board. Your game and other settings stay intact. On that board in Play, hold X for about one second to open Quick Setup. Use Left or Right to select Bluetooth. At the same end, hold X and Circle together for two seconds. Release both buttons when the blue-and-orange animation starts, then wait for three success flashes. Return to Foxie Litch, choose your board and try connecting again in the app.",
   "ownerPairingClearing": "Ownership is being cleared on the board.",
   "ownerPairingFailed": "Couldn’t confirm this Litch. Try again, or disconnect.",
   "ownerPairingRestartBoard": "Restart your Litch, then reconnect to finish ownership recovery.",
@@ -2749,15 +2768,15 @@
   "pairingRecoveryTitle": "Reconnect your Litch",
   "ownerVerificationRecoveryRetryFailed": "The connection still could not be verified. Try again or contact support.",
   "ownerVerificationRecoveryHelp": "Litch could not verify this phone’s saved connection. Your phone may already be unpaired. Keep the board nearby and try again.",
-  "ownerVerificationRecoverySteps": "If this keeps happening, contact support. If you control this Litch, you can also clear its saved Bluetooth pairings. This removes all devices paired with this board; your game and other settings stay intact. On the board in Play, hold X for one second to open Quick Setup. Use Left or Right to select Bluetooth. At the same end that opened Quick Setup, hold X and Circle for two seconds. Release when the blue-and-orange animation starts, then wait until the lights finish pulsing before trying again.",
+  "ownerVerificationRecoverySteps": "If you control this board and it still will not connect, clear its saved phones. This removes all phones, tablets and other devices paired with this board. Your game and other settings stay intact. On that board in Play, hold X for about one second to open Quick Setup. Use Left or Right to select Bluetooth. At the same end, hold X and Circle together for two seconds. Release both buttons when the blue-and-orange animation starts, then wait for three success flashes. Return to Foxie Litch, choose your board and try connecting again in the app.",
   "pairingRecoveryHelp": "The Bluetooth pairing saved on this device no longer matches this Litch. Keep the board nearby while you repair the pairing.",
   "pairingRecoveryAutomaticHelp": "Repair pairing removes the pairing saved on this device, then reconnects. Approve the Android prompt if one appears.",
-  "pairingRecoveryAndroidSteps": "Open Bluetooth settings and unpair this Litch. Then return here and try again.",
-  "pairingRecoveryIosSteps": "Open the Settings app and choose Bluetooth. Tap the info button (ⓘ) beside this Litch, then Forget This Device. Return to Litch and tap Try again.",
+  "pairingRecoveryAndroidSteps": "If trouble persists, open your phone’s Bluetooth settings. On Samsung, use Settings → Connections → Bluetooth. On other Android phones, look under Connected devices or Bluetooth. Tap the gear or menu beside the correct Foxie Litch board and choose Unpair or Forget. If several boards are listed, choose the one you want to connect. If it is not listed, continue with the board steps below.",
+  "pairingRecoveryIosSteps": "If trouble persists, open Settings → Bluetooth on your iPhone or iPad. Tap the info button (ⓘ) beside the correct Foxie Litch board and choose Forget This Device. If several boards are listed, choose the one you want to connect. If it is not listed, continue with the board steps below.",
   "pairingRepairAction": "Repair pairing",
   "openBluetoothSettings": "Bluetooth settings",
   "pairingRepairing": "Repairing saved pairing…",
-  "pairingRepairFailed": "The connection still needs attention. Unpair this Litch in this device’s Bluetooth settings, then try again.",
+  "pairingRepairFailed": "The connection still needs attention. Follow the steps below, then try connecting again in Foxie Litch.",
   "pairingSettingsUnavailable": "Open Bluetooth in this device’s Settings to unpair this Litch.",
   "promotionSetting": "Promotion",
   "promotionQueen": "Queen",

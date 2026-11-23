@@ -730,6 +730,18 @@ BLE OTA path retains its explicit target and the full protocol described here.
 - After the verification attempt, reload the selected channel's release notes
   without overwriting its verification result. This also applies when the
   connected screen is recreated with a pending update.
+- Once a board has completed its connection and pairing, the app can offer a
+  newer compatible firmware version from the selected channel. The offer
+  identifies the version ready to install, shows the version running on the
+  board and includes the release notes from the offered version's verified
+  manifest. **Later** dismisses it. **Review update** opens Board update,
+  where the user can choose **Update Board** to start installation. The
+  firmware verification badge on that screen describes the installed image.
+  The app remembers versions it has presented across reconnects and restarts.
+  Seeing the available release on Board update counts as seeing that offer.
+  **Don't show new firmware update notes again.** turns off future automatic
+  firmware offers. Board update remains accessible from the menu. App release
+  notes have their own preference.
 - An idle board already running the selected release offers an explicit
   **Reinstall** action using the same verified release snapshot and OTA flow.
   This does not advertise a new update. An active transfer or unresolved

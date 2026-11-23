@@ -31,39 +31,8 @@ import '../widgets/firmware_update_card.dart';
 import '../widgets/litch_workspace_geometry.dart';
 import '../widgets/reading_pane.dart';
 
-@immutable
-class FirmwareUpdateAvailability {
-  const FirmwareUpdateAvailability({
-    this.installedVersion,
-    this.latestVersion,
-    this.supportsUpdate = false,
-    this.loading = true,
-  });
-
-  final String? installedVersion;
-  final String? latestVersion;
-  final bool supportsUpdate;
-  final bool loading;
-
-  bool get updateAvailable =>
-      supportsUpdate &&
-      installedVersion != null &&
-      latestVersion != null &&
-      installedVersion != latestVersion;
-
-  @override
-  bool operator ==(Object other) {
-    return other is FirmwareUpdateAvailability &&
-        other.installedVersion == installedVersion &&
-        other.latestVersion == latestVersion &&
-        other.supportsUpdate == supportsUpdate &&
-        other.loading == loading;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(installedVersion, latestVersion, supportsUpdate, loading);
-}
+export '../models/firmware_release_snapshot.dart'
+    show FirmwareUpdateAvailability;
 
 class FirmwareScreen extends StatefulWidget {
   const FirmwareScreen({
@@ -112,6 +81,7 @@ class _FirmwareScreenState extends State<FirmwareScreen>
   bool _verifyingFirmware = false;
   bool _restoringOtaVerification = true;
   StreamSubscription<ConnectionStateUpdate>? _connectionSub;
+  StreamSubscription<bool>? _readinessSub;
   bool _hasVerificationStatus = false;
   String _versionDetails = '';
   String Function(AppLocalizations) _status = (strings) =>
@@ -206,7 +176,14 @@ class _FirmwareScreenState extends State<FirmwareScreen>
 
   String? _websiteVersion;
   String? _boardVersion;
+  String? _versionBoardId;
+  int? _versionConnectionToken;
+  String? _capabilitiesBoardId;
+  int? _capabilitiesConnectionToken;
   bool _preferencesAvailable = true;
+  bool _preferencesLoaded = false;
+  Future<void>? _connectedBoardRefresh;
+  String? _connectedBoardRefreshProbe;
   String? _appVersion;
   File? _downloadedFile;
   FirmwareReleaseSnapshot? _releaseSnapshot;
@@ -233,13 +210,25 @@ class _FirmwareScreenState extends State<FirmwareScreen>
   String get _targetBoardId => widget.bleService.connectedId ?? widget.boardId;
 
   bool get _supportsUpdate =>
-      widget.bleService.isConnected && (_capabilities?.supportsFirmwareUpdate ?? false);
+      widget.bleService.isConnected &&
+      (_capabilities?.supportsFirmwareUpdate ?? false);
+
+  String? get _currentInstalledVersion =>
+      !_isUpdateModal &&
+          _pendingOtaVerification == null &&
+          _versionBoardId != null &&
+          _versionConnectionToken != null &&
+          _isCurrentBoardRead(_versionBoardId!, _versionConnectionToken!)
+      ? _boardVersion
+      : null;
 
   String? _updateGuidance(AppLocalizations strings) {
     if (_isUpdateModal || _pendingOtaVerification != null) return null;
     if (!widget.bleService.isConnected) return strings.connectBeforeUpdate;
     final capabilities = _capabilities;
-    if (capabilities == null || capabilities.supportsFirmwareUpdate) return null;
+    if (capabilities == null || capabilities.supportsFirmwareUpdate) {
+      return null;
+    }
     if (!capabilities.explicitlyReported) return strings.boardRefreshFailed;
     return strings.manualUsbUpdate(capabilities.hardwareLabel);
   }
@@ -262,6 +251,11 @@ class _FirmwareScreenState extends State<FirmwareScreen>
       _onConnectionChanged,
     );
     if (widget.benchmarkProgress?.isRunning == true) _revealTransferOnce();
+    _readinessSub = widget.bleService.productReadinessStream.listen((ready) {
+      if (ready && !_isUpdateModal && _pendingOtaVerification == null) {
+        unawaited(_refreshConnectedBoard());
+      }
+    });
     _initializeScreen();
   }
 
@@ -283,6 +277,22 @@ class _FirmwareScreenState extends State<FirmwareScreen>
       _connectionSub = widget.bleService.connectionStream.listen(
         _onConnectionChanged,
       );
+      unawaited(_readinessSub?.cancel());
+      _readinessSub = widget.bleService.productReadinessStream.listen((ready) {
+        if (ready && !_isUpdateModal && _pendingOtaVerification == null) {
+          unawaited(_refreshConnectedBoard());
+        }
+      });
+      ++_releaseLoadGeneration;
+      _releaseSnapshot = null;
+      _capabilities = null;
+      _boardVersion = null;
+      _versionBoardId = null;
+      _capabilitiesBoardId = null;
+      _hasVerificationStatus = false;
+      _connectedBoardRefresh = null;
+      _connectedBoardRefreshProbe = null;
+      unawaited(_refreshConnectedBoard());
       _restartProvenanceRefresh();
     }
     if (oldWidget.benchmarkProgress?.isRunning != true &&
@@ -298,6 +308,9 @@ class _FirmwareScreenState extends State<FirmwareScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
     _restartProvenanceRefresh();
+    if (_foreground && !_isUpdateModal && _pendingOtaVerification == null) {
+      unawaited(_loadVersionDetails());
+    }
     if (state == AppLifecycleState.resumed && _transferringFirmware) {
       // Background time cannot lend confidence to a newly visible estimate.
       setState(_transferEstimate.reset);
@@ -329,18 +342,40 @@ class _FirmwareScreenState extends State<FirmwareScreen>
 
   bool _isCurrentBoardRead(String boardId, int connectionToken) =>
       mounted &&
+      widget.bleService.isConnected &&
+      widget.bleService.connectedId == boardId &&
       _targetBoardId == boardId &&
       widget.bleService.connectionSessionToken == connectionToken;
 
-  Future<void> _refreshConnectedBoard() async {
+  Future<void> _refreshConnectedBoard() {
+    if (!_preferencesLoaded || !widget.bleService.productReady) {
+      return Future<void>.value();
+    }
+    final probe = '$_targetBoardId:${widget.bleService.connectionSessionToken}';
+    final pending = _connectedBoardRefresh;
+    if (pending != null && _connectedBoardRefreshProbe == probe) return pending;
+    _connectedBoardRefreshProbe = probe;
+    final refresh = _readConnectedBoard();
+    _connectedBoardRefresh = refresh;
+    return refresh.whenComplete(() {
+      if (identical(_connectedBoardRefresh, refresh)) {
+        _connectedBoardRefresh = null;
+      }
+    });
+  }
+
+  Future<void> _readConnectedBoard() async {
+    final service = widget.bleService;
     final boardId = _targetBoardId;
     final connectionToken = widget.bleService.connectionSessionToken;
     await _refreshCapabilities(refresh: true);
-    if (!_isCurrentBoardRead(boardId, connectionToken) || _isUpdateModal) {
+    if (!identical(service, widget.bleService) ||
+        !_isCurrentBoardRead(boardId, connectionToken) ||
+        _isUpdateModal) {
       return;
     }
     await Future.wait(<Future<void>>[
-      if (!_hasVerificationStatus) _refreshBoardVersion(),
+      _loadVersionDetails(),
       _refreshProvenance(),
     ]);
   }
@@ -352,6 +387,7 @@ class _FirmwareScreenState extends State<FirmwareScreen>
     _resetTransferPresentation();
     _transferClock.stop();
     unawaited(_connectionSub?.cancel());
+    unawaited(_readinessSub?.cancel());
     _downloadService.dispose();
     super.dispose();
   }
@@ -388,6 +424,7 @@ class _FirmwareScreenState extends State<FirmwareScreen>
     if (!mounted) {
       return;
     }
+    _preferencesLoaded = true;
     if (_pendingOtaVerification != null) {
       await _verifyPendingUpdate();
       return;
@@ -404,14 +441,22 @@ class _FirmwareScreenState extends State<FirmwareScreen>
   }
 
   Future<void> _refreshCapabilities({bool refresh = false}) async {
+    final service = widget.bleService;
+    final readyAtStart = service.productReady;
     final boardId = _targetBoardId;
     final connectionToken = widget.bleService.connectionSessionToken;
     final LitchDeviceCapabilities capabilities = await widget.bleService
         .fetchDeviceCapabilities(deviceId: boardId, refresh: refresh);
-    if (!_isCurrentBoardRead(boardId, connectionToken)) {
+    if (!identical(service, widget.bleService) ||
+        (!readyAtStart && service.productReady) ||
+        !_isCurrentBoardRead(boardId, connectionToken)) {
       return;
     }
-    setState(() => _capabilities = capabilities);
+    setState(() {
+      _capabilities = capabilities;
+      _capabilitiesBoardId = boardId;
+      _capabilitiesConnectionToken = connectionToken;
+    });
     _notifyAvailability();
   }
 
@@ -447,6 +492,11 @@ class _FirmwareScreenState extends State<FirmwareScreen>
       }
     });
     _notifyAvailability();
+    // Installed identity remains readable over BLE when optional release
+    // metadata is offline or unavailable.
+    final installedRead = !_hasVerificationStatus
+        ? _refreshBoardVersion()
+        : Future<void>.value();
 
     try {
       final FirmwareReleaseSnapshot snapshot = await _downloadService
@@ -466,12 +516,6 @@ class _FirmwareScreenState extends State<FirmwareScreen>
               : strings.latestVersionIs(_websiteVersion!);
         }
       });
-
-      // Verification already owns the installed identity. A notes refresh
-      // must neither erase it on an empty reread nor query a different board.
-      if (!_hasVerificationStatus) {
-        await _refreshBoardVersion();
-      }
     } catch (error) {
       if (!_isCurrentReleaseLoad(release, generation)) {
         return;
@@ -484,6 +528,7 @@ class _FirmwareScreenState extends State<FirmwareScreen>
         }
       });
     } finally {
+      await installedRead;
       if (_isCurrentReleaseLoad(release, generation)) {
         setState(() {
           _loadingVersion = false;
@@ -678,6 +723,8 @@ class _FirmwareScreenState extends State<FirmwareScreen>
   }
 
   Future<void> _refreshBoardVersion() async {
+    final service = widget.bleService;
+    final readyAtStart = service.productReady;
     final boardId = _targetBoardId;
     final connectionToken = widget.bleService.connectionSessionToken;
     final String? boardVersion;
@@ -691,7 +738,9 @@ class _FirmwareScreenState extends State<FirmwareScreen>
       return;
     }
 
-    if (!_isCurrentBoardRead(boardId, connectionToken) ||
+    if (!identical(service, widget.bleService) ||
+        (!readyAtStart && service.productReady) ||
+        !_isCurrentBoardRead(boardId, connectionToken) ||
         _hasVerificationStatus ||
         _isUpdateModal) {
       return;
@@ -699,17 +748,29 @@ class _FirmwareScreenState extends State<FirmwareScreen>
 
     setState(() {
       _boardVersion = boardVersion;
+      _versionBoardId = boardId;
+      _versionConnectionToken = connectionToken;
     });
     _notifyAvailability();
   }
 
   void _notifyAvailability() {
+    final currentBoard =
+        widget.bleService.isConnected &&
+        _versionBoardId == _targetBoardId &&
+        _capabilitiesBoardId == _targetBoardId &&
+        _versionConnectionToken == widget.bleService.connectionSessionToken &&
+        _capabilitiesConnectionToken ==
+            widget.bleService.connectionSessionToken;
     widget.onAvailabilityChanged?.call(
       FirmwareUpdateAvailability(
         installedVersion: _boardVersion,
-        latestVersion: _websiteVersion,
-        supportsUpdate: _supportsUpdate,
-        loading: _loadingVersion,
+        latestVersion: _releaseSnapshot?.manifest.version,
+        supportsUpdate: _supportsUpdate && currentBoard,
+        loading: _loadingVersion || _restoringOtaVerification || _isUpdateModal,
+        snapshot: _releaseSnapshot,
+        boardId: currentBoard ? _targetBoardId : null,
+        connectionToken: currentBoard ? _versionConnectionToken : null,
       ),
     );
   }
@@ -935,6 +996,12 @@ class _FirmwareScreenState extends State<FirmwareScreen>
           _uploadProgress = 0;
           _boardVersion = verification.version;
         }
+        if (widget.bleService.isConnected &&
+            widget.bleService.connectedId == target.deviceId &&
+            verification is! OtaPostRebootPending) {
+          _versionBoardId = target.deviceId;
+          _versionConnectionToken = widget.bleService.connectionSessionToken;
+        }
       });
       _notifyAvailability();
       // Metadata is not part of the modal verification owner. Its completion
@@ -1068,7 +1135,7 @@ class _FirmwareScreenState extends State<FirmwareScreen>
         _supportsUpdate &&
         _boardVersion != null &&
         _websiteVersion != null &&
-        _boardVersion != _websiteVersion;
+        isNewerFirmwareVersion(_websiteVersion!, _boardVersion!);
     final String title = updateAvailable
         ? strings.versionReady(_websiteVersion!)
         : _loadingVersion
@@ -1077,7 +1144,10 @@ class _FirmwareScreenState extends State<FirmwareScreen>
     final updatePanel = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        FirmwareProvenanceCard(provenance: _provenance),
+        FirmwareProvenanceCard(
+          provenance: _provenance,
+          installedVersion: _currentInstalledVersion,
+        ),
         const SizedBox(height: 12),
         FirmwareUpdateCard(
           allowBeta: _useBetaFirmware,

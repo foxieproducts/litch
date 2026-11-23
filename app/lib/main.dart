@@ -14,6 +14,7 @@ import 'src/services/game_library_store.dart';
 import 'src/services/app_litchcraft_preferences.dart';
 import 'src/services/app_trace_recorder.dart';
 import 'src/services/app_tips_preferences.dart';
+import 'src/services/app_upgrade_notice_service.dart';
 import 'src/services/litch_ble_service.dart';
 import 'src/services/litchcraft_artwork_store.dart';
 import 'src/services/physical_game_history_ingestion.dart';
@@ -37,6 +38,7 @@ Future<void> main() async {
   trace.record(
     'app.started',
     fields: <String, Object?>{
+      'app_generation': 2,
       'build_mode': kDebugMode
           ? 'debug'
           : kProfileMode
@@ -59,6 +61,7 @@ class LitchMobileApp extends StatefulWidget {
     this.gameLibraryLoader,
     this.appTrace,
     this.engineRuntime,
+    this.appUpgradeNoticeService,
   });
 
   final LitchBleService? bleService;
@@ -67,6 +70,7 @@ class LitchMobileApp extends StatefulWidget {
   final GameLibraryLoader? gameLibraryLoader;
   final AppTraceSink? appTrace;
   final EngineRuntime? engineRuntime;
+  final AppUpgradeNoticeService? appUpgradeNoticeService;
 
   @override
   State<LitchMobileApp> createState() => _LitchMobileAppState();
@@ -353,6 +357,7 @@ class _LitchMobileAppState extends State<LitchMobileApp> {
         assignPlayer: _assignPlayer,
         appearanceMode: _appearanceMode,
         onAppearanceModeChanged: _setAppearanceMode,
+        appUpgradeNoticeService: widget.appUpgradeNoticeService,
       ),
     );
     final reviewOwner = _postGameReviewOwner;

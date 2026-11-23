@@ -73,6 +73,7 @@ flutter:
     - assets/licenses/native_runtime_notices.txt
 
   assets:
+    - assets/releases/app_store_notes.json
     - assets/privacy/foxie_litch_privacy_policy.md
     - assets/branding/foxie-app-icon.png
     - assets/branding/foxie-litch-wordmark.png

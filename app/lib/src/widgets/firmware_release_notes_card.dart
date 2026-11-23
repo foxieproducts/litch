@@ -9,11 +9,15 @@ class FirmwareReleaseNotesCard extends StatelessWidget {
     required this.beta,
     required this.details,
     this.originalContent = true,
+    this.showHeading = true,
+    this.selectable = true,
   });
 
   final bool beta;
   final String details;
   final bool originalContent;
+  final bool showHeading;
+  final bool selectable;
 
   @override
   Widget build(BuildContext context) {
@@ -23,19 +27,21 @@ class FirmwareReleaseNotesCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              beta
-                  ? litchStrings(context).betaReleaseNotes
-                  : litchStrings(context).releaseNotes,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
+            if (showHeading) ...<Widget>[
+              Text(
+                beta
+                    ? litchStrings(context).betaReleaseNotes
+                    : litchStrings(context).releaseNotes,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+            ],
             if (originalContent &&
                 !localizedUsesEnglish(litchStrings(context))) ...<Widget>[
               Text(litchStrings(context).originalNotes),
               const SizedBox(height: 8),
             ],
-            SelectableText(details),
+            if (selectable) SelectableText(details) else Text(details),
           ],
         ),
       ),

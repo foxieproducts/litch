@@ -49,6 +49,7 @@ class SettingsScreen extends StatefulWidget {
     this.healthFocusEpoch = 0,
     this.overviewRequestEpoch = 0,
     this.onOpenFirmware,
+    this.onInteractionBusyChanged,
     this.deferInitialLoad = false,
     this.recoveryOnly = false,
     this.landscapeOverlayClearance = 0,
@@ -66,6 +67,7 @@ class SettingsScreen extends StatefulWidget {
   final int healthFocusEpoch;
   final int overviewRequestEpoch;
   final VoidCallback? onOpenFirmware;
+  final ValueChanged<bool>? onInteractionBusyChanged;
   final bool deferInitialLoad;
   final bool recoveryOnly;
   final double landscapeOverlayClearance;
@@ -144,6 +146,27 @@ class SettingsScreenState extends State<SettingsScreen> {
   final FocusNode _boardHealthFocusNode = FocusNode(
     debugLabel: 'Board health section',
   );
+  var _navigationActivity = _SetupNavigationActivity();
+  bool? _reportedInteractionBusy;
+
+  bool get interactionBusy =>
+      _navigationActivity.isBusy ||
+      _isLoading ||
+      _writingKeys.isNotEmpty ||
+      _sliderDraftValues.isNotEmpty;
+
+  void _reportInteractionBusy() {
+    final busy = interactionBusy;
+    if (_reportedInteractionBusy == busy) return;
+    _reportedInteractionBusy = busy;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _reportedInteractionBusy == busy) {
+        widget.onInteractionBusyChanged?.call(busy);
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
   GlobalKey<NavigatorState> _setupNavigatorKey = GlobalKey<NavigatorState>();
   PageStorageBucket _pageStorageBucket = PageStorageBucket();
   final Map<_SetupPage, ScrollController> _pageScrollControllers =
@@ -197,6 +220,7 @@ class SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _navigationActivity.busy.addListener(_reportInteractionBusy);
     _bindServiceStreams();
     _onHomeState(widget.bleService.latestHomeState);
     if (!widget.deferInitialLoad) {
@@ -373,6 +397,11 @@ class SettingsScreenState extends State<SettingsScreen> {
       _usesDirectPhysicalPaletteKeys = false;
       _orientationCorrectionActive = false;
       _resetSettingsSearch();
+      _navigationActivity.busy.removeListener(_reportInteractionBusy);
+      _navigationActivity.dispose();
+      _navigationActivity = _SetupNavigationActivity();
+      _navigationActivity.busy.addListener(_reportInteractionBusy);
+      _reportedInteractionBusy = null;
       _setupNavigatorKey = GlobalKey<NavigatorState>();
       _pageStorageBucket = PageStorageBucket();
       final previousScrollControllers = _pageScrollControllers.values.toList();
@@ -714,6 +743,8 @@ class SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    _navigationActivity.busy.removeListener(_reportInteractionBusy);
+    _navigationActivity.dispose();
     _cancelStorageConfirmation();
     _storageRecoverySub?.cancel();
     ++_viewGeneration;
@@ -3723,6 +3754,7 @@ class SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _reportInteractionBusy();
     if (_sliderDraftValues.isEmpty) {
       _visibleStorageRecovery = _storageRecovery;
       _heldBoardHealthHeight = null;
@@ -3744,7 +3776,8 @@ class SettingsScreenState extends State<SettingsScreen> {
       _settings.where((s) => !_isHiddenSetting(s)).toList(),
     );
     final boardId = _connectedBoardId;
-    final hasSettings = boardId != null &&
+    final hasSettings =
+        boardId != null &&
         widget.bleService.settingsReadAuthority(boardId) ==
             LitchSettingsReadAuthority.confirmed;
     final enabled = hasSettings && !_isLoading;
@@ -3765,6 +3798,7 @@ class SettingsScreenState extends State<SettingsScreen> {
       },
       child: Navigator(
         key: _setupNavigatorKey,
+        observers: <NavigatorObserver>[_navigationActivity],
         pages: <Page<Object?>>[
           for (final page in _pageTrail)
             MaterialPage<Object?>(
@@ -3775,7 +3809,8 @@ class SettingsScreenState extends State<SettingsScreen> {
                 child: _buildSetupPage(
                   page,
                   visibleSettings,
-                  settingsUnavailable: boardId != null && !_isLoading && !hasSettings,
+                  settingsUnavailable:
+                      boardId != null && !_isLoading && !hasSettings,
                   enabled: enabled,
                 ),
               ),
@@ -4281,5 +4316,94 @@ class _PieceColorSwatch extends StatelessWidget {
             : null,
       ),
     );
+  }
+}
+
+/// The current navigator owns whether a popup, transition or back gesture is
+/// still active. Settled pages remain available for ordinary app notices.
+class _SetupNavigationActivity extends NavigatorObserver {
+  final ValueNotifier<bool> busy = ValueNotifier<bool>(false);
+  Route<dynamic>? _top;
+  Animation<double>? _topAnimation;
+  final Map<Animation<double>, AnimationStatusListener> _departures = {};
+  bool _gesture = false;
+  bool _scheduled = false;
+  bool _disposed = false;
+
+  bool get isBusy =>
+      _gesture ||
+      _top is PopupRoute<dynamic> ||
+      _departures.isNotEmpty ||
+      (_topAnimation != null &&
+          _topAnimation!.status != AnimationStatus.completed);
+
+  @override
+  void didChangeTop(Route<dynamic> topRoute, Route<dynamic>? previousTopRoute) {
+    if (_disposed) return;
+    _topAnimation?.removeStatusListener(_onAnimationStatus);
+    _top = topRoute;
+    _topAnimation = topRoute is TransitionRoute<dynamic>
+        ? topRoute.animation
+        : null;
+    _topAnimation?.addStatusListener(_onAnimationStatus);
+    _publish();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_disposed) return;
+    if (route is TransitionRoute<dynamic>) {
+      final animation = route.animation;
+      if (animation != null && animation.status != AnimationStatus.dismissed) {
+        void finished(AnimationStatus status) {
+          if (status == AnimationStatus.dismissed) {
+            animation.removeStatusListener(finished);
+            _departures.remove(animation);
+          }
+          _publish();
+        }
+
+        _departures[animation] = finished;
+        animation.addStatusListener(finished);
+      }
+    }
+    _publish();
+  }
+
+  @override
+  void didStartUserGesture(
+    Route<dynamic> route,
+    Route<dynamic>? previousRoute,
+  ) {
+    _gesture = true;
+    _publish();
+  }
+
+  @override
+  void didStopUserGesture() {
+    _gesture = false;
+    _publish();
+  }
+
+  void _onAnimationStatus(AnimationStatus _) => _publish();
+
+  void _publish() {
+    if (_scheduled || _disposed) return;
+    _scheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduled = false;
+      if (!_disposed) busy.value = isBusy;
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void dispose() {
+    _disposed = true;
+    _topAnimation?.removeStatusListener(_onAnimationStatus);
+    for (final entry in _departures.entries) {
+      entry.key.removeStatusListener(entry.value);
+    }
+    _departures.clear();
+    busy.dispose();
   }
 }

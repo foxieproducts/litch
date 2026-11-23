@@ -45,6 +45,7 @@ import 'package:litch_mobile/src/screens/litchcraft_screen.dart';
 import 'package:litch_mobile/src/screens/settings_screen.dart';
 import 'package:litch_mobile/src/screens/support_report_screen.dart';
 import 'package:litch_mobile/src/services/firmware_download_service.dart';
+import 'package:litch_mobile/src/services/app_upgrade_notice_service.dart';
 import 'package:litch_mobile/src/services/game_library_repository.dart';
 import 'package:litch_mobile/src/services/game_library_index.dart';
 import 'package:litch_mobile/src/services/game_library_store.dart';
@@ -71,6 +72,7 @@ import 'localization_test_support.dart';
 import 'post_game_review_test_fixture.dart';
 import 'support/litchcraft_frame_strip_gestures.dart';
 import 'support/memory_ota_target_store.dart';
+import 'support/firmware_test_fixture.dart';
 import 'support/owner_pairing_board.dart';
 import 'support/reboot_reply_ble.dart';
 import 'support/settings_session_board.dart';
@@ -1486,6 +1488,8 @@ Future<void> _pumpConnectedGate(
   double bottomSystemInset = 0,
   EdgeInsets? systemInsets,
   ThemeData? theme,
+  ThemeData? darkTheme,
+  ValueNotifier<TextScaler>? textScalerOverride,
   TextScaler textScaler = TextScaler.noScaling,
   Size? layoutSize,
   bool liveKeyboardPadding = false,
@@ -1506,6 +1510,7 @@ Future<void> _pumpConnectedGate(
   await tester.pumpWidget(
     MaterialApp(
       theme: theme,
+      darkTheme: darkTheme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (BuildContext context, Widget? child) {
@@ -1514,7 +1519,7 @@ Future<void> _pumpConnectedGate(
             (orientationSideReader != null
                 ? MediaQuery.viewPaddingOf(context)
                 : EdgeInsets.only(bottom: bottomSystemInset));
-        return MediaQuery(
+        Widget content(TextScaler scale) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             size: layoutSize,
             padding: liveKeyboardPadding
@@ -1526,7 +1531,7 @@ Future<void> _pumpConnectedGate(
                   )
                 : systemPadding,
             viewPadding: systemPadding,
-            textScaler: textScaler,
+            textScaler: scale,
           ),
           child: RepaintBoundary(
             key: const ValueKey<String>('connected-gate-render'),
@@ -1541,6 +1546,12 @@ Future<void> _pumpConnectedGate(
             ),
           ),
         );
+        return textScalerOverride == null
+            ? content(textScaler)
+            : ValueListenableBuilder<TextScaler>(
+                valueListenable: textScalerOverride,
+                builder: (_, scale, _) => content(scale),
+              );
       },
       home: ConnectionGateScreen(
         bleService: service,
@@ -7509,68 +7520,436 @@ void main() {
     }
   }
 
-  testWidgets(
-    'Connected menu explicitly labels the actual installed firmware',
-    (tester) async {
-      SharedPreferences.setMockInitialValues(<String, Object>{});
-      _usePortraitPhone(tester);
-      final service = _PagedSettingsBleService();
-      addTearDown(service.dispose);
-      late ValueChanged<FirmwareUpdateAvailability> publishAvailability;
-      await _pumpConnectedGate(
-        tester,
-        service,
-        firmwarePageBuilder: (_, _, _, _, changed) {
-          publishAvailability = changed;
-          return const SizedBox.shrink();
-        },
-      );
-      final action = find.byKey(
-        const ValueKey('connected-board-status-action'),
-      );
-      Future<void> openMenu(String? installed, String? latest) async {
-        publishAvailability(
-          FirmwareUpdateAvailability(
-            installedVersion: installed,
-            latestVersion: latest,
-            supportsUpdate: true,
-            loading: false,
-          ),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(action);
-        await tester.pumpAndSettle();
-      }
-
-      await openMenu('0.9.0-7', '0.9.0-7');
-      expect(find.text('Current firmware version: 0.9.0-7'), findsOneWidget);
-      tester.state<NavigatorState>(find.byType(Navigator)).pop();
-      await tester.pumpAndSettle();
-      await openMenu('0.9.0-8', '0.9.0-8');
-      expect(find.text('Current firmware version: 0.9.0-8'), findsOneWidget);
-      expect(find.text('Current firmware version: 0.9.0-7'), findsNothing);
-      tester.state<NavigatorState>(find.byType(Navigator)).pop();
-      await tester.pumpAndSettle();
-      await openMenu('0.9.0-8', '0.9.0-9');
-      expect(find.text('Update available'), findsOneWidget);
-      expect(
-        find.text('Current firmware version: 0.9.0-8 → 0.9.0-9'),
-        findsOneWidget,
-      );
-      tester.state<NavigatorState>(find.byType(Navigator)).pop();
-      await tester.pumpAndSettle();
-      await openMenu(null, '0.9.0-9');
-      final tile = tester.widget<ListTile>(
-        find.ancestor(
-          of: find.text('Check for updates'),
-          matching: find.byType(ListTile),
+  testWidgets('Connected menu explicitly labels the actual installed firmware', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    PackageInfo.setMockInitialValues(
+      appName: 'Foxie Litch',
+      packageName: 'com.foxieproducts.litchMobile',
+      version: '0.5.0',
+      buildNumber: '1',
+      buildSignature: '',
+    );
+    _usePortraitPhone(tester);
+    await loadHealthReviewFonts(tester, useSdkFonts: true);
+    final service = _PagedSettingsBleService();
+    addTearDown(service.dispose);
+    final noticeScale = ValueNotifier<TextScaler>(const TextScaler.linear(2));
+    addTearDown(noticeScale.dispose);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    late ValueChanged<FirmwareUpdateAvailability> publishAvailability;
+    await _pumpConnectedGate(
+      tester,
+      service,
+      textScalerOverride: noticeScale,
+      theme: buildLitchTheme(),
+      darkTheme: buildLitchDarkTheme(),
+      firmwarePageBuilder: (_, _, _, _, changed) {
+        publishAvailability = changed;
+        return const SizedBox.shrink();
+      },
+    );
+    final action = find.byKey(const ValueKey('connected-board-status-action'));
+    Future<void> openMenu(String? installed, String? latest) async {
+      publishAvailability(
+        FirmwareUpdateAvailability(
+          installedVersion: installed,
+          latestVersion: latest,
+          supportsUpdate: true,
+          loading: false,
         ),
       );
-      expect(tile.subtitle, isNull);
-      expect(find.text('Update available'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+      await tester.pumpAndSettle();
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+    }
+
+    await openMenu('0.9.0-7', '0.9.0-7');
+    expect(find.text('Current firmware version: 0.9.0-7'), findsOneWidget);
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    await openMenu('0.9.0-8', '0.9.0-8');
+    expect(find.text('Current firmware version: 0.9.0-8'), findsOneWidget);
+    expect(find.text('Current firmware version: 0.9.0-7'), findsNothing);
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    await openMenu('0.9.0-8', '0.9.0-9');
+    expect(find.text('Update available'), findsOneWidget);
+    expect(
+      find.text('Current firmware version: 0.9.0-8 → 0.9.0-9'),
+      findsOneWidget,
+    );
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    await openMenu(null, '0.9.0-9');
+    final tile = tester.widget<ListTile>(
+      find.ancestor(
+        of: find.text('Check for updates'),
+        matching: find.byType(ListTile),
+      ),
+    );
+    expect(tile.subtitle, isNull);
+    expect(find.text('Update available'), findsNothing);
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
+
+    FirmwareUpdateAvailability offer(
+      String version, {
+      String installed = '0.63-beta',
+      FirmwareReleaseInfo? release,
+      String? boardId,
+      int? token,
+      String? releaseNotes,
+    }) {
+      final selected = release ?? FirmwareReleaseInfo.stable;
+      final notes =
+          releaseNotes ?? 'Version: $version\n\nVerified notes for $version.';
+      return FirmwareUpdateAvailability(
+        installedVersion: installed,
+        latestVersion: version,
+        supportsUpdate: true,
+        loading: false,
+        boardId: boardId ?? service.connectedId,
+        connectionToken: token ?? service.connectionSessionToken,
+        snapshot: FirmwareReleaseSnapshot(
+          release: selected,
+          manifest: makeFirmwareManifest(
+            makeEsp32s3Firmware(),
+            channel: selected.channel.name,
+            manifestUrl: selected.manifestUrl,
+            version: version,
+            notesMarkdown: notes,
+          ),
+          notesMarkdown: notes,
+        ),
+      );
+    }
+
+    final prompt = find.byKey(const ValueKey<String>('firmware-update-offer'));
+    publishAvailability(offer('1.0.3', installed: 'custom-build'));
+    await tester.pumpAndSettle();
+    expect(prompt, findsNothing);
+    publishAvailability(offer('1.0.1-0', installed: '1.0.2'));
+    await tester.pumpAndSettle();
+    expect(
+      prompt,
+      findsNothing,
+      reason: 'Manual downgrade is not a newer offer.',
+    );
+    final actualNotes = File(
+      '../docs/release/initial_1.0.2.txt',
+    ).readAsStringSync();
+    final actualOffer = offer(
+      '1.0.2',
+      installed: '1.0.1-0',
+      releaseNotes: 'Version: 1.0.2\n\n$actualNotes',
+    );
+    // Metadata may arrive while the user is using an existing root popup.
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+    publishAvailability(actualOffer);
+    await tester.pumpAndSettle();
+    expect(prompt, findsNothing);
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
+    expect(prompt, findsOneWidget);
+    expect(find.text('Board firmware update: 1.0.2'), findsOneWidget);
+    expect(find.textContaining('Initial release'), findsOneWidget);
+    expect(find.text(actualNotes.trim()), findsOneWidget);
+    expect(
+      find.text('Ready to install. Your board is running 1.0.1-0.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text("Don't show new firmware update notes again."),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Version: 1.0.2'), findsNothing);
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const ValueKey<String>('release-notice-opt-out')),
+          )
+          .subtitle,
+      isNull,
+    );
+    final primaryRect = tester.getRect(
+      find.widgetWithText(FilledButton, 'Review update'),
+    );
+    final choiceRect = tester.getRect(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    expect(choiceRect.top, greaterThanOrEqualTo(primaryRect.bottom));
+    expect(choiceRect.shortestSide, greaterThanOrEqualTo(48));
+    expect(primaryRect.height, greaterThanOrEqualTo(48));
+    expect(
+      tester.widget<AlertDialog>(find.byType(AlertDialog)).backgroundColor?.a,
+      closeTo(.96, .001),
+    );
+    noticeScale.value = TextScaler.noScaling;
+    await tester.pumpAndSettle();
+    await captureHealthReview(
+      tester,
+      'firmware-offer-refined-1.0.2-portrait-100',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('connected-gate-render'),
+      ),
+    );
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+    await captureHealthReview(tester, 'firmware-offer-refined-1.0.2-portrait-dark-100',
+      boundaryFinder: find.byKey(const ValueKey<String>('connected-gate-render')));
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    noticeScale.value = const TextScaler.linear(2);
+    await tester.pumpAndSettle();
+
+    await captureHealthReview(
+      tester,
+      'firmware-offer-refined-1.0.2-portrait-light-200',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('connected-gate-render'),
+      ),
+    );
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+    await captureHealthReview(
+      tester,
+      'firmware-offer-refined-1.0.2-portrait-dark-200',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('connected-gate-render'),
+      ),
+    );
+    tester.platformDispatcher.localesTestValue = const [Locale('de')];
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Versionshinweise werden in ihrer Originalsprache angezeigt.'),
+      findsOneWidget,
+    );
+    await captureHealthReview(
+      tester,
+      'firmware-offer-refined-1.0.2-german-dark-200',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('connected-gate-render'),
+      ),
+    );
+    tester.platformDispatcher.localesTestValue = const [Locale('en')];
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(844, 390);
+    await tester.pumpAndSettle();
+    await captureHealthReview(
+      tester,
+      'firmware-offer-refined-1.0.2-landscape-light-200',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('connected-gate-render'),
+      ),
+    );
+    final footerChoiceBefore = tester.getRect(find.byKey(const ValueKey<String>('release-notice-opt-out')));
+    final footerActionBefore = tester.getRect(find.widgetWithText(FilledButton, 'Review update'));
+    final notesScroll = find.ancestor(of: find.text('Board firmware update: 1.0.2'),
+      matching: find.byType(Scrollable)).first;
+    await tester.drag(notesScroll, const Offset(0, -600));
+    await tester.pumpAndSettle();
+    final notePosition = tester.state<ScrollableState>(notesScroll).position;
+    expect(notePosition.pixels, greaterThan(0));
+    expect(notePosition.pixels, closeTo(notePosition.maxScrollExtent, .01));
+    expect(tester.getRect(find.byKey(const ValueKey<String>('release-notice-opt-out'))), footerChoiceBefore);
+    expect(tester.getRect(find.widgetWithText(FilledButton, 'Review update')), footerActionBefore);
+    await captureHealthReview(tester, 'firmware-offer-refined-1.0.2-landscape-final-paragraph-200',
+      boundaryFinder: find.byKey(const ValueKey<String>('connected-gate-render')));
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(highContrast: true);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<AlertDialog>(find.byType(AlertDialog)).backgroundColor?.a,
+      1,
+    );
+    await captureHealthReview(
+      tester,
+      'firmware-offer-refined-1.0.2-high-contrast-200',
+      boundaryFinder: find.byKey(
+        const ValueKey<String>('connected-gate-render'),
+      ),
+    );
+    tester.platformDispatcher.clearAccessibilityFeaturesTestValue();
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool('app_update_notices_disabled', true);
+    expect(preferences.getStringList('firmware_update_seen_versions'), [
+      '1.0.2',
+    ]);
+
+    // Simulate process death before either action is tapped. The next shell
+    // reloads durable history, including the retained series-0 spelling.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await preferences.setBool('app_update_notices_disabled', false);
+    final installedAt = DateTime.utc(2026, 1, 1);
+    String? appIdentity = jsonEncode(<String, Object>{
+      'schema': 1,
+      'platform': 'android',
+      'package': 'com.foxieproducts.litchMobile',
+      'version': '1.0.2',
+      'build': '50',
+      'installed': installedAt.millisecondsSinceEpoch,
+    });
+    final bundledCatalog = await tester.runAsync(
+      () => rootBundle.loadString(AppUpgradeNoticeService.notesAsset),
+    );
+    expect(bundledCatalog, contains('Follow your game on the Play screen'));
+    final appRelease = AppUpgradeNoticeService(
+      platform: TargetPlatform.android,
+      loadReleaseNotes: () async => bundledCatalog!,
+      loadPackageInfo: () async => PackageInfo(
+        appName: 'Foxie Litch',
+        packageName: 'com.foxieproducts.litchMobile',
+        version: '1.0.2',
+        buildNumber: '51',
+        installTime: installedAt,
+        updateTime: DateTime.utc(2026, 1, 2),
+      ),
+      readIdentity: () async => appIdentity,
+      writeIdentity: (value) async {
+        appIdentity = value;
+        return true;
+      },
+    );
+    service.emitAvailability(BleAvailability.ready);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ConnectionGateScreen(
+          bleService: service,
+          appUpgradeNoticeService: appRelease,
+          firmwarePageBuilder: (_, _, _, _, changed) {
+            publishAvailability = changed;
+            return const Text('Firmware content');
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final appNotice = find.byKey(const ValueKey<String>('app-upgrade-notice'));
+    expect(service.productReady, isTrue);
+    expect(
+      appNotice,
+      findsOneWidget,
+      reason:
+          'App notes use the actual ready paired shell, not a separate route.',
+    );
+    expect(prompt, findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(appNotice, findsNothing);
+    expect(preferences.getBool('app_update_notices_disabled'), isTrue);
+    publishAvailability(offer('1.0.2-0', installed: '1.0.1-0'));
+    await tester.pumpAndSettle();
+    expect(prompt, findsNothing);
+
+    // An incoming offer waits for the active pointer, then Later records it.
+    final pointer = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('connected-board-status-action')),
+      ),
+    );
+    publishAvailability(offer('1.0.3-1', installed: '0.7'));
+    await tester.pump();
+    expect(prompt, findsNothing);
+    await pointer.cancel();
+    await tester.pumpAndSettle();
+    expect(prompt, findsOneWidget);
+    await tester.tap(find.text('Later'));
+    await tester.pumpAndSettle();
+    publishAvailability(offer('1.0.3-1', release: FirmwareReleaseInfo.beta));
+    await tester.pumpAndSettle();
+    expect(
+      prompt,
+      findsNothing,
+      reason: 'Channel promotion does not create a new version.',
+    );
+
+    publishAvailability(offer('1.0.3-2'));
+    await tester.pumpAndSettle();
+    publishAvailability(
+      FirmwareUpdateAvailability(
+        loading: true,
+        boardId: 'board-1',
+        connectionToken: service.connectionSessionToken,
+      ),
+    );
+    publishAvailability(offer('1.0.3-2'));
+    await tester.pumpAndSettle();
+    expect(prompt, findsOneWidget);
+    await tester.tap(find.text('Review update'));
+    await tester.pumpAndSettle();
+    expect(find.text('Board update'), findsOneWidget);
+    expect(find.text('Firmware content'), findsOneWidget);
+    expect(prompt, findsNothing);
+    publishAvailability(offer('1.0.3-3'));
+    await tester.pumpAndSettle();
+    expect(
+      prompt,
+      findsNothing,
+      reason: 'The visible Update offer counts as seen.',
+    );
+    expect(
+      preferences.getStringList('firmware_update_seen_versions'),
+      contains('1.0.3-3'),
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    publishAvailability(offer('1.0.3-3', release: FirmwareReleaseInfo.beta));
+    await tester.pumpAndSettle();
+    expect(prompt, findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    publishAvailability(offer('1.0.3-4'));
+    await tester.pumpAndSettle();
+    expect(prompt, findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(prompt, findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('release-notice-opt-out')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Later'));
+    await tester.pumpAndSettle();
+    expect(preferences.getBool('firmware_update_notices_disabled'), isTrue);
+    expect(preferences.getBool('app_update_notices_disabled'), isTrue);
+    publishAvailability(offer('1.0.3-5'));
+    await tester.pumpAndSettle();
+    expect(
+      prompt,
+      findsNothing,
+      reason: 'The board opt-out applies to future versions.',
+    );
+    final oldToken = service.connectionSessionToken;
+    service.emitConnection('board-1', DeviceConnectionState.disconnected);
+    await tester.pump();
+    expect(appNotice, findsNothing);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(prompt, findsNothing);
+    publishAvailability(offer('1.0.3-5', boardId: 'board-1', token: oldToken));
+    await tester.pump();
+    expect(
+      prompt,
+      findsNothing,
+      reason: 'A late retired-link result cannot prompt.',
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets(
     'Connected Sleep and Disconnect stay ordered and recoverable at 200% text',
@@ -15533,6 +15912,26 @@ void main() {
     expect(tester.element(progress), same(original));
     expect(help.hitTestable(), findsOneWidget);
     expect(cancel.hitTestable(), findsOneWidget);
+    final connectionHelp = find.byKey(const ValueKey('connection-help'));
+    expect(connectionHelp.hitTestable(), findsOneWidget);
+    await tester.tap(connectionHelp);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    final helpPage = find.byKey(const ValueKey('bluetooth-connection-help'));
+    expect(helpPage, findsOneWidget);
+    expect(
+      find.descendant(of: helpPage, matching: find.text('Studio Board')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('three success flashes'), findsOneWidget);
+    final helpRoute = ModalRoute.of(tester.element(helpPage))!;
+    Navigator.of(tester.element(helpPage)).pop();
+    await tester.pump();
+    await tester.pump(helpRoute.reverseTransitionDuration);
+    await tester.pump();
+    expect(helpPage, findsNothing);
+    expect(tester.element(progress), same(original));
+    expect(help, findsOneWidget);
     await tester.tap(help);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
@@ -15697,12 +16096,19 @@ void main() {
     WidgetTester tester,
   ) async {
     _usePortraitPhone(tester);
+    tester.view.physicalSize = const Size(320, 844);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final _ConnectionGateBleService service = _ConnectionGateBleService();
     addTearDown(service.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(home: ConnectionGateScreen(bleService: service)),
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: ConnectionGateScreen(bleService: service),
+      ),
     );
     await tester.pump();
     expect(
@@ -15712,8 +16118,38 @@ void main() {
     expect(find.byIcon(Icons.mail_outline), findsNothing);
     final Finder help = find.byKey(const ValueKey<String>('discovery-support'));
     expect(help, findsOneWidget);
-    expect(find.text('Get help finding your board'), findsOneWidget);
+    expect(find.text('Connection help'), findsOneWidget);
     expect(tester.getSize(help).height, greaterThanOrEqualTo(48));
+
+    await tester.tap(help);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    final helpPage = find.byKey(const ValueKey('bluetooth-connection-help'));
+    expect(helpPage, findsOneWidget);
+    expect(find.textContaining('one device at a time'), findsOneWidget);
+    expect(find.textContaining('If it is not listed'), findsOneWidget);
+    expect(
+      find.textContaining('all phones, tablets and other devices'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('three success flashes'), findsOneWidget);
+    expect(find.text('Contact Support'), findsOneWidget);
+    expect(service.connectCalls, isEmpty);
+    expect(service.disconnectCalls, 0);
+    final support = find.descendant(
+      of: helpPage,
+      matching: find.byKey(const ValueKey('owner-pairing-support')),
+    );
+    await tester.ensureVisible(support);
+    await tester.pump();
+    expect(support.hitTestable(), findsOneWidget);
+    expect(tester.getSize(support).height, greaterThanOrEqualTo(48));
+    final helpRoute = ModalRoute.of(tester.element(helpPage))!;
+    Navigator.of(tester.element(helpPage)).pop();
+    await tester.pump();
+    await tester.pump(helpRoute.reverseTransitionDuration);
+    await tester.pump();
+    expect(helpPage, findsNothing);
 
     await _pumpConnectedGate(tester, service);
     expect(

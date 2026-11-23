@@ -468,6 +468,7 @@ void main() {
         ).readAsBytes();
         expect(bytes.length, lessThanOrEqualTo(320 * 1024));
         final value = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+        expect(value['app_generation'], 2);
         final retained = value['lines'] as List;
         expect(retained.length, inInclusiveRange(1, 119));
         expect(retained, lines.skip(lines.length - retained.length).toList());

@@ -253,12 +253,20 @@ class OtaFirmwareBleService extends FakeFirmwareBleService {
   final connectionEvents = StreamController<ConnectionStateUpdate>.broadcast(
     sync: true,
   );
+  final readinessEvents = StreamController<bool>.broadcast(sync: true);
+  bool? readyOverride;
+  Completer<LitchDeviceCapabilities>? nextCapabilityRead;
+  @override
+  bool get productReady => readyOverride ?? isConnected;
+  @override
+  Stream<bool> get productReadinessStream => readinessEvents.stream;
   Completer<OtaUploadResult>? uploadCompleter;
   @override
   Stream<ConnectionStateUpdate> get connectionStream => connectionEvents.stream;
   @override
   Future<void> dispose() async {
     await connectionEvents.close();
+    await readinessEvents.close();
     await super.dispose();
   }
 
@@ -310,6 +318,9 @@ class OtaFirmwareBleService extends FakeFirmwareBleService {
     if (refresh) {
       capabilityRefreshes += 1;
     }
+    final pending = nextCapabilityRead;
+    nextCapabilityRead = null;
+    if (pending != null) return pending.future;
     return capabilities;
   }
 
@@ -745,6 +756,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Installed version 1.2.2'), findsOneWidget);
       expect(find.text('Could not load board update details.'), findsOneWidget);
       expect(find.textContaining('updates.example.invalid'), findsNothing);
       expect(
@@ -781,100 +793,152 @@ void main() {
     },
   );
 
-  testWidgets('firmware screen offers Update only after the connected board reports support', (
-    WidgetTester tester,
-  ) async {
-    final OtaFirmwareBleService bleService = OtaFirmwareBleService()
-      ..connected = false
-      ..currentConnectedId = null;
-    FirmwareUpdateAvailability? availability;
+  testWidgets(
+    'firmware screen offers Update only after the connected board reports support',
+    (WidgetTester tester) async {
+      final OtaFirmwareBleService bleService = OtaFirmwareBleService()
+        ..connected = false
+        ..currentConnectedId = null;
+      addTearDown(bleService.dispose);
+      FirmwareUpdateAvailability? availability;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: FirmwareScreen(
-          bleService: bleService,
-          boardId: 'board-1',
-          onRequestShowFirmwareTab: () {},
-          onUpdateActivityChanged: (_) {},
-          onAvailabilityChanged: (FirmwareUpdateAvailability value) {
-            availability = value;
-          },
-          downloadService: FakeFirmwareDownloadService(),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FirmwareScreen(
+            bleService: bleService,
+            boardId: 'board-1',
+            onRequestShowFirmwareTab: () {},
+            onUpdateActivityChanged: (_) {},
+            onAvailabilityChanged: (FirmwareUpdateAvailability value) {
+              availability = value;
+            },
+            downloadService: FakeFirmwareDownloadService(),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Installed version unknown'), findsOneWidget);
-    expect(
-      tester
-          .widget<FirmwareProvenanceCard>(find.byType(FirmwareProvenanceCard))
-          .provenance
-          .state,
-      FirmwareProvenanceState.offline,
-    );
-    expect(find.widgetWithText(FilledButton, 'Update Board'), findsNothing);
-    bleService.capabilities = LitchDeviceCapabilities.unavailable;
-    bleService.connected = true;
-    bleService.currentConnectedId = 'board-1';
-    bleService.connectionEvents.add(
-      const ConnectionStateUpdate(
-        deviceId: 'board-1',
-        connectionState: DeviceConnectionState.connected,
-        failure: null,
-      ),
-    );
-    await tester.pumpAndSettle();
+      expect(find.text('Installed version unknown'), findsOneWidget);
+      expect(
+        tester
+            .widget<FirmwareProvenanceCard>(find.byType(FirmwareProvenanceCard))
+            .provenance
+            .state,
+        FirmwareProvenanceState.offline,
+      );
+      expect(find.widgetWithText(FilledButton, 'Update Board'), findsNothing);
+      bleService.capabilities = LitchDeviceCapabilities.unavailable;
+      bleService.connected = true;
+      bleService.currentConnectedId = 'board-1';
+      bleService.connectionEvents.add(
+        const ConnectionStateUpdate(
+          deviceId: 'board-1',
+          connectionState: DeviceConnectionState.connected,
+          failure: null,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Board details could not be read. Pull down to try again.'), findsOneWidget);
-    expect(find.textContaining('manually over USB'), findsNothing);
-    expect(find.widgetWithText(FilledButton, 'Update Board'), findsNothing);
-    expect(availability?.updateAvailable, isFalse);
+      expect(
+        find.text('Board details could not be read. Pull down to try again.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('manually over USB'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Update Board'), findsNothing);
+      expect(availability?.updateAvailable, isFalse);
 
-    bleService.capabilities = FakeFirmwareBleService.updateCapabilities;
-    final refresh = tester.state<RefreshIndicatorState>(find.byType(RefreshIndicator));
-    final refreshed = refresh.show();
-    await tester.pumpAndSettle();
-    await refreshed;
-    final FirmwareProvenanceCard provenanceCard = tester.widget(
-      find.byType(FirmwareProvenanceCard),
-    );
-    expect(provenanceCard.provenance.state, FirmwareProvenanceState.custom);
-    expect(find.textContaining('rated or online play'), findsOneWidget);
-    expect(find.textContaining('Makers rule.'), findsOneWidget);
-    expect(find.text('UPDATE AVAILABLE'), findsOneWidget);
-    final Text updateTitle = tester.widget<Text>(
-      find.text('Version 1.2.3 is ready'),
-    );
-    expect(updateTitle.style?.fontSize, 24);
-    final Text installedVersion = tester.widget<Text>(
-      find.text('Installed version 1.2.2'),
-    );
-    expect(installedVersion.style?.fontSize, 14);
-    expect(find.widgetWithText(FilledButton, 'Update Board'), findsOneWidget);
-    expect(availability?.updateAvailable, isTrue);
-    expect(find.byType(AlertDialog), findsNothing);
+      bleService.capabilities = FakeFirmwareBleService.updateCapabilities;
+      final refresh = tester.state<RefreshIndicatorState>(
+        find.byType(RefreshIndicator),
+      );
+      final refreshed = refresh.show();
+      await tester.pumpAndSettle();
+      await refreshed;
+      final FirmwareProvenanceCard provenanceCard = tester.widget(
+        find.byType(FirmwareProvenanceCard),
+      );
+      expect(provenanceCard.provenance.state, FirmwareProvenanceState.custom);
+      expect(find.textContaining('rated or online play'), findsOneWidget);
+      expect(find.textContaining('Makers rule.'), findsOneWidget);
+      expect(find.text('UPDATE AVAILABLE'), findsOneWidget);
+      final Text updateTitle = tester.widget<Text>(
+        find.text('Version 1.2.3 is ready'),
+      );
+      expect(updateTitle.style?.fontSize, 24);
+      final Text installedVersion = tester.widget<Text>(
+        find.text('Installed version 1.2.2'),
+      );
+      expect(installedVersion.style?.fontSize, 14);
+      expect(find.widgetWithText(FilledButton, 'Update Board'), findsOneWidget);
+      expect(availability?.updateAvailable, isTrue);
+      expect(find.byType(AlertDialog), findsNothing);
 
-    bleService.connected = false;
-    bleService.currentConnectedId = null;
-    bleService.connectionEvents.add(
-      const ConnectionStateUpdate(
-        deviceId: 'board-1',
-        connectionState: DeviceConnectionState.disconnected,
-        failure: null,
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Installed version unknown'), findsOneWidget);
-    expect(
-      tester
-          .widget<FirmwareProvenanceCard>(find.byType(FirmwareProvenanceCard))
-          .provenance
-          .state,
-      FirmwareProvenanceState.offline,
-    );
-    expect(availability?.updateAvailable, isFalse);
-  });
+      bleService.connected = false;
+      bleService.currentConnectedId = null;
+      bleService.connectionEvents.add(
+        const ConnectionStateUpdate(
+          deviceId: 'board-1',
+          connectionState: DeviceConnectionState.disconnected,
+          failure: null,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Installed version unknown'), findsOneWidget);
+      expect(
+        tester
+            .widget<FirmwareProvenanceCard>(find.byType(FirmwareProvenanceCard))
+            .provenance
+            .state,
+        FirmwareProvenanceState.offline,
+      );
+      expect(availability?.updateAvailable, isFalse);
+
+      // A first connection may still be reading public capabilities when owner
+      // authorization completes. The ready event must start a fresh read rather
+      // than inherit the older, empty result from before authorization.
+      await tester.pumpWidget(const SizedBox.shrink());
+      final earlyCapabilities = Completer<LitchDeviceCapabilities>();
+      bleService.connected = true;
+      bleService.currentConnectedId = 'board-1';
+      bleService.readyOverride = false;
+      bleService.nextCapabilityRead = earlyCapabilities;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FirmwareScreen(
+            bleService: bleService,
+            boardId: 'board-1',
+            onRequestShowFirmwareTab: () {},
+            onUpdateActivityChanged: (_) {},
+            onAvailabilityChanged: (value) => availability = value,
+            downloadService: FakeFirmwareDownloadService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(earlyCapabilities.isCompleted, isFalse);
+      expect(availability?.updateAvailable, isFalse);
+      bleService.readyOverride = true;
+      bleService.readinessEvents.add(true);
+      await tester.pumpAndSettle();
+      expect(availability?.updateAvailable, isTrue);
+      expect(
+        availability?.snapshot?.notesMarkdown,
+        contains('Board software release notes.'),
+      );
+      expect(availability?.boardId, 'board-1');
+      expect(availability?.connectionToken, bleService.connectionSessionToken);
+      earlyCapabilities.complete(LitchDeviceCapabilities.unavailable);
+      await tester.pumpAndSettle();
+      expect(
+        availability?.updateAvailable,
+        isTrue,
+        reason:
+            'A pre-authorization result cannot replace the ready-session capability read.',
+      );
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('same-version board offers deliberate exact-snapshot Reinstall', (
     WidgetTester tester,
@@ -1128,6 +1192,7 @@ void main() {
     final ControlledFirmwareDownloadService downloadService =
         ControlledFirmwareDownloadService();
 
+    FirmwareUpdateAvailability? channelAvailability;
     await tester.pumpWidget(
       MaterialApp(
         home: FirmwareScreen(
@@ -1135,6 +1200,7 @@ void main() {
           boardId: 'board-1',
           onRequestShowFirmwareTab: () {},
           onUpdateActivityChanged: (_) {},
+          onAvailabilityChanged: (value) => channelAvailability = value,
           downloadService: downloadService,
         ),
       ),
@@ -1180,6 +1246,11 @@ void main() {
     await tester.pump();
     expect(find.text('BETA SNAPSHOT'), findsOneWidget);
     expect(find.text('Latest version: 2.0.0-beta.1'), findsOneWidget);
+    expect(channelAvailability?.snapshot?.notesMarkdown, 'BETA SNAPSHOT');
+    expect(
+      channelAvailability?.snapshot?.release.channel,
+      FirmwareReleaseChannel.beta,
+    );
 
     downloadService.complete(
       FirmwareReleaseInfo.stable,
@@ -1633,13 +1704,14 @@ void main() {
   testWidgets('upload completion cannot release reconnect-owned verification', (
     tester,
   ) async {
+    await loadHealthReviewFonts(tester, useSdkFonts: true);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final upload = Completer<OtaUploadResult>();
     final verify = Completer<OtaPostRebootVerification>();
     final service = OtaFirmwareBleService()
       ..initialInstalledVersion = '1.2.2'
       ..uploadCompleter = upload
-      ..connectedProvenance = FirmwareProvenance.official('a' * 64)
+      ..connectedProvenance = FirmwareProvenance.unverified
       ..verificationCompleter = verify
       ..capabilities = const LitchDeviceCapabilities(
         contractVersion: 3,
@@ -1652,9 +1724,12 @@ void main() {
     final download = OtaFirmwareDownloadService();
     final activities = <bool>[];
     addTearDown(service.dispose);
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
         theme: buildLitchTheme(),
+        builder: (_, child) => RepaintBoundary(child: child!),
         home: Scaffold(
           body: FirmwareScreen(
             bleService: service,
@@ -1667,11 +1742,31 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Official firmware'), findsOneWidget);
+    expect(find.text('Installed firmware source unverified'), findsOneWidget);
+    expect(
+      find.text(
+        'The app could not confirm the source of installed firmware 1.2.2.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Version 1.2.3 is ready'), findsOneWidget);
+    expect(
+      find.text(
+        'The app could not confirm the source of installed firmware 1.2.3.',
+      ),
+      findsNothing,
+    );
+    await captureHealthReview(
+      tester,
+      'installed-firmware-source-current-vs-offered',
+    );
     final previousReads = service.provenanceReads;
     await tester.tap(find.widgetWithText(FilledButton, 'Update Board'));
     await tester.pumpAndSettle();
     expect(service.pendingOtaVerification, isNotNull);
+    expect(find.text('The app could not confirm the source of the installed firmware.'), findsOneWidget);
+    expect(find.text('The app could not confirm the source of installed firmware 1.2.2.'), findsNothing);
+
     service.connectedProvenance = FirmwareProvenance.unverified;
     service.connected = true;
     service.currentConnectedId = 'board-1';
@@ -1720,6 +1815,28 @@ void main() {
       find.text('Selected firmware verified on this board.'),
       findsOneWidget,
     );
-    expect(find.text('Firmware not verified'), findsOneWidget);
+    expect(find.text('Installed firmware source unverified'), findsOneWidget);
+    expect(
+      find.text(
+        'The app could not confirm the source of installed firmware 1.2.3.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: FirmwareProvenanceCard(
+            provenance: FirmwareProvenance.unverified,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Installed firmware source unverified'), findsOneWidget);
+    expect(
+      find.text(
+        'The app could not confirm the source of the installed firmware.',
+      ),
+      findsOneWidget,
+    );
   });
 }

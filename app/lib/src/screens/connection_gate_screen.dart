@@ -11,6 +11,9 @@ import '../controllers/litchcraft_controller.dart';
 import '../controllers/litchcraft_library.dart';
 import '../localization/litch_strings.dart';
 import '../models/home_state_notification.dart';
+import '../widgets/firmware_update_prompt.dart';
+import '../widgets/app_upgrade_notice_prompt.dart';
+import '../services/app_upgrade_notice_service.dart';
 import '../models/litch_board.dart';
 import '../models/owner_pairing_session.dart';
 import '../models/litch_control_action.dart';
@@ -229,6 +232,7 @@ class ConnectionGateScreen extends StatefulWidget {
     this.gameLibraryOpener,
     this.assignPlayer,
     this.appTrace,
+    this.appUpgradeNoticeService,
   }) : assert(
          (craftController == null) == (craftLibrary == null),
          'craftController and craftLibrary must be supplied together',
@@ -246,6 +250,7 @@ class ConnectionGateScreen extends StatefulWidget {
   final GameLibraryOpener? gameLibraryOpener;
   final LocalPlayerAssignment? assignPlayer;
   final AppTraceSink? appTrace;
+  final AppUpgradeNoticeService? appUpgradeNoticeService;
 
   @override
   State<ConnectionGateScreen> createState() => _ConnectionGateScreenState();
@@ -301,6 +306,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
   String? _dismissedOwnerRefusalDeviceId;
   int _connectionChoiceGeneration = 0;
 
+  bool _noticeStartupReady = false;
   bool _isConnecting = false;
   Future<bool>? _connectionRequest;
   bool _restartingConnection = false;
@@ -548,6 +554,8 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
       // Optional names and Console visibility must not prevent discovery.
     }
     if (!mounted) return;
+
+    setState(() => _noticeStartupReady = true);
 
     // The preference read can finish after a real connection event, or this
     // gate can attach to an already-connected service. Transport owns identity.
@@ -2025,6 +2033,26 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     return _knownBoardNames[id] ?? advertisedName?.trim() ?? 'Foxie Litch';
   }
 
+  void _openConnectionHelp(String? targetId) {
+    final helpTargetId = targetId ?? _connectionEnd?.deviceId ?? _selectedBoardId;
+    final board =
+        (_pendingDestinationBoard?.id == helpTargetId
+            ? _pendingDestinationBoard
+            : null) ??
+        _bleService.discoveredBoard(helpTargetId ?? '') ??
+        _boards.where((board) => board.id == helpTargetId).firstOrNull;
+    final boardName = board?.name ??
+        (_connectionEnd?.deviceId == helpTargetId ? _connectionEnd?.name : null);
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => BluetoothConnectionHelpScreen(
+          boardName: _connectionBoardName(helpTargetId, boardName),
+          support: _buildSupportButton(helpTargetId),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSupportButton(String? targetId, {bool endJourney = false}) {
     return TextButton(
       key: const ValueKey('owner-pairing-support'),
@@ -2269,6 +2297,15 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
   Widget build(BuildContext context) {
     final connectedId = _bleService.connectedId;
     final presentation = _connectionPresentation;
+    final noticeReady =
+        _noticeStartupReady &&
+        !presentation.pairingBlocked &&
+        !presentation.showProgress &&
+        !_isConnecting &&
+        !_restartingConnection &&
+        !_isIdentifying &&
+        !_identifyingAll &&
+        _bleService.pairingRecovery == null;
     final content = _buildConnectionContent(
       context,
       pairingBlocked: presentation.pairingBlocked,
@@ -2296,7 +2333,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     final sessionToken = _bleService.connectionSessionToken;
     // A usable Craft canvas owns reconnect feedback. Quiet owner verification
     // keeps the gate's accessible progress and Cancel above locked controls.
-    return Stack(
+    final gate = Stack(
       fit: StackFit.expand,
       children: [
         content,
@@ -2316,13 +2353,31 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
               onCancel: () => unawaited(_disconnect(returnToBoardList: true)),
               onRetry: () =>
                   _restartWaitingConnection(targetId, sessionToken, milestone),
-              support: _buildSupportButton(
-                targetId,
-                endJourney: selectedJourney,
+              support: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    key: const ValueKey('connection-help'),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    onPressed: () => _openConnectionHelp(targetId),
+                    child: Text(litchStrings(context).findBoardHelp),
+                  ),
+                  _buildSupportButton(targetId, endJourney: selectedJourney),
+                ],
               ),
             ),
           ),
       ],
+    );
+    return AppUpgradeNoticePrompt(
+      bleService: _bleService,
+      service: widget.appUpgradeNoticeService,
+      startupReady: noticeReady,
+      canPresent: () =>
+          _mainScaffoldKey.currentState?._readyForReleaseNotice ?? true,
+      child: gate,
     );
   }
 
@@ -3053,10 +3108,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                                                 context,
                                               ).findBoardHelp,
                                               onPressed: () =>
-                                                  SupportReportScreen.open(
-                                                    context,
-                                                    bleService: _bleService,
-                                                  ),
+                                                  _openConnectionHelp(null),
                                               style: IconButton.styleFrom(
                                                 minimumSize: const Size(48, 48),
                                               ),
@@ -3096,10 +3148,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                                               'discovery-support',
                                             ),
                                             onPressed: () =>
-                                                SupportReportScreen.open(
-                                                  context,
-                                                  bleService: _bleService,
-                                                ),
+                                                _openConnectionHelp(null),
                                             child: Text(
                                               litchStrings(
                                                 context,
@@ -4187,6 +4236,9 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
   Widget _buildFirmwarePage() {
     final FirmwarePageBuilder builder =
         widget.firmwarePageBuilder ?? _buildDefaultFirmwarePage;
+    final epoch = _firmwareRefreshEpoch;
+    final service = widget.bleService;
+    final boardId = widget.boardId;
     return KeyedSubtree(
       key: ValueKey<int>(_firmwareRefreshEpoch),
       child: builder(
@@ -4194,7 +4246,14 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
         widget.boardId,
         _showFirmwareTab,
         _onUpdateActivityChanged,
-        _onFirmwareAvailabilityChanged,
+        (availability) {
+          if (mounted &&
+              epoch == _firmwareRefreshEpoch &&
+              identical(service, widget.bleService) &&
+              boardId == widget.boardId) {
+            _onFirmwareAvailabilityChanged(availability);
+          }
+        },
       ),
     );
   }
@@ -4216,6 +4275,9 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
       healthFocusEpoch: _settingsHealthFocusEpoch,
       overviewRequestEpoch: _settingsOverviewRequestEpoch,
       onOpenFirmware: _showFirmwareTab,
+      onInteractionBusyChanged: (_) {
+        if (mounted) setState(() {});
+      },
       landscapeOverlayClearance: _settingsOverlayClearance,
     );
   }
@@ -4246,6 +4308,19 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
       onAvailabilityChanged: onAvailabilityChanged,
     );
   }
+
+  bool get _readyForReleaseNotice =>
+      !widget.connectionPending &&
+      !widget.ownerVerificationPending &&
+      !widget.modeResolving &&
+      !_coldDestinationPending &&
+      _craftModeSynchronizations == 0 &&
+      _craftDeparture == null &&
+      _craftReentries == 0 &&
+      !_updateInProgress &&
+      !_boardMenuOpen &&
+      (_currentIndex != 2 ||
+          _settingsScreenKey.currentState?.interactionBusy == false);
 
   void _onFirmwareAvailabilityChanged(FirmwareUpdateAvailability availability) {
     if (!mounted || availability == _firmwareAvailability) {
@@ -4446,6 +4521,7 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
     } finally {
       _boardMenuOpen = false;
       _boardMenuRoute = null;
+      if (mounted) setState(() {});
     }
   }
 
@@ -4496,6 +4572,7 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
         _otaBenchmarkProgress = null;
         _firmwareOriginPage = null;
         _updateInProgress = false;
+        _firmwareAvailability = const FirmwareUpdateAvailability();
         _recoveryOnly = widget.bleService
             .deviceCapabilities(widget.boardId)
             .recoveryOnly;
@@ -4524,6 +4601,7 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
 
   @override
   Widget build(BuildContext context) {
+    AppUpgradeNoticePriority.requestCheck(context);
     final EdgeInsets rootSafeInsets = MediaQuery.viewPaddingOf(context);
     final List<NavigationDestination> destinations = <NavigationDestination>[
       NavigationDestination(
@@ -4801,7 +4879,7 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
       ),
     );
 
-    return PopScope<Object?>(
+    final shell = PopScope<Object?>(
       canPop: !showingFirmware && !_recoveryOnly,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (didPop || _updateInProgress) return;
@@ -5037,6 +5115,22 @@ class _LitchMainScaffoldState extends State<LitchMainScaffold>
                 ),
         ),
       ),
+    );
+    return FirmwareUpdatePrompt(
+      availability: _firmwareAvailability,
+      eligible:
+          connected &&
+          widget.bleService.productReady &&
+          _readyForReleaseNotice &&
+          _firmwareAvailability.boardId == widget.bleService.connectedId &&
+          _firmwareAvailability.connectionToken ==
+              widget.bleService.connectionSessionToken,
+      showingUpdate: showingFirmware,
+      canPresent: () =>
+          _currentIndex != 2 ||
+          _settingsScreenKey.currentState?.interactionBusy == false,
+      onReviewUpdate: _showFirmwareTab,
+      child: shell,
     );
   }
 }
@@ -5937,11 +6031,7 @@ class _ConnectedBoardSheetState extends State<_ConnectedBoardSheet> {
     if (value == null) return;
     _pendingBrightnessPreview = null;
     final Future<void> write = widget.bleService
-        .writeSetting(
-          deviceId: widget.boardId,
-          key: 'BRIGHTNESS',
-          value: value,
-        )
+        .writeSetting(deviceId: widget.boardId, key: 'BRIGHTNESS', value: value)
         .then<void>((_) {});
     _brightnessPreviewWrite = write;
     unawaited(

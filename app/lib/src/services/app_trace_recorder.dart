@@ -106,6 +106,7 @@ final class _ConsoleSnapshotWriter implements AppConsoleSnapshotSink {
     previousLines = retained;
     pending = {
       'schema': 1,
+      'app_generation': 2,
       'process_id': pid,
       'process_started_at': processStartedAt,
       'connection_generation': connectionGeneration,

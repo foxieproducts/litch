@@ -9,6 +9,85 @@ import '../widgets/litch_workspace_geometry.dart';
 import '../localization/litch_strings.dart';
 import '../services/bluetooth_pairing_recovery.dart';
 
+class _BluetoothConnectionRecoverySteps extends StatelessWidget {
+  const _BluetoothConnectionRecoverySteps();
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = litchStrings(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          defaultTargetPlatform == TargetPlatform.iOS
+              ? strings.pairingRecoveryIosSteps
+              : strings.pairingRecoveryAndroidSteps,
+          key: const ValueKey('phone-pairing-recovery-steps'),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          strings.ownerVerificationRecoverySteps,
+          key: const ValueKey('owner-verification-recovery-steps'),
+        ),
+      ],
+    );
+  }
+}
+
+/// The same optional manual procedure remains reachable before a connection.
+class BluetoothConnectionHelpScreen extends StatelessWidget {
+  const BluetoothConnectionHelpScreen({
+    super.key,
+    required this.boardName,
+    required this.support,
+  });
+
+  final String boardName;
+  final Widget support;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = litchStrings(context);
+    return Scaffold(
+      key: const ValueKey('bluetooth-connection-help'),
+      appBar: LitchCompactAppBar(
+        child: AppBar(
+          toolbarHeight: LitchCompactControls.toolbarHeightOf(context),
+          title: Text(strings.findBoardHelp, softWrap: true, maxLines: 2),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: LitchWorkspaceGeometry.readableContentWidth,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    boardName,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(strings.connectionHelpBasics),
+                  const SizedBox(height: 24),
+                  const _BluetoothConnectionRecoverySteps(),
+                  const SizedBox(height: 24),
+                  support,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class BluetoothPairingRecoveryScreen extends StatefulWidget {
   const BluetoothPairingRecoveryScreen({
     super.key,
@@ -162,14 +241,8 @@ class _BluetoothPairingRecoveryScreenState
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 20),
-                    if (!verificationFailed)
-                      Text(
-                        ios
-                            ? strings.pairingRecoveryIosSteps
-                            : automatic
-                            ? strings.pairingRecoveryAutomaticHelp
-                            : strings.pairingRecoveryAndroidSteps,
-                      ),
+                    if (!verificationFailed && automatic)
+                      Text(strings.pairingRecoveryAutomaticHelp),
                     const SizedBox(height: 24),
                     if (state.busy) ...[
                       const Center(child: CircularProgressIndicator()),
@@ -204,15 +277,8 @@ class _BluetoothPairingRecoveryScreenState
                         spacing: 8,
                         children: actions,
                       ),
-                    if (verificationFailed) ...[
-                      const SizedBox(height: 24),
-                      Text(
-                        strings.ownerVerificationRecoverySteps,
-                        key: const ValueKey(
-                          'owner-verification-recovery-steps',
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 24),
+                    const _BluetoothConnectionRecoverySteps(),
                   ],
                 ),
               ),

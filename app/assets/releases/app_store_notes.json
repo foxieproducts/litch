@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "releases": [
+    {
+      "version": "1.0.3",
+      "build_number": "52",
+      "locale": "en-US",
+      "notes": "See release notes after an app update and when board firmware is available. Choose which notices to show. Get clearer Bluetooth pairing help and step-by-step Duck Chess hints. Board updates now clearly distinguish the available version from the version installed.",
+      "source": {
+        "kind": "prepared_app_release_text",
+        "intended_stores": ["app_store", "google_play"]
+      }
+    },
+    {
+      "version": "1.0.2",
+      "build_number": "51",
+      "locale": "en-US",
+      "notes": "Follow your game on the Play screen and replay saved games move by move. Adjust your Litch board’s lighting and computer difficulty. In Litchcraft, draw pictures and animations, then send them to your board.",
+      "source": {
+        "kind": "shared_app_release_text",
+        "recorded_stores": ["app_store", "google_play"],
+        "url": "https://apps.apple.com/ae/app/foxie-litch/id6833486655"
+      }
+    }
+  ]
+}

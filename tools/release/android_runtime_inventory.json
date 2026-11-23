@@ -10,7 +10,7 @@
         "app/android/gradle/wrapper/gradle-wrapper.properties": "297c9e63b6fa6e7e8b221900fa1787c1a0e38869d8957da66389fd0f6b00f78e",
         "app/android/settings.gradle.kts": "a9b5756048f668d4ebf355116678fd334cd5f2169b7d4518ad19b8df14d3af36",
         "app/pubspec.lock": "c4d575d16a0d6bf116cac89d7ed73be8d1feeeb3e4e0686ff34ad7fdcb67d177",
-        "app/pubspec.yaml": "88d89beb6c8b2a5d24a6e4177035d04ef57716753aa98b7168f73acdb165647b",
+        "app/pubspec.yaml": "f8c91a7bd18a7dab50048b615ec3f4f1195d737602095459239076d19871a181",
         "app/third_party/flutter_reactive_ble/pubspec.yaml": "08294ac74687b19b1675f6805255db7bcad469267e790b6c3bef2794e8591145",
         "app/third_party/reactive_ble_mobile/android/build.gradle": "2854de0b1caaeb596530c39dd1ef3d7f51609da848c9b0e31e182c6a67615d94",
         "app/third_party/reactive_ble_mobile/pubspec.yaml": "12d374185ac3f53d751b5f52d71471305788c21d3590338c4f66a18ee1fbbcf5"

@@ -868,6 +868,23 @@ void main() {
           find.byKey(const ValueKey('owner-verification-recovery-steps')),
           findsOneWidget,
         );
+        expect(
+          find.textContaining(
+            platform == TargetPlatform.iOS
+                ? 'Forget This Device'
+                : 'Unpair or Forget',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('all phones, tablets and other devices'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('three success flashes'), findsOneWidget);
+        expect(
+          find.textContaining('try connecting again in the app'),
+          findsOneWidget,
+        );
         final primary = find.byKey(const ValueKey('pairing-recovery-primary'));
         final cancel = find.byKey(const ValueKey('pairing-recovery-cancel'));
         expect(
@@ -1156,17 +1173,17 @@ void main() {
             findsNothing,
           );
           expect(
-            find.textContaining('Open the Settings app and choose Bluetooth.'),
+            find.textContaining('Settings → Bluetooth on your iPhone or iPad.'),
             findsOneWidget,
           );
           expect(
             find.textContaining(
-              'Tap the info button (ⓘ) beside this Litch, then Forget This Device.',
+              'Tap the info button (ⓘ) beside the correct Foxie Litch board and choose Forget This Device.',
             ),
             findsOneWidget,
           );
           expect(
-            find.textContaining('Return to Litch and tap Try again.'),
+            find.textContaining('Return to Foxie Litch, choose your board'),
             findsOneWidget,
           );
           expect(

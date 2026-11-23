@@ -9,7 +9,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # Official packages use these values without --build-name/--build-number overrides.
 # Android versionName/versionCode and iOS CFBundleShortVersionString/CFBundleVersion
 # use the native values; N is independent of the monotonic native package code.
-version: 1.0.2+51
+version: 1.0.3+52
 
 environment:
   sdk: ^3.11.0

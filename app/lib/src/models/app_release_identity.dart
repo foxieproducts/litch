@@ -3,9 +3,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 // Source metadata prepared by tools/release/release_identity.py before QA.
 // Preparation requires reconciled publication evidence for the selected series.
 const AppReleaseIdentity litchAppReleaseIdentity = AppReleaseIdentity(
-  version: '1.0.2',
-  nativeVersion: '1.0.2',
-  buildNumber: '51',
+  version: '1.0.3',
+  nativeVersion: '1.0.3',
+  buildNumber: '52',
 );
 
 /// Human release identity is separate from native package version/build fields.

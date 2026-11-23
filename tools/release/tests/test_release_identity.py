@@ -397,6 +397,7 @@ class ReleaseIdentityTests(unittest.TestCase):
             ("1.0.0", 45, "0.9.9-7"),
             ("1.0.1", 49, "1.0.0-1"),
             ("1.0.2", 50, "1.0.1-0"),
+            ("1.0.3", 52, "1.0.2"),
         ):
             with self.subTest(series=series):
                 history = [published(prior)]
@@ -415,17 +416,20 @@ class ReleaseIdentityTests(unittest.TestCase):
                                  releases=history, current=manifest(prior))
                     writes.assert_not_called()
                 self.assertEqual(identity.read_sources(self.root), before)
-        self.assertEqual(identity.next_beta_version(history), "1.0.2")
-        for spelling in ("1.0.2", "1.0.2-0"):
-            for channel in ("beta", "stable"):
-                records = history + [published(spelling, channel=channel)]
-                self.assertEqual(identity.next_beta_version(records), "1.0.2-1")
-                identity.check_next_beta("1.0.2-1", records)
-                for reused in ("1.0.2", "1.0.2-0"):
-                    with self.assertRaisesRegex(ValueError, "already published"):
-                        identity.check_next_beta(reused, records)
-        with self.assertRaisesRegex(ValueError, "next unpublished beta"):
-            identity.check_next_beta("1.0.2-0", history)
+        self.assertEqual(identity.next_beta_version(history), "1.0.3")
+        for series, prior in (("1.0.2", "1.0.1-0"), ("1.0.3", "1.0.2")):
+            history = [published(prior)]
+            spellings = (series, f"{series}-0")
+            for spelling in spellings:
+                for channel in ("beta", "stable"):
+                    records = history + [published(spelling, channel=channel)]
+                    self.assertEqual(identity.next_beta_version(records, series=series), f"{series}-1")
+                    identity.check_next_beta(f"{series}-1", records)
+                    for reused in spellings:
+                        with self.assertRaisesRegex(ValueError, "already published"):
+                            identity.check_next_beta(reused, records)
+            with self.assertRaisesRegex(ValueError, "next unpublished beta"):
+                identity.check_next_beta(f"{series}-0", history)
 
     def test_097_published_zero_advances_numerically_and_cannot_be_rebuilt(self):
         history = [published("0.9.5-11"), published("0.9.7-99", draft=True),

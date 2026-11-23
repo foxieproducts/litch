@@ -12,9 +12,9 @@ from pathlib import Path
 import re
 import sys
 
-SERIES = "1.0.2"
-BARE_INITIAL_VERSION = "1.0.2"
-ZERO_START_SERIES = ("0.9.7", "0.9.8", "0.9.9", "1.0.0", "1.0.1", SERIES)
+SERIES = "1.0.3"
+BARE_INITIAL_SERIES = ("1.0.2", SERIES)
+ZERO_START_SERIES = ("0.9.7", "0.9.8", "0.9.9", "1.0.0", "1.0.1", *BARE_INITIAL_SERIES)
 SUPPORTED_SERIES = ("0.9.0", "0.9.5", *ZERO_START_SERIES)
 RESERVED_BETA_VERSIONS = frozenset((
     "0.9.0-2", "0.9.0-3", "0.9.0-4", "0.9.0-5", "0.9.0-6", "0.9.0-7",
@@ -24,7 +24,8 @@ RESERVED_BETA_VERSIONS = frozenset((
 PUBLIC_BASE_URL = "https://foxielitch.com/fw"
 MAX_PACKAGE_CODE = 9999
 VERSION = re.compile(
-    rf"(?:({'|'.join(map(re.escape, SUPPORTED_SERIES))})-(0|[1-9][0-9]*)|{re.escape(BARE_INITIAL_VERSION)})\Z"
+    rf"(?:({'|'.join(map(re.escape, SUPPORTED_SERIES))})-(0|[1-9][0-9]*)|"
+    rf"{'|'.join(map(re.escape, BARE_INITIAL_SERIES))})\Z"
 )
 HEADER = "include/firmware/firmware_version.hpp"
 PUBSPEC = "app/pubspec.yaml"
@@ -40,12 +41,14 @@ APP_VERSION = re.compile(
 
 
 def canonical_version(version: str) -> str:
-    """The first 1.0.2 release and its retained -0 spelling consume one identity."""
-    return BARE_INITIAL_VERSION if version == BARE_INITIAL_VERSION + "-0" else version
+    """For series released without a suffix, the bare version and -0 share one slot."""
+    if isinstance(version, str) and version.endswith("-0") and version[:-2] in BARE_INITIAL_SERIES:
+        return version[:-2]
+    return version
 
 
 def sequence(version: str) -> int:
-    if version == BARE_INITIAL_VERSION:
+    if version in BARE_INITIAL_SERIES:
         return 0
     match = VERSION.fullmatch(version)
     if (not match or len(version) > 64
@@ -74,7 +77,7 @@ def release_records(value: list) -> list:
 
 def next_beta_version(releases: list, *, series: str = SERIES) -> str:
     # Drafts, candidate tags and local builds do not consume N. A stable-only
-    # first 1.0.2 release occupies zero; later stable promotions do not advance N.
+    # bare release occupies zero; later stable promotions do not advance N.
     if series not in SUPPORTED_SERIES:
         raise ValueError("unsupported release series")
     numbers = []
@@ -83,8 +86,8 @@ def next_beta_version(releases: list, *, series: str = SERIES) -> str:
             raise ValueError("incomplete GitHub release record")
         if release["draft"]:
             continue
-        initial_stable = release["tag_name"] in (
-            f"fw-stable-{BARE_INITIAL_VERSION}", f"fw-stable-{BARE_INITIAL_VERSION}-0")
+        initial_stable = series in BARE_INITIAL_SERIES and release["tag_name"] in (
+            f"fw-stable-{series}", f"fw-stable-{series}-0")
         if not release["tag_name"].startswith("fw-beta-") and not initial_stable:
             continue
         if not release.get("published_at"):

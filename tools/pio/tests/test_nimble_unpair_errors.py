@@ -68,6 +68,8 @@ struct BleService {
         bool phyKnown=true,dataLengthKnown=false;
     } link;
     LinkObservation GetLinkObservation() const { return link; }
+    struct SessionDiagnostics { unsigned consoleOutputOverflows = 0; };
+    SessionDiagnostics GetSessionDiagnostics() const { return {}; }
     void OnNativeEncryptionChange(uint16_t h, int s) { ++encryption; encryptionHandle=h; encryptionStatus=s; }
     void OnNativeDataLengthChange(uint16_t h, const BleDataLengthObservation& v) { ++observations; handle=h; value=v; link.dataLengthKnown=true; }
 };
@@ -120,7 +122,8 @@ def RunDataLengthCorpus(source: bytes, root: Path, label: str):
         NamedBody(source.decode(), "void\nble_gap_rx_data_len_change("))
     console = (SCRIPT.parents[2] / "src/firmware_console.cpp").read_text()
     start = console.index("        const auto link = sys.ble.GetLinkObservation();")
-    end = console.index("        const auto session = sys.ble.GetSessionDiagnostics();", start)
+    link_row = console.index('"ble_link:', start)
+    end = console.index(");", link_row) + 2
     body = body.replace("/* ACTUAL_SUPPORT_LINK_ROW */", console[start:end])
     path = root / (label + ".cpp"); path.write_text(body)
     binary = root / label

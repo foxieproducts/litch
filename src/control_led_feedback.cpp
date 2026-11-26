@@ -25,7 +25,7 @@ void Set(status_led_frame_adapter::FixedPhysicalStatusOverlay& out,
     out.controlMask |= static_cast<uint16_t>(1U << index);
 }
 Rgb Blend(const Rgb a, const Rgb b, const uint32_t phase256) {
-    return AlphaBlendRgb(a, b, static_cast<uint8_t>(std::min(phase256, 255U)));
+    return AlphaBlendRgb(a, b, static_cast<uint8_t>(std::min<uint32_t>(phase256, 255U)));
 }
 uint16_t Fade(const uint32_t elapsed, const uint32_t duration) {
     return duration == 0U || elapsed >= duration ? 0U :

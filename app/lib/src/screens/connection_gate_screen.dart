@@ -810,8 +810,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
       }
 
       if (endedBeforeReady) {
-        // An early native drop can mean the board is busy with another phone.
-        // Keep that guidance and the selected journey through the next attempt.
+        // Keep the selected board available for Retry after an early disconnect.
         final keepWaiting =
             _awaitingDestination && _reconnectTargetId == endedTarget;
         _autoConnectTimer?.cancel();
@@ -2078,14 +2077,18 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     }
   }
 
-  String _connectionBoardName(String? id, String? advertisedName) {
+  String _connectionBoardName(
+    String? id,
+    String? advertisedName, {
+    String fallback = 'Foxie Litch',
+  }) {
     if (_bleService.isConnected && _bleService.connectedId == id) {
       final value = _bleService.latestSettingValue('BLE_DEVICE_NAME');
       if (value is String && value.trim().isNotEmpty) return value.trim();
     }
     final name = advertisedName?.trim();
     if (name != null && name.isNotEmpty) return name;
-    return _knownBoardNames[id] ?? 'Foxie Litch';
+    return _knownBoardNames[id] ?? fallback;
   }
 
   void _openConnectionHelp(String? targetId) {
@@ -2377,7 +2380,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
         _pendingDestinationBoard ??
         _bleService.discoveredBoard(targetId ?? '') ??
         _boards.where((board) => board.id == targetId).firstOrNull;
-    final name = _connectionBoardName(targetId, board?.name);
+    final name = _connectionBoardName(targetId, board?.name, fallback: '');
     // A gate mounted over an existing link can show quiet owner proof without
     // having initiated a connection choice. Its report returns to that proof.
     final selectedJourney =
@@ -2401,7 +2404,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                   ? litchStrings(context).boardConnecting
                   : litchStrings(context).connectingToBoard(name),
               hint: _connectionEnd?.nativeDrop == true
-                  ? litchStrings(context).connectionRetrySingleDeviceHelp
+                  ? litchStrings(context).connectionEndedBeforeReady
                   : null,
               retryEnabled: _canRetryWaitingConnection(targetId),
               milestone: milestone,

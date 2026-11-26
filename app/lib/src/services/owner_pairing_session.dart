@@ -25,7 +25,9 @@ final class OwnerPairingSession {
   OwnerPairingSession(
     this.session, {
     Duration readinessTimeout = defaultReadinessTimeout,
-  }) : _readinessTimeout = readinessTimeout {
+    Duration nativeSecurityTimeout = defaultNativeSecurityTimeout,
+  }) : _readinessTimeout = readinessTimeout,
+       _nativeSecurityTimeout = nativeSecurityTimeout {
     _subscription = session.states.listen(
       _accept,
       onDone: () {
@@ -36,7 +38,11 @@ final class OwnerPairingSession {
 
   final ConnectionSession session;
   static const defaultReadinessTimeout = Duration(seconds: 20);
+  // The pinned board SMP procedure allows 30 seconds. Leave a bounded margin
+  // for the durable owner receipt after native security completes.
+  static const defaultNativeSecurityTimeout = Duration(seconds: 40);
   final Duration _readinessTimeout;
+  final Duration _nativeSecurityTimeout;
   late final StreamSubscription<ConnectionSessionPacket> _subscription;
   final _updates = StreamController<OwnerPairingSessionStatus>.broadcast(
     sync: true,
@@ -47,12 +53,25 @@ final class OwnerPairingSession {
   bool _identityConflict = false;
   int _nextAttempt = 1;
   int _claimStatusFloor = 0;
+  int? _claimAttempt;
+  bool _claimPhoneInitiated = false;
   String? _provenIdentity;
   bool _disposed = false;
   int? _phoneBondAttempt;
   bool _phoneBondTaken = false;
 
   bool get phoneBondRequested => _phoneBondAttempt != null;
+  int? get activePhoneBondAttempt {
+    final current = _status;
+    if (!_phoneBondTaken ||
+        current == null ||
+        !current.claimPending ||
+        current.attempt != _phoneBondAttempt) {
+      return null;
+    }
+    return _phoneBondAttempt;
+  }
+
   void retireNativeBondAttempt() => _phoneBondAttempt = null;
   int? takeNativeBondAttempt() {
     final current = _status;
@@ -206,6 +225,8 @@ final class OwnerPairingSession {
     _claimStatusFloor = _statusRevision;
     final attempt = _nextAttempt++;
     if (_nextAttempt > 0xffff) _nextAttempt = 1;
+    _claimAttempt = attempt;
+    _claimPhoneInitiated = phoneInitiated;
     _phoneBondAttempt = phoneInitiated ? attempt : null;
     _phoneBondTaken = false;
     return session.sendOrdered(
@@ -235,40 +256,62 @@ final class OwnerPairingSession {
     );
   }
 
+  bool get _nativeSecurityAdmitted {
+    final current = _status;
+    return current != null &&
+        _claimAttempt != null &&
+        current.attempt == _claimAttempt &&
+        _statusRevision > _claimStatusFloor &&
+        (current.state == OwnerPairingSessionState.persistingOwner ||
+            (current.state == OwnerPairingSessionState.securing &&
+                (!_claimPhoneInitiated || current.nativeBondAllowed)));
+  }
+
   Future<void> waitUntilReady() async {
     if (_status?.foreignOwnerRefused == true) {
       throw StateError('Board belongs to another device.');
     }
     if (ready) return;
+    var securityWindow = _nativeSecurityAdmitted;
+    var timeout = _readinessTimeout;
     try {
-      await session.readStateSnapshot<bool>(
-        code: 40,
-        timeout: _readinessTimeout,
-        mode: ConnectionSessionStateReadMode.observeFirst,
-        accept: (packet) {
-          _accept(packet);
-          if (ready) return true;
-          final current = _status;
-          if (current != null &&
-              _statusRevision > _claimStatusFloor &&
-              !current.claimPending &&
-              current.state != OwnerPairingSessionState.clearPrompt &&
-              current.state != OwnerPairingSessionState.ownerReady &&
-              !(current.state == OwnerPairingSessionState.ownedOther &&
-                  current.reason == OwnerPairingSessionReason.none)) {
-            throw StateError('Board pairing ended: ${current.reason.name}.');
-          }
-          if (_identityConflict) {
-            throw StateError('Board identity changed during pairing.');
-          }
-          return null;
-        },
-      );
+      while (true) {
+        if (ready) return;
+        timeout = securityWindow ? _nativeSecurityTimeout : _readinessTimeout;
+        final finished = await session.readStateSnapshot<bool>(
+          code: 40,
+          timeout: timeout,
+          mode: ConnectionSessionStateReadMode.observeFirst,
+          accept: (packet) {
+            _accept(packet);
+            if (ready) return true;
+            final current = _status;
+            if (current != null &&
+                _statusRevision > _claimStatusFloor &&
+                !current.claimPending &&
+                current.state != OwnerPairingSessionState.clearPrompt &&
+                current.state != OwnerPairingSessionState.ownerReady &&
+                !(current.state == OwnerPairingSessionState.ownedOther &&
+                    current.reason == OwnerPairingSessionReason.none)) {
+              throw StateError('Board pairing ended: ${current.reason.name}.');
+            }
+            if (_identityConflict) {
+              throw StateError('Board identity changed during pairing.');
+            }
+            // Start the native pairing deadline once for this claim, after
+            // physical consent. Replayed status keeps the original deadline.
+            if (!securityWindow && _nativeSecurityAdmitted) return false;
+            return null;
+          },
+        );
+        if (finished) return;
+        securityWindow = true;
+      }
     } on TimeoutException {
       if (_status != null) {
         throw TimeoutException(
           'Board owner verification did not finish',
-          _readinessTimeout,
+          timeout,
         );
       }
       rethrow;

@@ -2238,6 +2238,11 @@ void main() {
         SharedPreferences.setMockInitialValues(<String, Object>{
           'board_friendly_name:board-1': 'Studio Board',
         });
+        const advertisedBoard = LitchBoard(
+          id: 'board-1',
+          name: 'Comet 1-3.3',
+          rssi: -40,
+        );
         final semantics = tester.ensureSemantics();
         final board = OwnerPairingBoard()
           ..state = 6
@@ -2285,9 +2290,7 @@ void main() {
           }
 
           if (nextGate == 'physical pairing') {
-            service.advertise(
-              const LitchBoard(id: 'board-1', name: 'Comet 1-3.3', rssi: -40),
-            );
+            service.advertise(advertisedBoard);
             await tester.pump();
             await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
             await tester.pump();
@@ -2359,7 +2362,7 @@ void main() {
             expect(
               find.descendant(
                 of: overlay,
-                matching: find.textContaining('Studio Board'),
+                matching: find.textContaining(advertisedBoard.name),
               ),
               findsOneWidget,
             );
@@ -2530,7 +2533,7 @@ void main() {
             expect(
               find.descendant(
                 of: overlay,
-                matching: find.textContaining('Studio Board'),
+                matching: find.textContaining(advertisedBoard.name),
               ),
               findsOneWidget,
             );
@@ -14186,12 +14189,7 @@ void main() {
           reason:
               'Only the newest choice can own or clear its connecting state',
         );
-        expect(
-          find.text(
-            'Connecting to ${sameBoard ? 'Studio Board' : 'Travel Board'}...',
-          ),
-          findsOneWidget,
-        );
+        expect(find.text('Connecting to ${target.name}...'), findsOneWidget);
         service.completeNextConnect(false);
         await tester.pump();
         expect(

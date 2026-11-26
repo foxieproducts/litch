@@ -822,6 +822,50 @@ void main() {
     },
   );
 
+  testWidgets('fresh bond failure offers retry without deleting pairings', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    var retries = 0;
+    var repairs = 0;
+    await tester.pumpWidget(
+      _screen(
+        state: const BluetoothPairingRecoveryState(
+          deviceId: _boardId,
+          stage: BluetoothPairingRecoveryStage.ready,
+          reason: BluetoothPairingRecoveryReason.freshBondFailed,
+        ),
+        onRetry: () async {
+          ++retries;
+          return true;
+        },
+        onRepair: () async {
+          ++repairs;
+          return true;
+        },
+      ),
+    );
+    expect(find.textContaining('Pairing did not finish.'), findsOneWidget);
+    expect(find.textContaining('accept the pairing request'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('phone-pairing-recovery-steps')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('owner-verification-recovery-steps')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('pairing-recovery-secondary')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('pairing-recovery-primary')));
+    await tester.pump();
+    expect(retries, 1);
+    expect(repairs, 0);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
     testWidgets(
       'owner verification failure offers neutral recovery at 200 percent $platform',

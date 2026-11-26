@@ -355,7 +355,7 @@ void main() {
           : manualCancel
           ? 'PreReadyManualDisconnectJourney explicit Cancel does not report an unexpected connection end'
           : beforeReady
-          ? 'PreReadyConnectionEndedJourney SDK forty millisecond drop keeps conditional one-phone help through retry and current owner proof'
+          ? 'PreReadyConnectionEndedJourney early link loss offers retry and help until the board confirms ownership'
           : 'ReadyConnectionLostJourney SDK ready link loss retains ordinary reconnect guidance',
       (tester) async {
         SharedPreferences.setMockInitialValues({
@@ -466,10 +466,14 @@ void main() {
             find.descendant(
               of: panel,
               matching: find.textContaining(
-                'If another device is connected, open Litch on that device and tap Disconnect.',
+                'Keep your board powered and nearby, then try again.',
               ),
             ),
             findsOneWidget,
+          );
+          expect(
+            find.textContaining('another device is connected'),
+            findsNothing,
           );
           expect(
             find.textContaining('belongs to another device'),

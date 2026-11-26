@@ -58,12 +58,15 @@ Future<void> turns([int count = 30]) async {
 
 final class _BondGateway implements BluetoothPairingRecoveryGateway {
   final starts = <(String, int, int)>[];
-  BluetoothPairingBondStartResult result =
+  final failures = StreamController<BluetoothPairingBondFailed>.broadcast(
+    sync: true,
+  );
+  FutureOr<BluetoothPairingBondStartResult> result =
       BluetoothPairingBondStartResult.started;
   @override
   Stream<BluetoothPairingKeyMissing> get keyMissing => const Stream.empty();
   @override
-  Stream<BluetoothPairingBondFailed> get bondFailures => const Stream.empty();
+  Stream<BluetoothPairingBondFailed> get bondFailures => failures.stream;
   @override
   Future<void> watchDevice(String? deviceId, int generation) async {}
   @override
@@ -86,7 +89,7 @@ final class _BondGateway implements BluetoothPairingRecoveryGateway {
   @override
   Future<bool> openBluetoothSettings() async => false;
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async => failures.close();
 }
 
 final class _ConsentDuringCancelBoard extends OwnerPairingBoard {
@@ -348,6 +351,125 @@ Uint8List _wireFixture(String file, String name) {
 }
 
 void main() {
+  for (final phoneInitiated in [false, true]) {
+    test(
+      'native pairing proof window stays bounded despite replay phone=$phoneInitiated',
+      () async {
+        final board = OwnerPairingBoard();
+        final session = ConnectionSession(
+          packets: board.sessionPackets.stream,
+          send: board.sharedWrite,
+          clientNonce: 1,
+          recoveryProbeDelay: const Duration(milliseconds: 5),
+          recoveryFailureTimeout: const Duration(milliseconds: 500),
+        );
+        final pairing = OwnerPairingSession(
+          session,
+          readinessTimeout: const Duration(milliseconds: 150),
+          nativeSecurityTimeout: const Duration(milliseconds: 100),
+        );
+        addTearDown(() async {
+          await pairing.dispose();
+          await session.dispose();
+          await board.sessionPackets.close();
+          await board.packets.close();
+        });
+        await session.activate();
+        await pairing.readStatus();
+        await pairing.begin(phoneInitiated: phoneInitiated);
+        final ready = pairing.waitUntilReady();
+        final expectation = expectLater(
+          ready,
+          throwsA(
+            isA<TimeoutException>().having(
+              (e) => e.duration,
+              'native phase timeout',
+              const Duration(milliseconds: 100),
+            ),
+          ),
+        );
+        board.setState(3, nextFlags: phoneInitiated ? 20 : 4);
+        final replay = Timer.periodic(
+          const Duration(milliseconds: 15),
+          (_) => board.publish(),
+        );
+        try {
+          await expectation.timeout(const Duration(seconds: 1));
+        } finally {
+          replay.cancel();
+        }
+        expect(pairing.ready, isFalse);
+        expect(session.isActivated, isTrue);
+        expect(board.pairingCommands, hasLength(1));
+      },
+    );
+  }
+
+  test('iOS consent time does not consume native proof window', () async {
+    final board = OwnerPairingBoard();
+    final session = ConnectionSession(
+      packets: board.sessionPackets.stream,
+      send: board.sharedWrite,
+      clientNonce: 1,
+      recoveryProbeDelay: const Duration(milliseconds: 5),
+      recoveryFailureTimeout: const Duration(milliseconds: 500),
+    );
+    final pairing = OwnerPairingSession(
+      session,
+      readinessTimeout: const Duration(milliseconds: 150),
+      nativeSecurityTimeout: const Duration(milliseconds: 200),
+    );
+    addTearDown(() async {
+      await pairing.dispose();
+      await session.dispose();
+      await board.sessionPackets.close();
+      await board.packets.close();
+    });
+    await session.activate();
+    await pairing.readStatus();
+    await pairing.begin();
+    var complete = false;
+    final ready = pairing.waitUntilReady().whenComplete(() => complete = true);
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+    board.setState(3, nextFlags: 4);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(complete, isFalse);
+    board.setState(5, nextFlags: 7);
+    await ready;
+    expect(pairing.ready, isTrue);
+  });
+
+  test('post-consent native pairing gets a full proof window', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final board = OwnerPairingBoard();
+    final gateway = _BondGateway();
+    final service = LitchBleService(
+      ble: board,
+      pairingRecoveryGateway: gateway,
+      pendingOtaStore: MemoryOtaTargetStore(),
+      ownerPairingReadinessTimeout: const Duration(seconds: 1),
+    );
+    addTearDown(() => disposeBoard(service, board));
+    await connectBoard(service, board);
+    await turns();
+    final ready = service.ensureProductReady('board-1');
+    expect(board.pairingCommands.single.body[1], 3);
+    await Future<void>.delayed(const Duration(milliseconds: 650));
+    board.setState(3, nextFlags: 20);
+    await turns();
+    expect(gateway.starts, hasLength(1));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+    expect(
+      service.isConnected,
+      isTrue,
+      reason: 'consent time must not consume native Pair proof window',
+    );
+    board.setState(5, nextFlags: 7);
+    expect(await ready, isTrue);
+    expect(service.productReady, isTrue);
+  });
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     PackageInfo.setMockInitialValues(
@@ -612,7 +734,8 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       final board = OwnerPairingBoard();
-      final gateway = _BondGateway();
+      final nativeResult = Completer<BluetoothPairingBondStartResult>();
+      final gateway = _BondGateway()..result = nativeResult.future;
       final service = LitchBleService(
         ble: board,
         pairingRecoveryGateway: gateway,
@@ -657,6 +780,11 @@ void main() {
       expect(service.productReady, isFalse);
       board.setState(5, nextFlags: 7);
       expect(await service.ensureProductReady('board-1'), isTrue);
+      nativeResult.complete(BluetoothPairingBondStartResult.failed);
+      await turns();
+      expect(service.productReady, isTrue);
+      expect(service.isConnected, isTrue);
+      expect(service.pairingRecovery, isNull);
     },
   );
 
@@ -800,6 +928,90 @@ void main() {
   );
 
   test(
+    'failed fresh Android bond reports pairing did not finish without stale-key repair',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final board = OwnerPairingBoard();
+      final gateway = _BondGateway();
+      final service = LitchBleService(
+        ble: board,
+        pairingRecoveryGateway: gateway,
+        pendingOtaStore: MemoryOtaTargetStore(),
+      );
+      addTearDown(() => disposeBoard(service, board));
+      await connectBoard(service, board);
+      await turns();
+      board.setState(3, nextFlags: 20);
+      await turns();
+      expect(gateway.starts, hasLength(1));
+      final (id, generation, attempt) = gateway.starts.single;
+      gateway.failures.add(
+        BluetoothPairingBondFailed('other-board', generation),
+      );
+      gateway.failures.add(BluetoothPairingBondFailed(id, generation - 1));
+      await turns();
+      expect(service.isConnected, isTrue);
+      expect(service.pairingRecovery, isNull);
+      board.attempt = attempt + 1;
+      board.setState(3, nextFlags: 20);
+      await turns();
+      gateway.failures.add(BluetoothPairingBondFailed(id, generation));
+      await turns();
+      expect(service.isConnected, isTrue);
+      expect(
+        service.pairingRecovery,
+        isNull,
+        reason: 'The board is reporting a different pairing attempt.',
+      );
+      board.attempt = attempt;
+      board.setState(3, nextFlags: 20);
+      await turns();
+      gateway.failures.add(BluetoothPairingBondFailed(id, generation));
+      await turns();
+      expect(service.isConnected, isFalse);
+      expect(service.productReady, isFalse);
+      expect(service.pairingRecovery?.reason.name, 'freshBondFailed');
+      expect(service.pairingRecovery?.canRepair, isFalse);
+      expect(
+        board.connections,
+        hasLength(1),
+        reason: 'A failed bond must not trigger an automatic retry.',
+      );
+      board.state = 1;
+      board.flags = 4;
+      board.attempt = 0;
+      final retry = service.retryPairingConnection();
+      for (var i = 0; i < 100 && board.connections.length < 2; ++i) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(board.connections, hasLength(2));
+      board.connections.last.add(
+        const ConnectionStateUpdate(
+          deviceId: 'board-1',
+          connectionState: DeviceConnectionState.connected,
+          failure: null,
+        ),
+      );
+      expect(await retry, isTrue);
+      await turns(100);
+      expect(
+        board.pairingCommands,
+        hasLength(2),
+        reason: 'Explicit recovery retry must admit one new board claim.',
+      );
+      gateway.failures.add(BluetoothPairingBondFailed(id, generation));
+      await turns();
+      expect(service.isConnected, isTrue);
+      expect(
+        service.pairingRecovery,
+        isNull,
+        reason: 'A retired bond event cannot affect the retried link.',
+      );
+    },
+  );
+
+  test(
     'Android native bonding failure retires the link without product readiness',
     () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -820,6 +1032,8 @@ void main() {
       expect(gateway.starts, hasLength(1));
       expect(service.isConnected, isFalse);
       expect(service.productReady, isFalse);
+      expect(service.pairingRecovery?.reason.name, 'freshBondFailed');
+      expect(service.pairingRecovery?.canRepair, isFalse);
       board.setState(3, nextFlags: 20);
       await turns();
       expect(gateway.starts, hasLength(1));
@@ -1615,7 +1829,9 @@ void main() {
         );
         expect(board.identifyCommands, isNotEmpty);
         expect(
-          board.directIdentifyCommands.where((command) => command['cmd'] == 'identify'),
+          board.directIdentifyCommands.where(
+            (command) => command['cmd'] == 'identify',
+          ),
           isEmpty,
         );
         expect(board.pairingCommands, isEmpty);
@@ -2268,31 +2484,49 @@ void main() {
     },
   );
 
-  test('received owner status times out as verification, not missing State40', () async {
-    final board = OwnerPairingBoard()..state = 6..flags = 5;
-    final session = ConnectionSession(
-      packets: board.sessionPackets.stream,
-      send: board.sharedWrite,
-      clientNonce: 1,
-      recoveryProbeDelay: const Duration(milliseconds: 5),
-      recoveryFailureTimeout: const Duration(milliseconds: 100),
-    );
-    final pairing = OwnerPairingSession(session,
-      readinessTimeout: const Duration(milliseconds: 40));
-    addTearDown(() async {
-      await pairing.dispose();
-      await session.dispose();
-      await board.sessionPackets.close();
-      await board.packets.close();
-    });
-    await session.activate();
-    expect((await pairing.readStatus()).ownerRetained, isTrue);
-    await expectLater(pairing.waitUntilReady(), throwsA(isA<TimeoutException>().having(
-      (error) => error.message, 'message', 'Board owner verification did not finish')));
-    expect(board.stateQueries.where((code) => code == 40).length, greaterThan(1));
-    expect(session.isActivated, isTrue);
-    expect(pairing.ready, isFalse);
-  });
+  test(
+    'received owner status times out as verification, not missing State40',
+    () async {
+      final board = OwnerPairingBoard()
+        ..state = 6
+        ..flags = 5;
+      final session = ConnectionSession(
+        packets: board.sessionPackets.stream,
+        send: board.sharedWrite,
+        clientNonce: 1,
+        recoveryProbeDelay: const Duration(milliseconds: 5),
+        recoveryFailureTimeout: const Duration(milliseconds: 100),
+      );
+      final pairing = OwnerPairingSession(
+        session,
+        readinessTimeout: const Duration(milliseconds: 40),
+      );
+      addTearDown(() async {
+        await pairing.dispose();
+        await session.dispose();
+        await board.sessionPackets.close();
+        await board.packets.close();
+      });
+      await session.activate();
+      expect((await pairing.readStatus()).ownerRetained, isTrue);
+      await expectLater(
+        pairing.waitUntilReady(),
+        throwsA(
+          isA<TimeoutException>().having(
+            (error) => error.message,
+            'message',
+            'Board owner verification did not finish',
+          ),
+        ),
+      );
+      expect(
+        board.stateQueries.where((code) => code == 40).length,
+        greaterThan(1),
+      );
+      expect(session.isActivated, isTrue);
+      expect(pairing.ready, isFalse);
+    },
+  );
 
   test(
     'received owner state with unpromoted identity reports the durability predicate',
@@ -2673,12 +2907,16 @@ void main() {
             ),
             findsOneWidget,
           );
-          expect(find.bySemanticsLabel('Connecting…'), findsOneWidget);
+          final connectingLabel = lookupAppLocalizations(
+            const Locale('en'),
+          ).boardConnecting;
+          expect(find.bySemanticsLabel(connectingLabel), findsOneWidget);
           expect(find.textContaining('another device'), findsNothing);
           expect(find.text('X + O'), findsNothing);
           expect(board.pairingCommands, isEmpty);
-          board.attempt = 7;
-          board.setState(3);
+          // Saved-owner verification stays OwnedOther until native proof.
+          // Securing describes a new physically confirmed claim, not reconnect.
+          board.setState(6, nextFlags: 5);
           await tester.pump();
           expect(service.productReady, isFalse);
           expect(board.productQueries, isEmpty);
@@ -2713,12 +2951,17 @@ void main() {
           expect(
             find.descendant(
               of: find.byKey(const ValueKey('connection-progress-overlay')),
-              matching: find.bySemanticsLabel('Connecting…'),
+              matching: find.bySemanticsLabel(connectingLabel),
             ),
             findsOneWidget,
             reason: 'The same cue remains until current-link mode proof.',
           );
-          expect(blockedMain, findsNothing);
+          expect(
+            blockedMain,
+            findsOneWidget,
+            reason:
+                'Controls remain inert while current-link mode proof is pending.',
+          );
           expect(board.pairingCommands, isEmpty);
           await tester.pumpWidget(const SizedBox.shrink());
           await tester.runAsync(() => disposeBoard(service, board));
@@ -3147,9 +3390,17 @@ void main() {
             find.byKey(const ValueKey('connection-progress-overlay')),
             findsOneWidget,
           );
+          final retryProgress = tester.element(
+            find.byKey(const ValueKey('connection-progress-overlay')),
+          );
           if (cancelRetry) {
             await tester.tap(find.byKey(const ValueKey('chosen-board-cancel')));
             await tester.pump();
+            expect(
+              find.byKey(const ValueKey('connection-progress-overlay')),
+              findsNothing,
+              reason: 'Cancel removes the first journey before native cleanup.',
+            );
             final second = find.byKey(
               const ValueKey('discovered-board-board-2'),
             );
@@ -3167,6 +3418,18 @@ void main() {
               const Locale('en'),
             ).connectFailedBoard('Second Litch');
             expect(find.text(secondFailure), findsOneWidget);
+            final secondProgress = tester.element(
+              find.byKey(const ValueKey('connection-progress-overlay')),
+            );
+            expect(secondProgress, isNot(same(retryProgress)));
+            expect(
+              tester
+                  .widget<Text>(
+                    find.byKey(const ValueKey('chosen-board-phase')),
+                  )
+                  .data,
+              contains('Second Litch'),
+            );
             board.nativeDisconnected.complete();
             for (var pass = 0; pass < 20; ++pass) {
               await tester.pump();
@@ -3183,8 +3446,25 @@ void main() {
             expect(service.productReady, isFalse);
             expect(board.pairingCommands, isEmpty);
             expect(
+              tester.element(
+                find.byKey(const ValueKey('connection-progress-overlay')),
+              ),
+              same(secondProgress),
+              reason:
+                  'Old cleanup cannot remove or replace the new chosen-board journey.',
+            );
+            await tester.tap(find.byKey(const ValueKey('chosen-board-cancel')));
+            await tester.pump();
+            await tester.runAsync(() => turns());
+            await tester.pump(const Duration(seconds: 4));
+            expect(
               find.byKey(const ValueKey('connection-progress-overlay')),
               findsNothing,
+            );
+            expect(
+              board.connections,
+              hasLength(1),
+              reason: 'Cancel stops the new journey retry timer.',
             );
             return;
           }
@@ -3224,14 +3504,37 @@ void main() {
             expect(service.isConnected, isFalse);
             expect(service.productReady, isFalse);
             expect(
-              find.byKey(const ValueKey('connection-progress-overlay')),
-              findsNothing,
-              reason: 'A retired fresh link must not leave Connecting stuck.',
+              tester.element(
+                find.byKey(const ValueKey('connection-progress-overlay')),
+              ),
+              same(retryProgress),
+              reason:
+                  'A transient drop retains the selected journey and its Cancel action.',
             );
             expect(
-              find.textContaining('Connection ended before setup finished.'),
+              find.descendant(
+                of: find.byKey(const ValueKey('connection-progress-overlay')),
+                matching: find.textContaining(
+                  'Connection ended before setup finished.',
+                ),
+              ),
               findsOneWidget,
             );
+            expect(board.pairingCommands, isEmpty);
+            await tester.tap(find.byKey(const ValueKey('chosen-board-cancel')));
+            await tester.pump();
+            await tester.runAsync(() => turns());
+            await tester.pump(const Duration(seconds: 4));
+            expect(
+              find.byKey(const ValueKey('connection-progress-overlay')),
+              findsNothing,
+            );
+            expect(
+              board.connections,
+              hasLength(2),
+              reason: 'Cancel stops reconnect after the dropped link.',
+            );
+            expect(service.isConnected, isFalse);
             expect(board.pairingCommands, isEmpty);
             return;
           }
@@ -3647,11 +3950,13 @@ void main() {
             'Capability discovery is loading, including capability-off boards.',
       );
       board.capabilityReplyGate!.complete();
-      for (var turn = 0;
-          turn < 60 &&
-              service.ownerPairingStatus?.state !=
-                  OwnerPairingSessionState.awaitPhysical;
-          turn++) {
+      for (
+        var turn = 0;
+        turn < 60 &&
+            service.ownerPairingStatus?.state !=
+                OwnerPairingSessionState.awaitPhysical;
+        turn++
+      ) {
         await tester.pump(const Duration(milliseconds: 20));
         await tester.runAsync(() => turns(1));
       }

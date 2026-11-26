@@ -153,9 +153,14 @@ void main() {
             lessThan(clearHelp.indexOf('Foxie Litch')),
           );
         }
-        final oneDevicePolicy = strings.connectionEndedBeforeReady
-            .split('\n\n')
-            .last;
+        final oneDevicePolicy = switch (locale.languageCode) {
+          'de' => 'einem Gerät',
+          'es' => 'dispositivo a la vez',
+          'fr' => 'un seul appareil',
+          'it' => 'un solo dispositivo',
+          _ => 'one device',
+        };
+        expect(strings.connectionHelpBasics, contains(oneDevicePolicy));
         expect(strings.manualConnectionBody, contains(oneDevicePolicy));
         expect(
           strings.manualConnectionBody.indexOf(oneDevicePolicy),

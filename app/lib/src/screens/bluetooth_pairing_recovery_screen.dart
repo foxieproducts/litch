@@ -136,10 +136,13 @@ class _BluetoothPairingRecoveryScreenState
     final state = widget.state;
     final verificationFailed =
         state.reason == BluetoothPairingRecoveryReason.ownerVerificationFailed;
+    final freshBondFailed =
+        state.reason == BluetoothPairingRecoveryReason.freshBondFailed;
+    final retryOnly = verificationFailed || freshBondFailed;
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final automatic = !ios && state.canRepair && !_manual;
     final settingsLabel = strings.openBluetoothSettings;
-    final primaryLabel = verificationFailed || ios
+    final primaryLabel = retryOnly || ios
         ? strings.tryAgain
         : automatic
         ? strings.pairingRepairAction
@@ -150,7 +153,7 @@ class _BluetoothPairingRecoveryScreenState
         ? strings.tryAgain
         : settingsLabel;
     Future<void> primary() async {
-      if (verificationFailed) {
+      if (retryOnly) {
         await widget.onRetry();
       } else if (automatic) {
         await widget.onRepair();
@@ -179,14 +182,14 @@ class _BluetoothPairingRecoveryScreenState
         onPressed: state.busy ? null : () => unawaited(primary()),
         child: Text(primaryLabel),
       ),
-      if (!ios && !verificationFailed)
+      if (!ios && !retryOnly)
         OutlinedButton(
           key: const ValueKey('pairing-recovery-secondary'),
           style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
           onPressed: state.busy ? null : () => unawaited(secondary()),
           child: Text(secondaryLabel),
         ),
-      if (verificationFailed) ...[
+      if (retryOnly) ...[
         TextButton(
           key: const ValueKey('pairing-recovery-cancel'),
           style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
@@ -235,13 +238,15 @@ class _BluetoothPairingRecoveryScreenState
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      verificationFailed
+                      freshBondFailed
+                          ? strings.freshPairingDidNotFinish
+                          : verificationFailed
                           ? strings.ownerVerificationRecoveryHelp
                           : strings.pairingRecoveryHelp,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 20),
-                    if (!verificationFailed && automatic)
+                    if (!retryOnly && automatic)
                       Text(strings.pairingRecoveryAutomaticHelp),
                     const SizedBox(height: 24),
                     if (state.busy) ...[
@@ -262,7 +267,7 @@ class _BluetoothPairingRecoveryScreenState
                       Semantics(
                         liveRegion: true,
                         child: Text(
-                          verificationFailed
+                          retryOnly
                               ? strings.ownerVerificationRecoveryRetryFailed
                               : strings.pairingRepairFailed,
                         ),
@@ -278,7 +283,8 @@ class _BluetoothPairingRecoveryScreenState
                         children: actions,
                       ),
                     const SizedBox(height: 24),
-                    const _BluetoothConnectionRecoverySteps(),
+                    if (!freshBondFailed)
+                      const _BluetoothConnectionRecoverySteps(),
                   ],
                 ),
               ),

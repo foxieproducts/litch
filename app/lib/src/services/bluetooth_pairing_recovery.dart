@@ -16,7 +16,11 @@ final class BluetoothPairingBondFailed {
   final int generation;
 }
 
-enum BluetoothPairingRecoveryReason { keyMissing, ownerVerificationFailed }
+enum BluetoothPairingRecoveryReason {
+  keyMissing,
+  ownerVerificationFailed,
+  freshBondFailed,
+}
 
 enum BluetoothPairingRepairResult { removed, unsupported, cancelled, failed }
 

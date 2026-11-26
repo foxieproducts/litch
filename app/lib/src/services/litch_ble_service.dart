@@ -255,26 +255,28 @@ class LitchBleService {
     _gattSessionFactory =
         gattSessionFactory ??
         (ble == null ? ReactiveBleGattSessionFactory(_ble) : null);
-    _pairingKeyMissingSub =
+    final nativePairing =
         _pairingRecoveryGateway is UnavailableBluetoothPairingRecovery
         ? null
-        : _pairingRecoveryGateway.keyMissing.listen((event) {
-            if (!_disposed &&
-                event.generation == _pairingWatchGeneration &&
-                event.generation == _connectionGeneration &&
-                event.deviceId.toUpperCase() ==
-                    _pairingWatchDeviceId?.toUpperCase()) {
-              _suspendForStalePairing(_pairingWatchDeviceId!);
-            }
-          });
-    _pairingBondFailureSub = _pairingRecoveryGateway.bondFailures.listen((event) {
+        : _pairingRecoveryGateway;
+    _pairingKeyMissingSub = nativePairing?.keyMissing.listen((event) {
+      if (!_disposed &&
+          event.generation == _pairingWatchGeneration &&
+          event.generation == _connectionGeneration &&
+          event.deviceId.toUpperCase() ==
+              _pairingWatchDeviceId?.toUpperCase()) {
+        _suspendForPairingRecovery(_pairingWatchDeviceId!);
+      }
+    });
+    _pairingBondFailureSub = nativePairing?.bondFailures.listen((event) {
       if (event.generation != _connectionGeneration ||
           event.generation != _pairingWatchGeneration ||
-          event.deviceId.toUpperCase() != _pairingWatchDeviceId?.toUpperCase()) {
+          event.deviceId.toUpperCase() !=
+              _pairingWatchDeviceId?.toUpperCase()) {
         return;
       }
       _nativeBondFailureGeneration = event.generation;
-      _recoverFailedOwnerVerification();
+      _recoverFromNativeBondFailure();
     });
   }
 
@@ -330,7 +332,8 @@ class LitchBleService {
   final BluetoothPairingRecoveryGateway _pairingRecoveryGateway;
   late final StreamSubscription<BluetoothPairingKeyMissing>?
   _pairingKeyMissingSub;
-  late final StreamSubscription<BluetoothPairingBondFailed> _pairingBondFailureSub;
+  late final StreamSubscription<BluetoothPairingBondFailed>?
+  _pairingBondFailureSub;
   int? _nativeBondFailureGeneration;
   final _pairingRecoveryController =
       StreamController<BluetoothPairingRecoveryState?>.broadcast(sync: true);
@@ -338,6 +341,7 @@ class LitchBleService {
   String? _pairingWatchDeviceId;
   int _pairingWatchGeneration = 0;
   bool _pairingRecoveryConnecting = false;
+  String? _freshBondFailureClaimIdentity;
 
   BluetoothPairingRecoveryState? get pairingRecovery => _pairingRecovery;
   Stream<BluetoothPairingRecoveryState?> get pairingRecoveryStream =>
@@ -357,45 +361,48 @@ class LitchBleService {
     if (!_disposed) _pairingRecoveryController.add(state);
   }
 
-  bool get _awaitingSavedOwnerVerification {
-    final status = _ownerPairingSession?.status;
-    return !productReady &&
+  BluetoothPairingRecoveryReason? get _nativeBondFailureReason {
+    final pairing = _ownerPairingSession;
+    if (productReady || pairing == null) return null;
+    if (pairing.activePhoneBondAttempt != null) {
+      return BluetoothPairingRecoveryReason.freshBondFailed;
+    }
+    final status = pairing.status;
+    if (!pairing.phoneBondRequested &&
         status?.state == OwnerPairingSessionState.ownedOther &&
         status?.reason == OwnerPairingSessionReason.none &&
-        status?.ownerRetained == true &&
-        _ownerPairingSession?.phoneBondRequested != true;
+        status?.ownerRetained == true) {
+      return BluetoothPairingRecoveryReason.ownerVerificationFailed;
+    }
+    return null;
   }
 
-  void _recoverFailedOwnerVerification() {
+  void _recoverFromNativeBondFailure() {
     final id = connectedId;
-    if (id == null || _nativeBondFailureGeneration != _connectionGeneration) {
-      return;
-    }
-    if (!_awaitingSavedOwnerVerification) {
-      // An early native event can precede the first public owner snapshot.
-      // Once its phase is known, a fresh claim or a healthy owner consumes it.
-      if (_ownerPairingSession?.status != null) {
-        _nativeBondFailureGeneration = null;
-      }
-      return;
-    }
     final generation = _connectionGeneration;
-    // State delivery is synchronous. Retire only after its current publication
-    // unwinds, just as the existing foreign-owner refusal does.
+    if (id == null || _nativeBondFailureGeneration != generation) return;
+    final pairing = _ownerPairingSession;
+    final reason = _nativeBondFailureReason;
+    if (reason == null) {
+      // Wait for the first public owner snapshot before classifying an early event.
+      if (pairing?.status != null) _nativeBondFailureGeneration = null;
+      return;
+    }
+    final attempt = pairing?.activePhoneBondAttempt;
+    // Finish synchronous state delivery before retiring its connection.
     scheduleMicrotask(() {
       if (_connectionGeneration == generation &&
           connectedId == id &&
           _nativeBondFailureGeneration == generation &&
-          _awaitingSavedOwnerVerification) {
-        _suspendForStalePairing(
-          id,
-          reason: BluetoothPairingRecoveryReason.ownerVerificationFailed,
-        );
+          identical(pairing, _ownerPairingSession) &&
+          _nativeBondFailureReason == reason &&
+          pairing?.activePhoneBondAttempt == attempt) {
+        _suspendForPairingRecovery(id, reason: reason);
       }
     });
   }
 
-  void _suspendForStalePairing(
+  void _suspendForPairingRecovery(
     String deviceId, {
     BluetoothPairingRecoveryReason reason =
         BluetoothPairingRecoveryReason.keyMissing,
@@ -407,13 +414,20 @@ class LitchBleService {
       deviceId: deviceId,
       reason: reason,
     );
+    _freshBondFailureClaimIdentity =
+        reason == BluetoothPairingRecoveryReason.freshBondFailed
+        ? _ownerPairingSession?.durableIdentity ?? deviceId
+        : null;
     _publishPairingRecovery(pending);
     _publishProductReadiness(false);
-    _pushAppLog(
-      reason == BluetoothPairingRecoveryReason.keyMissing
-          ? 'Saved Bluetooth pairing cannot be used; automatic reconnect paused.'
-          : 'Native pairing failed while verifying a saved connection; automatic reconnect paused.',
-    );
+    _pushAppLog(switch (reason) {
+      BluetoothPairingRecoveryReason.keyMissing =>
+        'Saved Bluetooth pairing cannot be used; automatic reconnect paused.',
+      BluetoothPairingRecoveryReason.ownerVerificationFailed =>
+        'Native pairing failed while verifying a saved connection; automatic reconnect paused.',
+      BluetoothPairingRecoveryReason.freshBondFailed =>
+        'Native pairing did not finish. Automatic reconnect is paused.',
+    });
     unawaited(stopScan());
     unawaited(disconnect());
     unawaited(() async {
@@ -500,6 +514,11 @@ class LitchBleService {
       failed: false,
     );
     _publishPairingRecovery(reconnecting);
+    if (pending.reason == BluetoothPairingRecoveryReason.freshBondFailed) {
+      final identity = _freshBondFailureClaimIdentity;
+      if (identity != null) _ownerClaimRetryRequiredBoards.remove(identity);
+      _freshBondFailureClaimIdentity = null;
+    }
     _pairingRecoveryConnecting = true;
     try {
       final connected = await connect(pending.deviceId);
@@ -518,6 +537,7 @@ class LitchBleService {
   }
 
   Future<void> dismissPairingRecovery() async {
+    _freshBondFailureClaimIdentity = null;
     if (_pairingRecovery == null) return;
     final generation = _connectionGeneration;
     _publishPairingRecovery(null);
@@ -1034,7 +1054,7 @@ class LitchBleService {
                 },
               );
             }
-            _recoverFailedOwnerVerification();
+            _recoverFromNativeBondFailure();
             if (!owns()) return;
             if (defaultTargetPlatform == TargetPlatform.android &&
                 status.nativeBondAllowed) {
@@ -1194,12 +1214,15 @@ class LitchBleService {
     } catch (_) {
       result = BluetoothPairingBondStartResult.failed;
     }
-    if (!owns()) return;
+    if (!owns() || pairing.activePhoneBondAttempt != attempt) return;
     if (result == BluetoothPairingBondStartResult.alreadyBonded) {
-      _suspendForStalePairing(deviceId);
+      _suspendForPairingRecovery(deviceId);
     } else if (result != BluetoothPairingBondStartResult.started) {
       _pushAppLog('Bluetooth pairing could not start on this device.');
-      await disconnect();
+      _suspendForPairingRecovery(
+        deviceId,
+        reason: BluetoothPairingRecoveryReason.freshBondFailed,
+      );
     }
   }
 
@@ -4536,7 +4559,7 @@ class LitchBleService {
 
                 final bool hasFallbackMode = (index + 1) < modes.length;
                 if (isNativePairingKeyMissing(update.failure?.message)) {
-                  _suspendForStalePairing(deviceId);
+                  _suspendForPairingRecovery(deviceId);
                   if (!connectedCompleter.isCompleted) {
                     connectedCompleter.complete(false);
                   }
@@ -7744,7 +7767,7 @@ class LitchBleService {
     _retireConnection();
     _ownerClaimRetryRequiredBoards.clear();
     await _pairingKeyMissingSub?.cancel();
-    await _pairingBondFailureSub.cancel();
+    await _pairingBondFailureSub?.cancel();
     await _pairingRecoveryGateway.watchDevice(null, _connectionGeneration);
     await _pairingRecoveryGateway.dispose();
     await _bleSetupResetFuture;

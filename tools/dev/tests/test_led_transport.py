@@ -18,6 +18,18 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "led_transport"
 
 
 class LedTransportTest(unittest.TestCase):
+    def test_c3_bitbang_waits_for_the_latch_and_accepts_a_completed_send(self):
+        with tempfile.TemporaryDirectory(prefix="litch-c3-bitbang-") as tmp:
+            binary = Path(tmp) / "c3_bitbang"
+            subprocess.run([
+                "c++", "-std=c++17", "-DARDUINO", "-DARDUINO_ARCH_ESP32",
+                "-DCONFIG_IDF_TARGET_ESP32C3", "-I", str(FIXTURE),
+                "-I", str(ROOT / "include"), "-I", str(ROOT / "lib/foxie_embedded/include"),
+                str(ROOT / "src/neopixel_led_renderer.cpp"), str(FIXTURE / "c3_bitbang.cpp"),
+                "-o", str(binary),
+            ], check=True, timeout=60)
+            subprocess.run([str(binary)], check=True, timeout=10)
+
     def test_captured_pairing_uses_production_animation_renderer(self):
         sources = [
             "neopixel_led_renderer", "budget_aware_led_pipeline",

@@ -1,4 +1,5 @@
 #pragma once
+#include <type_traits>
 #include <vector>
 #include "rmt_fixture.hpp"
 struct RgbwColor {
@@ -19,6 +20,7 @@ struct NeoEsp32Rmt0Sk6812Method { static constexpr unsigned CHANNEL = 0U, RESET_
 struct NeoEsp32Rmt1Sk6812Method { static constexpr unsigned CHANNEL = 1U, RESET_US = 80U; };
 struct NeoEsp32Rmt0Ws2812xMethod { static constexpr unsigned CHANNEL = 0U, RESET_US = 300U; };
 struct NeoEsp32Rmt1Ws2812xMethod { static constexpr unsigned CHANNEL = 1U, RESET_US = 300U; };
+struct NeoEsp32BitBangWs2812xNoIntrMethod { static constexpr unsigned CHANNEL = 0U, RESET_US = 300U; };
 
 namespace fixture {
 // Observe the SDK call boundary; this does not simulate wire bytes or optics.
@@ -27,6 +29,8 @@ struct PixelWrite {
     unsigned r, g, b, w;
 };
 inline std::vector<PixelWrite> pixelWrites;
+inline unsigned bitBangFrames = 0U;
+inline unsigned bitBangReturnDelayUs = 0U;
 }
 
 template <typename Feature, typename Method> class NeoPixelBus {
@@ -47,11 +51,20 @@ template <typename Feature, typename Method> class NeoPixelBus {
     }
     void Show() {
         if (!m_dirty) return;
-        // Stress an SDK submission/buffer copy while a previous channel runs.
-        fixture::Advance(fixture::submissionDelayUs);
         auto& channel = fixture::channels[Method::CHANNEL];
-        channel = {fixture::nowUs + m_count * 40U + Method::RESET_US,
-                   0U, false, Method::RESET_US};
+        if constexpr (std::is_same_v<Method, NeoEsp32BitBangWs2812xNoIntrMethod>) {
+            // At 800 kbit/s each byte occupies 10 us. Only the latch is
+            // outstanding on return, and a scheduling delay can hide it.
+            fixture::Advance(m_count * Feature::CHANNELS * 10U);
+            channel = {fixture::nowUs + Method::RESET_US, 0U, false, Method::RESET_US};
+            fixture::Advance(fixture::bitBangReturnDelayUs);
+            ++fixture::bitBangFrames;
+        } else {
+            // Stress an SDK submission/buffer copy while a previous channel runs.
+            fixture::Advance(fixture::submissionDelayUs);
+            channel = {fixture::nowUs + m_count * 40U + Method::RESET_US,
+                       0U, false, Method::RESET_US};
+        }
         fixture::events.push_back({fixture::EventKind::Submit, m_pin});
         ++fixture::starts;
         m_dirty = false;

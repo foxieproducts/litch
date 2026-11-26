@@ -111,15 +111,22 @@ bool WaitCanShowTrueBounded(TStrip& strip, const uint32_t timeoutMs) {
 }
 
 template <typename TStrip>
-bool WaitCanShowFalseAfterShow(TStrip& strip) {
-    // Ensure the Show() call actually started transmitting (CanShow() should flip to false).
-    // Keep this bounded; the caller records an unobserved start as unconfirmed.
+bool SubmitStrip(TStrip& strip, const bool unchanged) {
+    strip.Show();
+    if (unchanged) return true;
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+    // NoIntr bitbang returns after the last data bit. Its 300 us latch may
+    // already have elapsed if this task was preempted on return.
+    return true;
+#else
+    // RMT starts asynchronously. Confirm the busy edge before waiting for idle.
     for (uint16_t i = 0; i < 2000; ++i) {
         if (!strip.CanShow()) {
             return true;
         }
     }
     return false;
+#endif
 }
 
 } // namespace
@@ -288,10 +295,12 @@ void NeoPixelLedRenderer::SetLedRgb(const uint16_t ledIndex, const uint8_t r, co
 }
 
 void NeoPixelLedRenderer::RestoreOutputPinRouting() {
+#if defined(ARDUINO_ARCH_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3)
+    // Only RMT needs reconnecting after the power sequencer drives the pins
+    // as plain GPIO. The C3 bitbang driver uses that GPIO route directly.
     if (!IsOutputEnabled()) {
         return;
     }
-#if defined(ARDUINO_ARCH_ESP32)
     if (rmt_set_pin(RMT_CHANNEL_0, RMT_MODE_TX, static_cast<gpio_num_t>(m_boardPin)) != ESP_OK) {
         logger::Error("led: failed to restore board RMT pin routing");
     }
@@ -350,24 +359,11 @@ void NeoPixelLedRenderer::Show() {
         renderLease.MarkCompleted();
         return;
     }
-    // The budget pipeline dirties both strips even for quantized-black frames.
-    // Pinned NeoPixelBus 2.8.4 submits RMT asynchronously; CanShow observes
-    // rmt_wait_tx_done(channel, 0), including the reset/latch interval.
-    // Never mask interrupts across submission or polling. On S3 each 48-symbol
-    // RMT block needs a 24-symbol refill about every 30 us. Starting the second
-    // strip and copying its buffer with interrupts masked can starve the first
-    // strip, even though software eventually reports a completed transmission.
-    // The cooperative output owner plus render lease serialize Show calls;
-    // NeoPixelBus owns separate editing/sending buffers for asynchronous TX.
+    // On S3, interrupts must remain enabled while starting the second RMT
+    // strip so the first strip can refill its 24-symbol half every 30 us.
     m_deliveryTelemetry.OnSubmission(fxe::Millis());
-    m_boardStrip.Show();
-    const bool boardStarted = boardUnchanged ||
-                              WaitCanShowFalseAfterShow(m_boardStrip);
-    if (m_splitStrips) {
-        m_edgeStrip.Show();
-    }
-    const bool edgeStarted = edgeUnchanged ||
-                             WaitCanShowFalseAfterShow(m_edgeStrip);
+    const bool boardStarted = SubmitStrip(m_boardStrip, boardUnchanged);
+    const bool edgeStarted = !m_splitStrips || SubmitStrip(m_edgeStrip, edgeUnchanged);
 
     // Even a failed start must settle both buses before releasing the lease.
     bool boardCompleted = false;

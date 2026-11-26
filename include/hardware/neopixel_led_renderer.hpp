@@ -10,9 +10,6 @@
 
 #ifdef ARDUINO
 #include <NeoPixelBus.h>
-#if defined(CONFIG_IDF_TARGET_ESP32C3)
-#include "hardware/c3_neopixel_rmt_method.hpp"
-#endif
 #endif
 
 namespace hardware {
@@ -137,20 +134,19 @@ class NeoPixelLedRenderer final : public modules::ILedRenderer {
     void LogShowFailure(const char* reason);
 
 #ifdef ARDUINO
-    // Use RMT method on ESP32 family.
-    // RMT0: board LEDs (or full chain when not split).
-    // RMT1: edge/status LEDs when split.
 #if defined(LITCH_HW_VARIANT_S3)
+    // RMT0 drives the board and RMT1 drives the separate status strip.
     // V3.3 SIDE-A requires >200 us reset; WS2812x uses the same data pulse
     // widths as SK6812 here and provides a 300 us reset. V2/V3 keep 80 us.
     using BoardStripType = S3SelectableStrip<
         NeoEsp32Rmt0Ws2812xMethod, NeoEsp32Rmt0Sk6812Method>;
     using EdgeStripType = S3SelectableStrip<
         NeoEsp32Rmt1Ws2812xMethod, NeoEsp32Rmt1Sk6812Method>;
-#else
-    // C3 prototype uses WS2812B-4020 (RGB) with GRB byte order.
-    using BoardStripType = NeoPixelBus<NeoGrbFeature, C3NeoPixelRmtMethod>;
-    using EdgeStripType = NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt1Ws2812xMethod>;
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    // V1 has one GRB chain. Send each frame without interrupt gaps between
+    // pixels, which can make the WS2812B-4020 latch a partial frame.
+    using BoardStripType = NeoPixelBus<NeoGrbFeature, NeoEsp32BitBangWs2812xNoIntrMethod>;
+    using EdgeStripType = BoardStripType;
 #endif
 
     BoardStripType m_boardStrip;

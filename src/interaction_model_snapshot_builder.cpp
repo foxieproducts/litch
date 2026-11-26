@@ -72,6 +72,7 @@ InteractionModelSnapshot BuildInteractionModelSnapshot(const InteractionModelSna
     }
 
     snapshot.interaction.validDestinationMask = stateMachine.GetValidDestMask();
+    snapshot.interaction.duckUndoRelocationPending = inputs.duckUndoRelocationPending;
     snapshot.interaction.captureFirstCapturerMask = inputs.captureFirstCapturerMask;
     const ChessInteractionModel& chessInteraction =
         stateMachine.GetChessInteractionModel();
@@ -379,6 +380,7 @@ InteractionModelSnapshot BuildInteractionModelSnapshot(const firmware_internal::
         .kingResignationSquare = sys.gamePersistence.GetKingResignationSquare(),
         .kingResignationElapsedMs = sys.gamePersistence.GetKingResignationElapsedMs(),
         .kingResignationArmed = sys.gamePersistence.IsKingResignationArmed(),
+        .duckUndoRelocationPending = sys.gamePersistence.IsDuckUndoRelocationPending(),
     });
     return snapshot;
 }

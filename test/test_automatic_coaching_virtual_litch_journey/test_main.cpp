@@ -96,6 +96,15 @@ uint16_t Energy(virtual_litch_color color) {
     return static_cast<uint16_t>(color.r) + color.g + color.b + color.w;
 }
 
+std::array<uint16_t, 2> PieceEnergy(const runtime::VirtualLitchSession& session, uint8_t square) {
+    const auto revision = session.PhysicalFrame().led_count == 300U
+        ? hardware::BoardRevision::V3_3S3 : hardware::BoardRevision::V2S3;
+    const auto targets = hardware::MapSemanticSquareLedTargets(
+        revision, square, hardware::SquareLedSlot::Piece, Rotated(session));
+    return {Energy(session.PhysicalFrame().pixels[targets.indices[0U]]),
+            Energy(session.PhysicalFrame().pixels[targets.indices[targets.count - 1U]])};
+}
+
 bool Pair(const runtime::VirtualLitchSession& session, uint8_t logical) {
     if (logical >= 64U) {
         return false;
@@ -313,6 +322,8 @@ void AutomaticCoachingWholeTurn(bool duck, bool firstP2, bool rotated,
     }
     uint8_t duckFrom = 64U;
     uint8_t duckTo = 64U;
+    const uint8_t ordinarySquare = from == 48U ? 49U : 48U;
+    const auto ordinaryPiece = PieceEnergy(session, ordinarySquare);
     const auto checkDuckPhase = [&](const char* stage, const bool relocating) {
         if (!duck) return;
         if (duckFrom >= 64U || duckTo >= 64U) {
@@ -340,6 +351,8 @@ void AutomaticCoachingWholeTurn(bool duck, bool firstP2, bool rotated,
                   exported[1] == (relocating ? 'd' : selected ? 'l' : 'h'), run,
               "fresh JSON and binary Home messages serialize the current phase without a compound pair");
         if (relocating) {
+            Check(PieceEnergy(session, ordinarySquare) == ordinaryPiece && ordinaryPiece[0] > 4U, run,
+                  "ordinary forward Duck relocation leaves unrelated piece brightness unchanged");
             Check(assistance.duckFromSquare == duckFrom &&
                       assistance.duckToSquare == duckTo &&
                       assistance.fromSquare >= 64U && assistance.toSquare >= 64U &&
@@ -648,14 +661,14 @@ void FixedDuckGuidance(runtime::VirtualLitchSession& session, const char* run,
                    : "hard correction owns the edge while both Coaching latches remain enabled");
 }
 
-void AutomaticCoachingDuckUndoAndCancelRedo(bool firstP2, bool rotated) {
+void AutomaticCoachingDuckUndoAndCancelRedo(bool firstP2, bool rotated, bool v33 = false) {
     char run[96] = {};
     std::snprintf(run, sizeof(run),
                   "AutomaticCoachingDuckUndoAndCancelRedo/first-p%u/rotate-%u",
                   firstP2 ? 2U : 1U, rotated);
     virtual_litch_config config{};
     virtual_litch_default_config(&config);
-    config.hardware = VIRTUAL_LITCH_HARDWARE_S3;
+    config.hardware = v33 ? VIRTUAL_LITCH_HARDWARE_V3_3 : VIRTUAL_LITCH_HARDWARE_S3;
     config.first_player_is_p2 = firstP2;
     config.board_rotate = rotated;
     test_support::BoundedHintSession sessionFixture(config);
@@ -686,9 +699,19 @@ void AutomaticCoachingDuckUndoAndCancelRedo(bool firstP2, bool rotated) {
     if (!hinted) {
         return;
     }
+    const uint8_t ordinaryForwardSquare = from == 48U ? 49U : 48U;
+    const auto beforeForwardDuck = PieceEnergy(session, ordinaryForwardSquare);
     Checkpoint(session, run, "automatic-ready", "follow-chess-and-Duck-Hint", publisher, true);
     Check(Move(session, occupancy, from, to), run,
           "raw chess pickup and placement reach production acknowledgement");
+    if (v33) {
+        for (uint8_t sample = 0U; sample < 40U &&
+             session.State().interaction_phase != static_cast<uint8_t>(runtime::ChessInteractionPhase::DuckRelocation); ++sample)
+            Check(session.Advance(100U) == VIRTUAL_LITCH_OK, run, "wait for ordinary Duck relocation");
+        Check(session.State().interaction_phase == static_cast<uint8_t>(runtime::ChessInteractionPhase::DuckRelocation) &&
+                  PieceEnergy(session, ordinaryForwardSquare) == beforeForwardDuck && beforeForwardDuck[0] > 4U,
+              run, "V3.3 forward Duck relocation leaves both unrelated LEDs at normal brightness");
+    }
     occupancy &= ~(UINT64_C(1) << DUCK_START);
     Check(Observe(session, occupancy), run,
           "early Duck pickup enters the same pending compound turn");
@@ -712,14 +735,42 @@ void AutomaticCoachingDuckUndoAndCancelRedo(bool firstP2, bool rotated) {
     }
     Checkpoint(session, run, "turn-complete", "tap-X-to-Undo", publisher);
 
+    const uint8_t backgroundSquare = from == 48U ? 49U : 48U;
+    const auto beforeDuckUndo = PieceEnergy(session, backgroundSquare);
     Check(Tap(session, blackOwner, runtime::VirtualLitchPhysicalButton::X),
           run, "raw X requests Undo through the production control owner");
+    const auto duringDuckUndo = PieceEnergy(session, backgroundSquare);
+    for (uint8_t slot = 0U; slot < 2U; ++slot) {
+        std::printf("[DUCK_UNDO_DIM] run=%s slot=%u before=%u during=%u\n",run,slot,beforeDuckUndo[slot],duringDuckUndo[slot]);
+        Check(beforeDuckUndo[slot] > 4U && duringDuckUndo[slot] * 2U < beforeDuckUndo[slot],run,
+              "fixed Duck Undo dims both unrelated physical piece LEDs");
+    }
     modules::ControlMutationOutcome outcome;
     Check(session.TryGetLastBoardControlOutcome(outcome) &&
               outcome.action == modules::ControlAction::Undo &&
               (outcome.status == modules::ControlMutationStatus::Accepted ||
                outcome.status == modules::ControlMutationStatus::Applied),
           run, "the board control owner acknowledges the Undo request");
+    if (v33) {
+        bool duckProminent = false;
+        for (uint8_t sample = 0U; sample < 12U; ++sample) {
+            const auto duckPixels = PieceEnergy(session, duckTo);
+            duckProminent = duckProminent ||
+                (duckPixels[0] > duringDuckUndo[0] && duckPixels[1] > duringDuckUndo[1]);
+            Check(session.Advance(50U) == VIRTUAL_LITCH_OK, run, "sample the Duck return cue");
+        }
+        Check(duckProminent, run, "both actual Duck LEDs stand out from the dimmed board");
+        Check(Pair(session, duckTo) && Pair(session, DUCK_START), run,
+              "V3.3 fixed Duck Undo keeps the real source and destination rails visible");
+        occupancy &= ~(UINT64_C(1) << duckTo);
+        Check(Observe(session, occupancy) && Pair(session, DUCK_START), run,
+              "V3.3 raw Duck lift keeps its return destination visible");
+        occupancy |= UINT64_C(1) << DUCK_START;
+        Check(Observe(session, occupancy) && session.Advance(100U) == VIRTUAL_LITCH_OK &&
+                  session.IsUndoActionPending(), run,
+              "V3.3 Duck return advances to the pending chess inverse");
+        return;
+    }
     FixedDuckGuidance(session, run, "undo-fixed-return", DUCK_START, duckTo,
                       runtime::RequiredPhysicalAction::LiftPrimary,
                       "lift-Duck-for-fixed-return", publisher);
@@ -1182,6 +1233,7 @@ int main() {
         }
     }
     AutomaticCoachingWholeTurn(true, false, false, true);
+    AutomaticCoachingDuckUndoAndCancelRedo(false, false, true);
     for (bool firstP2 : {false, true}) {
         for (bool rotated : {false, true}) {
             AutomaticCoachingDuckUndoAndCancelRedo(firstP2, rotated);

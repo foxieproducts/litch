@@ -877,17 +877,20 @@ void CaptureEdgeBlockedBracketJourney(const RemovalFadeCase profile) {
     Check(currentLimit?identity:SameSquarePixels(restored,victim),run,"position invalidation restores the actual victim identity with no white removal residue");
 }
 
-void UndoLocalReturnJourney() {
-    const char* run="Undo/V3.3/raw-X/directed-return-no-cross";
-    auto config=Config();config.hardware=VIRTUAL_LITCH_HARDWARE_V3_3;
+void UndoLocalReturnJourney(bool rotate, bool minimal, bool litBoard = false) {
+    const char* run=rotate ? "Undo/V3.3/rotated/Minimal" : litBoard ? "Undo/V3.3/lit-board" : "Undo/V3.3/normal";
+    auto config=Config(rotate);config.hardware=VIRTUAL_LITCH_HARDWARE_V3_3;
     test_support::BoundedHintSession fixture(config);auto& s=fixture.session;
     uint64_t occupancy=Bit(7U)|Bit(52U)|Bit(62U);
     Check(s.Reset()==VIRTUAL_LITCH_OK && s.LoadExternalFen("7k/8/8/8/8/8/4P3/6K1 w - - 0 1") &&
-              Observe(s,occupancy) && s.Advance(1000U)==VIRTUAL_LITCH_OK && Setting(s,"WHITE_SQUARES_ON","false"),run,
-          "legal minimal pawn position enters production play with square background off");
+              Observe(s,occupancy) && s.Advance(1000U)==VIRTUAL_LITCH_OK && Setting(s,"WHITE_SQUARES_ON",litBoard ? "true" : "false"),run,
+          "legal minimal pawn position enters production play with selected square background");
     occupancy&=~Bit(52U);Check(Observe(s,occupancy),run,"raw e2 pickup");
     occupancy|=Bit(36U);Check(Observe(s,occupancy) && s.Advance(3000U)==VIRTUAL_LITCH_OK && s.UndoHistoryMoveCount()==1U,
           run,"raw e2-e4 commits once before Undo");
+    Check(Setting(s,"MINIMAL_ANIMATIONS",minimal ? "true" : "false") && s.Advance(20U)==VIRTUAL_LITCH_OK,run,"select animation preference");
+    const auto backgroundBefore = AllSquarePixels(s,62U);
+    const auto squareBefore = AllSquarePixels(s,63U);
     const auto owner=Owner(s,true)==modules::UiOwner::P2?VIRTUAL_LITCH_OWNER_P2:VIRTUAL_LITCH_OWNER_P1;
     Check(s.SetButtonDown(owner,runtime::VirtualLitchPhysicalButton::X,true)==VIRTUAL_LITCH_OK && s.Advance(20U)==VIRTUAL_LITCH_OK &&
               s.SetButtonDown(owner,runtime::VirtualLitchPhysicalButton::X,false)==VIRTUAL_LITCH_OK && s.Advance(20U)==VIRTUAL_LITCH_OK &&
@@ -895,6 +898,22 @@ void UndoLocalReturnJourney() {
     Check(s.Advance(1U)==VIRTUAL_LITCH_OK &&
               s.State().interaction_phase==static_cast<uint8_t>(runtime::ChessInteractionPhase::ExecutingPlan),run,
           "the next production tick hands accepted Undo to its physical return plan");
+    const auto backgroundDuring = AllSquarePixels(s,62U);
+    const auto squareDuring = AllSquarePixels(s,63U);
+    for (uint8_t slot : {1U, 2U}) {
+        const auto before = Energy(backgroundBefore.mapped[slot]);
+        const auto during = Energy(backgroundDuring.mapped[slot]);
+        std::printf("[UNDO_DIM] run=%s mapped_piece=%u before=%u during=%u\n",run,slot,before,during);
+        Check(before > 4U && during * 2U < before,run,"both physical LEDs of an uninvolved piece dim during the return");
+    }
+    if (litBoard) {
+        for (uint8_t slot : {0U, 3U}) {
+            const auto before = Energy(squareBefore.mapped[slot]);
+            const auto during = Energy(squareDuring.mapped[slot]);
+            std::printf("[UNDO_DIM] run=%s mapped_rail=%u before=%u during=%u\n",run,slot,before,during);
+            Check(before > 4U && during * 2U < before,run,"both physical background rails dim during the return");
+        }
+    }
     const auto squareDark = [](const SquarePixels& cell) {
         for (const auto color : cell.semantic) if (Energy(color) != 0U) return false;
         for (const auto color : cell.mapped) if (Energy(color) != 0U) return false;
@@ -902,13 +921,18 @@ void UndoLocalReturnJourney() {
     };
     bool routeVisible = false;
     bool routeCleared = false;
+    bool sourceProminent = false;
     for(uint8_t sample=0U;sample<=16U;++sample){
+        const auto source = AllSquarePixels(s,36U);
+        sourceProminent = sourceProminent ||
+            (Energy(source.mapped[1U]) > Energy(backgroundDuring.mapped[1U]) &&
+             Energy(source.mapped[2U]) > Energy(backgroundDuring.mapped[2U]));
         const auto landing = AllSquarePixels(s, 52U);
         Check(Energy(Square(s,52U))>0U && Energy(landing.semantic[1U])>0U &&
                   Energy(landing.mapped[1U])>0U && Energy(landing.mapped[2U])>0U,run,
               "the exact e2 return target retains its semantic and both mapped landing Piece LEDs");
         for(const uint8_t neighbor:{51U,53U,60U}){
-            Check(squareDark(AllSquarePixels(s,neighbor)),run,
+            if (!litBoard) Check(squareDark(AllSquarePixels(s,neighbor)),run,
                   "Undo leaves off-route surrounding squares dark without a stationary focus cross");
         }
         const auto route = AllSquarePixels(s, 44U);
@@ -920,7 +944,8 @@ void UndoLocalReturnJourney() {
         if(sample%4U==0U)Checkpoint(s,run,"directed-return","lift-e4-and-return-e2","accepted",Bit(36U)|Bit(52U)|Bit(44U)|Bit(51U)|Bit(53U));
         if(sample!=16U)Check(s.Advance(50U)==VIRTUAL_LITCH_OK,run,"sample one-way Undo travel through e3");
     }
-    Check(routeVisible && routeCleared, run,
+    Check(sourceProminent,run,"both actual LEDs of the returning piece stand out from the dimmed board");
+    if (!minimal && !litBoard) Check(routeVisible && routeCleared, run,
           "the e3 route lights all four mapped LEDs transiently, then clears between travel heads");
     std::printf("[UNDO_ROUTE] run=%s e3_visible=%u e3_cleared=%u landing=e2 next=lift-e4-and-return-e2\n",
                 run, static_cast<unsigned>(routeVisible), static_cast<unsigned>(routeCleared));
@@ -930,7 +955,10 @@ void UndoLocalReturnJourney() {
     Check(Observe(s,occupancy) && Observe(s,occupancy|Bit(52U)) && s.Advance(3000U)==VIRTUAL_LITCH_OK &&
               !s.HomeStateSnapshot().undoPending && s.State().correction_mask==0ULL && s.UndoHistoryMoveCount()==0U,run,
           "restoring the exact e2 return completes Undo with no stale correction or duplicate action");
-    Check(squareDark(AllSquarePixels(s,44U)) && squareDark(AllSquarePixels(s,36U)),run,
+    const auto backgroundAfter = AllSquarePixels(s,62U);
+    for (uint8_t slot : {1U, 2U}) Check(Equal(backgroundBefore.mapped[slot],backgroundAfter.mapped[slot]),run,
+        "both unrelated physical piece LEDs return to their original brightness after Undo");
+    if (!litBoard) Check(squareDark(AllSquarePixels(s,44U)) && squareDark(AllSquarePixels(s,36U)),run,
           "restoration clears the empty e3 route and e4 source in semantic and mapped output");
     Checkpoint(s,run,"Undo-complete","Black-or-White-next-action","accepted",Bit(52U)|Bit(44U));
 }
@@ -1224,10 +1252,18 @@ void KnightCaptureJourney(bool cpu, bool sourceFirst, bool firstP2, bool rotate)
     occupancy|=Bit(18U);Check(Observe(s,occupancy)&&s.Advance(2100U)==VIRTUAL_LITCH_OK&&s.UndoHistoryMoveCount()==1U,run,
         "placing the knight commits exactly one real capture after ordinary settling");
     Check(EmptyPieceTargets(s,27U)&&EmptyPieceTargets(s,19U),run,"committed capture clears all transient empty-route Piece emitters");
-    Check(RawUndoTap(s)&&s.IsUndoActionPending(),run,"raw X enters the existing capture Undo choreography");
+    const auto captureBackgroundBefore = AllSquarePixels(s,63U);
+    Check(RawUndoTap(s)&&s.IsUndoActionPending()&&s.Advance(1U)==VIRTUAL_LITCH_OK,run,"raw X enters the existing capture Undo choreography");
+    const auto captureBackgroundDuring = AllSquarePixels(s,63U);
+    for (uint8_t slot : {1U, 2U}) {
+        const auto before = Energy(captureBackgroundBefore.mapped[slot]);
+        const auto during = Energy(captureBackgroundDuring.mapped[slot]);
+        Check(before > 4U && during * 2U < before,run,"capture Undo dims both LEDs of the unrelated king");
+    }
     Check(EmptyPieceTargets(s,27U)&&EmptyPieceTargets(s,19U),run,"Undo owns precise return prompts and cannot retain a knight L route");
     occupancy&=~Bit(18U);Check(Observe(s,occupancy),run,"Undo lifts the captured-move knight from its actual destination");
     occupancy|=Bit(35U);Check(Observe(s,occupancy),run,"Undo returns the knight to its actual origin");
+    Check(Energy(Square(s,18U)) > 0U,run,"capture Undo points to the victim restoration square after the mover returns");
     occupancy|=Bit(18U);Check(Observe(s,occupancy)&&s.Advance(2100U)==VIRTUAL_LITCH_OK&&s.UndoHistoryMoveCount()==0U,run,
         "Undo completes required captured-piece restoration and removes exactly one history move");
     if(cpu) {
@@ -3184,7 +3220,9 @@ int main() {
     for(bool rotate:{false,true})for(bool firstP2:{false,true})CaptureEdgeBlockedBracketJourney({rotate,firstP2,230U,0U});
     CaptureEdgeBlockedBracketJourney({false,false,256U,0U});
     CaptureEdgeBlockedBracketJourney({true,false,230U,80U});
-    UndoLocalReturnJourney();
+    UndoLocalReturnJourney(false, false);
+    UndoLocalReturnJourney(true, true);
+    UndoLocalReturnJourney(false, false, true);
     const std::array<CaptureCase, 6U> positions{{
         {"CaptureFirstVisibleHint/completed-Classical", "4k3/8/8/8/3p4/8/3R4/4K3 w - - 0 1", Bit(4U)|Bit(35U)|Bit(51U)|Bit(60U), 35U, Bit(51U), 64U, true},
         {"CaptureFirstWithoutCoaching/completed-Classical", "4k3/8/8/8/3p4/8/3R4/4K3 w - - 0 1", Bit(4U)|Bit(35U)|Bit(51U)|Bit(60U), 35U, Bit(51U), 64U},

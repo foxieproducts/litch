@@ -186,6 +186,7 @@ void Session::CaptureFrame() {
         snapshotInputs.kingResignationSquare = m_gamePersistence->GetKingResignationSquare();
         snapshotInputs.kingResignationElapsedMs = m_gamePersistence->GetKingResignationElapsedMs();
         snapshotInputs.kingResignationArmed = m_gamePersistence->IsKingResignationArmed();
+        snapshotInputs.duckUndoRelocationPending = m_gamePersistence->IsDuckUndoRelocationPending();
     } else {
         snapshotInputs.derived = &m_derived;
         snapshotInputs.setupLifecycle = m_setupLifecycle;

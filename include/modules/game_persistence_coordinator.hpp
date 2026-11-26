@@ -170,6 +170,7 @@ class GamePersistenceCoordinator final {
     uint8_t GetUndoHistoryMoveCount() const;
     bool IsCancelUndoAvailable() const;
     bool IsUndoActionPending() const;
+    bool IsDuckUndoRelocationPending() const { return m_duckUndoRelocationPending; }
     bool HasPendingUndoCommand() const;
     void RequestHintToggle();
 

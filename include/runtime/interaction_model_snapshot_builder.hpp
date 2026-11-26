@@ -41,6 +41,7 @@ struct InteractionModelSnapshotBuildInputs {
     uint8_t kingResignationSquare = 255U;
     uint32_t kingResignationElapsedMs = 0U;
     bool kingResignationArmed = false;
+    bool duckUndoRelocationPending = false;
 };
 
 InteractionModelSnapshot BuildInteractionModelSnapshot(const InteractionModelSnapshotBuildInputs& inputs);

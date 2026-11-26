@@ -90,6 +90,7 @@ struct InteractionStateView {
     uint64_t cpuIllegalMask = 0;
     uint64_t cpuTentativeCorrectionMask = 0;
     bool undoPromptActive = false;
+    bool duckUndoRelocationPending = false;
     bool kingQueenSwapPromptActive = false;
     bool placementModeActive = false;
     uint64_t placementMissingMask = 0;

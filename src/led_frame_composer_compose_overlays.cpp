@@ -112,8 +112,8 @@ void ApplyCenterTextOverlay(const ComposeContext& ctx,
         return;
     }
 
-    // A known Undo relocation shares ordinary movement guidance. Do not dim
-    // its travel or repaint its landing with the former return-square pulse.
+    // The directed Undo background is dimmed in ComposeBoard, before travel
+    // and landing are drawn. Do not repaint those cues with the older pulse.
     if (ctx.undoPromptActive && directedUndoPromptValid) {
         return;
     }

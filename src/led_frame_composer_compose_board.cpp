@@ -5,6 +5,7 @@
 #include "modules/led_render_policy.hpp"
 #include "runtime/chess_interaction_duck_projection.hpp"
 #include "runtime/game_state_machine_castling.hpp"
+#include "runtime/directed_physical_prompt.hpp"
 #include "runtime/square_mapping.hpp"
 
 namespace modules::led_frame_composer {
@@ -71,6 +72,17 @@ uint64_t ComposeBoard(const ComposeContext& ctx,
     const auto& in = *ctx.in;
     const auto& snapshot = ctx.Snapshot();
     const BoardComposeRuntime boardRuntime = BuildBoardComposeRuntime(ctx);
+    runtime::DirectedPhysicalPrompt undoPrompt;
+    const bool duckUndo = snapshot.interaction.duckUndoRelocationPending &&
+        snapshot.interaction.taggedState.tag == runtime::ChessInteractionPhase::DuckRelocation;
+    const bool dimDirectedUndo =
+        ((ctx.undoMoverPhase && ctx.renderIntent.centerTextOverlayVisible) ||
+         (duckUndo && !ctx.renderIntent.menuForegroundVisible && !ctx.renderIntent.HasCelebration())) &&
+        !ctx.invalidBoard.IsActive() && ctx.humanIllegalMask == 0ULL &&
+        ctx.cpuIllegalMask == 0ULL && ctx.cpuTentativeCorrectionMask == 0ULL &&
+        ctx.captureReturnMask == 0ULL &&
+        runtime::TryGetDirectedPhysicalPrompt(snapshot.interaction.taggedState, undoPrompt);
+    constexpr uint16_t UNDO_BACKGROUND_SCALE256 = 72U;
     const modules::UiOwner expectedMoverOwner = boardRuntime.expectedMoverOwner;
     const modules::UiOwner expectedOpponentOwner = boardRuntime.expectedOpponentOwner;
     const bool gameOverCelebration = ctx.renderIntent.HasCelebration();
@@ -159,6 +171,11 @@ uint64_t ComposeBoard(const ComposeContext& ctx,
                               (ctx.captureReturnOn && isCaptureReturnSquare);
 
         modules::Rgb finalSquare = squareRgb;
+        if (dimDirectedUndo) {
+            // Dim the ordinary board before prompts and travel are composed,
+            // so only the background recedes while guidance stays vivid.
+            finalSquare = ScaleRgbSaturating(finalSquare, UNDO_BACKGROUND_SCALE256);
+        }
         if (ctx.illegalOn && isIllegalSquare) {
             finalSquare = modules::Rgb{255, 64, 64};
         } else if (ctx.captureReturnOn && isCaptureReturnSquare) {
@@ -327,6 +344,10 @@ uint64_t ComposeBoard(const ComposeContext& ctx,
                         ? ScaleRgbSaturating(modules::RGB_YELLOW, 26U)
                         : modules::RGB_YELLOW;
                 }
+            }
+
+            if (dimDirectedUndo && logicalSq != undoPrompt.fromSquare) {
+                adjustedFinalPiece = ScaleRgbSaturating(adjustedFinalPiece, UNDO_BACKGROUND_SCALE256);
             }
 
             if (duckAwaitingLift && !forceOff) {

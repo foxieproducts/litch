@@ -185,6 +185,87 @@ struct OwnerPreviewFixture {
     }
 };
 
+void TestPairedBluetoothIdentitySuffix() {
+    using Peer = modules::BleServiceConnectionEpochTestPeer;
+    OwnerPreviewFixture fixture(modules::BoardOwnerRecord::Active);
+    const uint8_t publicAddress[6] = {0x81U, 0x3fU, 0x52U, 0xa6U, 0x10U, 0x24U};
+    NimBLEDevice::SetTestAddress(publicAddress, true);
+    constexpr const char* query = R"({"cmd":"info","bs":1})";
+    const auto generation = Peer::ProducerEpoch(fixture.service);
+    namespace wire = modules::connection_session_codec;
+    std::array<uint8_t, 10U> fragment{{1U, 1U, 0U, 0U}};
+    fxe::WriteU16LE(static_cast<uint16_t>(std::strlen(query)), fragment.data() + 2U);
+    std::copy_n(query, 6U, fragment.begin() + 4U);
+    std::array<uint8_t, 20U> packet{}; size_t packetSize = 0U;
+    Check(wire::Codec::Encode({{wire::Kind::Object, modules::ConnectionSession::OTA_CONTROL_OBJECT_OPCODE,
+              Peer::ObjectToken(fixture.service), 1U}, {fragment.data(), fragment.size()}},
+              {packet.data(), packet.size()}, packetSize) == wire::Error::None,
+          "pre-owner selector has a valid shared Object frame");
+    fixture.service.OnConnectionSessionWrite(packet.data(), packetSize);
+    fixture.service.DrainEventQueue();
+    Check(NimBLEDevice::AddressReads() == 0U,
+          "raw Object admission denies the pre-owner selector without reading identity");
+    Check(QueueSharedStatusCommand(fixture.service, query, generation, true),
+          "unpaired suffix query reaches the shared ingress fence");
+    fixture.service.DrainEventQueue();
+    SharedStatusRecords before;
+    for (unsigned i = 0U; i < 16U; ++i) before.Take(fixture.service);
+    bool leaked = false;
+    for (const auto& record : before.records) leaked |= record.find("\"bs\"") != std::string::npos;
+    Check(NimBLEDevice::AddressReads() == 0U && !leaked,
+          "pre-owner Identify-only session neither reads nor emits local identity");
+    fixture.service.OnOwnerSecurity(fixture.Security(false));
+    fixture.service.DrainEventQueue(); fixture.service.UpdateOwnerPairing();
+    Check(Peer::ProductAccess(fixture.service), "suffix requires actual paired owner access");
+    Check(QueueSharedStatusCommand(fixture.service, R"({"cmd":"info"})", generation, true),
+          "ordinary info still queues for the paired owner");
+    fixture.service.DrainEventQueue();
+    SharedStatusRecords plain;
+    for (unsigned i = 0U; i < 16U; ++i) plain.Take(fixture.service);
+    Check(plain.intact && !plain.records.empty() &&
+              std::all_of(plain.records.begin(), plain.records.end(), [](const std::string& record) {
+                  return record == R"({"i":[3,0,575]})";
+              }) && NimBLEDevice::AddressReads() == 0U,
+          "ordinary info remains byte-for-byte unchanged and never reads local identity");
+    Peer::HandleOtaPacket(fixture.service, query, std::strlen(query));
+    Check(NimBLEDevice::AddressReads() == 0U, "legacy direct ingress never exposes suffix");
+    SharedStatusRecords direct;
+    for (unsigned i = 0U; i < 16U; ++i) direct.Take(fixture.service);
+    for (const auto& record : direct.records)
+        Check(record.find("\"bs\"") == std::string::npos, "legacy response contains only public info");
+    const auto run = [&](const uint8_t* address, bool isPublic, const char* expected) {
+        NimBLEDevice::SetTestAddress(address, isPublic);
+        Check(QueueSharedStatusCommand(fixture.service, query, generation, true), "paired suffix query queues");
+        fixture.service.DrainEventQueue();
+        SharedStatusRecords records;
+        for (unsigned i = 0U; i < 32U; ++i) records.Take(fixture.service);
+        Check(records.intact && records.records.size() == 1U && records.records[0] == expected &&
+                  NimBLEDevice::AddressReads() == 1U,
+              "paired suffix returns one bounded status from the selected local identity");
+    };
+    run(publicAddress, true, R"({"bs":"3F81"})");
+    run(publicAddress, false, R"({"bs":null})");
+    const uint8_t absent[6]{};
+    run(absent, true, R"({"bs":null})");
+    {
+        modules::SettingsStore settings;
+        modules::ControlMutationService control;
+        modules::BleService legacy;
+        Check(Peer::Configure(legacy, settings, control) &&
+                  Peer::ActivateMinimumConnectionObjectSession(legacy),
+              "legacy non-pairing fixture opens the shared Object channel");
+        Peer::PrepareProducerGeneration(legacy);
+        NimBLEDevice::SetTestAddress(publicAddress, true);
+        Check(QueueSharedStatusCommand(legacy, query, 7U, true), "legacy shared selector queues");
+        legacy.DrainEventQueue();
+        SharedStatusRecords records;
+        for (unsigned i = 0U; i < 32U; ++i) records.Take(legacy);
+        Check(records.intact && records.records.size() == 1U &&
+                  records.records[0].find("{\"i\":[") == 0U && NimBLEDevice::AddressReads() == 0U,
+              "non-pairing profile returns unchanged public info without reading local identity");
+    }
+}
+
 void TestOwnerStoreDiagnosticCountsAreReadOnlyAndChecked() {
     owner_native_fixture::Reset();
     modules::BleService cold;

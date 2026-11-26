@@ -186,6 +186,21 @@ void BleService::NotifyDeviceInfo() {
     }
 }
 
+void BleService::NotifyBluetoothIdentitySuffix() {
+    // NimBLE resolves the selected local identity, not the peer or its RPA.
+    // Only the public identity is stable and comparable with the platform ID.
+    const auto identity = NimBLEDevice::getAddress();
+    if (!identity.isPublic() || identity.isNull()) {
+        NotifyOtaJson("{\"bs\":null}");
+        return;
+    }
+    const auto* bytes = identity.getVal(); // NimBLE stores addresses little-endian.
+    char payload[20]{};
+    std::snprintf(payload, sizeof(payload), "{\"bs\":\"%02X%02X\"}",
+                  static_cast<unsigned>(bytes[1]), static_cast<unsigned>(bytes[0]));
+    NotifyOtaJson(payload);
+}
+
 #if defined(LITCH_BLE_OTA)
 void BleService::NotifyOtaBeginAccepted() {
     const size_t maxNotifyPayload = GetOtaNotifyPayloadLimit(GetMtu());

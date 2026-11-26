@@ -19,9 +19,19 @@ class NimBLEAdvertising;
 class NimBLEServer;
 class NimBLEAddress {
   public:
+    NimBLEAddress() = default;
+    NimBLEAddress(const uint8_t* bytes, bool isPublic) : m_public(isPublic) {
+        std::memcpy(m_bytes, bytes, sizeof(m_bytes));
+    }
     const uint8_t* getVal() const { return m_bytes; }
+    bool isPublic() const { return m_public; }
+    bool isNull() const {
+        for (const auto byte : m_bytes) if (byte != 0U) return false;
+        return true;
+    }
   private:
     uint8_t m_bytes[6]{};
+    bool m_public = true;
 };
 
 class NimBLEConnInfo {
@@ -339,6 +349,12 @@ class NimBLEDevice {
     static bool setPower(int) { return true; }
     static NimBLEServer* createServer() { return &s_server; }
     static NimBLEAdvertising* getAdvertising();
+    static NimBLEAddress getAddress() { ++s_addressReads; return s_address; }
+    static void SetTestAddress(const uint8_t* bytes, bool isPublic) {
+        s_address = NimBLEAddress(bytes, isPublic);
+        s_addressReads = 0U;
+    }
+    static uint32_t AddressReads() { return s_addressReads; }
     static bool startSecurity(uint16_t handle, int* result = nullptr) {
         ++s_securityRequests;
         s_securityHandle = handle;
@@ -366,6 +382,8 @@ class NimBLEDevice {
     inline static int s_securityResult = 0;
     inline static void (*s_deinitHook)() = nullptr;
     inline static bool s_initialized = false;
+    inline static NimBLEAddress s_address{};
+    inline static uint32_t s_addressReads = 0U;
     inline static bool s_failNextHostStop = false;
     inline static std::string s_name;
     inline static uint16_t s_mtu = 23U;

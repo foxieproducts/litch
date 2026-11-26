@@ -604,6 +604,14 @@ five seconds; synchronous source requests retain their 30-second response
 budget. There is no extra metadata lookup lease or filesystem authorization I/O.
 The existing progress watchdog supervises the operation.
 
+Starting in firmware 1.0.4, a paired phone with confirmed owner access can
+request the board's Bluetooth address suffix over OTA control Object `0x32`
+by sending `{"cmd":"info","bs":1}`. A reply such as `{"bs":"3F81"}` gives the
+last four uppercase hexadecimal digits of the board's public identity address
+in Bluetooth display order. The reply is `{"bs":null}` if that address is
+unavailable. Earlier firmware returns its ordinary compact device info. The
+app omits the suffix until a paired connection supplies one.
+
 Crash-loop and fatal startup recovery initialize and pump the same BLE/session/
 OTA updater without loading settings or starting game/engine services. Recovery
 uses fixed name `Litch Recovery`, independent of unloaded or later-loaded BLE

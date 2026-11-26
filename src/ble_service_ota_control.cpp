@@ -95,6 +95,12 @@ void BleService::HandleOtaControlPacket(const char* const data,
 #endif
     if (std::strcmp(cmd, "info") == 0 ||
         std::strcmp(cmd, "device_info") == 0) {
+        if (std::strcmp(cmd, "info") == 0 && doc["bs"].is<uint8_t>() &&
+            doc["bs"].as<uint8_t>() == 1U && sharedIngress && !m_recoveryOnly &&
+            OwnerPairingEnabled() && OwnerProductAccess()) {
+            NotifyBluetoothIdentitySuffix();
+            return;
+        }
         NotifyDeviceInfo();
         return;
     }

@@ -1055,9 +1055,10 @@ struct BleServiceConnectionEpochTestPeer {
     static bool HandleConnectionOtaControl(
         BleService& service, const uint8_t* bytes, const size_t size,
         const uint32_t ingressOrdinal = 18U,
-        const uint32_t connectionEpoch = 7U) {
+        const uint32_t connectionEpoch = 7U, const bool useStreamToken = false) {
         ConnectionSession::ObjectCommand object;
         object.opcode = ConnectionSession::OTA_CONTROL_OBJECT_OPCODE;
+        if (useStreamToken) object.streamToken = service.m_connectionSession.ObjectStreamToken();
         object.body = fxe::ConstByteSpan(bytes, size);
         const auto result = service.HandleConnectionOtaControlObject(object, ingressOrdinal, connectionEpoch);
         return result == BleService::ObjectAdmission::Accepted || result == BleService::ObjectAdmission::RetainedCredit;
@@ -7111,7 +7112,7 @@ struct SharedStatusRecords {
 };
 
 bool QueueSharedStatusCommand(modules::BleService& service, const std::string& command,
-                              const uint32_t generation = 7U) {
+                              const uint32_t generation = 7U, const bool useStreamToken = false) {
     using Peer = modules::BleServiceConnectionEpochTestPeer;
     size_t offset = 0U;
     while (offset < command.size()) {
@@ -7123,7 +7124,7 @@ bool QueueSharedStatusCommand(modules::BleService& service, const std::string& c
         fragment[1U] = (begins ? 1U : 0U) | (offset + count == command.size() ? 2U : 0U);
         if (begins) fxe::WriteU16LE(static_cast<uint16_t>(command.size()), fragment.data() + 2U);
         std::copy_n(command.data() + offset, count, fragment.data() + header);
-        if (!Peer::HandleConnectionOtaControl(service, fragment.data(), fragment.size(), 0U, generation)) return false;
+        if (!Peer::HandleConnectionOtaControl(service, fragment.data(), fragment.size(), 0U, generation, useStreamToken)) return false;
         offset += count;
     }
     return true;
@@ -7402,6 +7403,11 @@ void TestRecoveryUsesUpdaterWithoutDomainStartup() {
     send(R"({"cmd":"info"})");
     Check(control->LastTx() == R"({"i":[3,4,24,1]})",
           "recovery mode and exact truthful mask arrive through existing pre-session info");
+    const uint8_t recoveryAddress[6] = {0x81U, 0x3fU, 0x52U, 0xa6U, 0x10U, 0x24U};
+    NimBLEDevice::SetTestAddress(recoveryAddress, true);
+    send(R"({"cmd":"info","bs":1})");
+    Check(control->LastTx() == R"({"i":[3,4,24,1]})" && NimBLEDevice::AddressReads() == 0U,
+          "recovery selector returns unchanged public info without reading local identity");
     constexpr char domainCommand[] = R"({"cmd":"console","line":"newgame"})";
     service.OnCommandCharacteristicWrite(domainCommand, sizeof(domainCommand) - 1U);
     char input = 0;
@@ -9396,6 +9402,7 @@ int main() {
         fxe::ManualMillis::SetNowMs(0U);
         TestTypedIdentifyVirtualLitchTimedJourney();
         TestIdentifyRatePolicyAndUnpairedOrderedPath();
+        TestPairedBluetoothIdentitySuffix();
         TestRejectedOwnerEpochCannotStartQuietSecurity();
         TestOwnerNativeSecurityRequestsAreIntentBounded();
         TestNativeSavedPhonesThroughSharedSession();

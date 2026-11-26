@@ -552,6 +552,7 @@ class BleService {
     bool NotifyOtaJson(const char* jsonPayload);
     bool NotifyOtaStatus(const char* status, const char* detail = nullptr);
     void NotifyDeviceInfo();
+    void NotifyBluetoothIdentitySuffix();
     void RequestFirmwareDigestNotification();
     void UpdateFirmwareDigestNotification();
 #if defined(LITCH_BLE_OTA)

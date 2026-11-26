@@ -14,6 +14,7 @@ xcrun swiftc -swift-version 4.2 -j 2 -num-threads 2 -module-cache-path "$test_bu
   -F "$test_frameworks" -Xlinker -rpath -Xlinker "$test_frameworks" \
   -I "$test_libraries" -L "$test_libraries" -Xlinker -rpath -Xlinker "$test_libraries" \
   -Xlinker -rpath -Xlinker "$test_private_frameworks" \
+  "$test_dir/../Classes/Plugin/ScanNames.swift" \
   "$test_dir/../Classes/ReactiveBle/WriteWithoutResponseAdmission.swift" \
   "$test_dir/../Classes/Plugin/ConnectionDiagnostics.swift" \
   "$test_dir/main.swift" -o "$test_build/write-admission-tests"

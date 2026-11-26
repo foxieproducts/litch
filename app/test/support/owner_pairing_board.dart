@@ -100,6 +100,9 @@ class OwnerPairingBoard extends RebootReplyBle {
   final stateQueries = <int>[];
   int heartbeats = 0;
   bool includeIdentity = true;
+  bool supportsBluetoothSuffix = false;
+  Object? bluetoothSuffixReply = '3F81';
+  int bluetoothSuffixQueries = 0;
   void Function(int code)? onStateQuery;
   bool publishAfterBegin = true;
   int stateToken = 0x80000001;
@@ -108,6 +111,13 @@ class OwnerPairingBoard extends RebootReplyBle {
   Future<void> commandWrite(List<int> value) async {
     final command = jsonDecode(utf8.decode(value)) as Map;
     if (command['cmd'] == 'info') {
+      if (command['bs'] == 1) {
+        ++bluetoothSuffixQueries;
+        if (supportsBluetoothSuffix) {
+          emitStatus(jsonEncode({'bs': bluetoothSuffixReply}));
+          return;
+        }
+      }
       await capabilityReplyGate?.future;
       emitStatus('{"i":[3,3,$capabilityMask]}');
       return;

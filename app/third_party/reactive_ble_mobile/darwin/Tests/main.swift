@@ -2,6 +2,22 @@ import Foundation
 import XCTest
 
 final class WriteAdmissionTests: XCTestCase {
+    func testScanNameUsesFreshAdvertisingBeforeCachedPeripheralName() {
+        let names = ScanNames()
+        func unexpectedCacheRead() -> String? {
+            XCTFail("Cached name must be lazy")
+            return nil
+        }
+        let id = "CBAC74C1-949A-469A-897C-BCF04733BEEF"
+        XCTAssertEqual(names.resolve(id: id, advertised: nil, cached: "Foxie Litch"), "Foxie Litch")
+        XCTAssertEqual(names.resolve(id: id, advertised: "Studio Board", cached: unexpectedCacheRead()), "Studio Board")
+        XCTAssertEqual(names.resolve(id: id, advertised: nil, cached: "Foxie Litch"), "Studio Board")
+        XCTAssertEqual(names.resolve(id: id, advertised: " ", cached: unexpectedCacheRead()), "Studio Board")
+        XCTAssertEqual(names.resolve(id: id, advertised: "Foxie Litch", cached: "Studio Board"), "Foxie Litch")
+        XCTAssertEqual(names.resolve(id: "other", advertised: nil, cached: nil), "")
+        XCTAssertEqual(ScanNames().resolve(id: id, advertised: nil, cached: "New OS name"), "New OS name")
+    }
+
     private final class Fixture {
         let peripheral = UUID()
         var now: TimeInterval = 0

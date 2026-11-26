@@ -79,6 +79,19 @@ private class BleClientForTesting(
 
 @DisplayName("BleClient unit tests")
 class ReactiveBleClientTest {
+    @Test
+    fun `scan response name survives stale OS cache and explicit rename replaces it`() {
+        val names = ScanNames()
+        val id = "AA:BB:CC:DD:EE:FF"
+        assertThat(names.resolve(id, null, { "Foxie Litch" })).isEqualTo("Foxie Litch")
+        assertThat(names.resolve(id, "Studio Board", { error("Cached name must be lazy") })).isEqualTo("Studio Board")
+        assertThat(names.resolve(id, null, { error("Cached name must be lazy") })).isEqualTo("Studio Board")
+        assertThat(names.resolve(id, " ", { "Foxie Litch" })).isEqualTo("Studio Board")
+        assertThat(names.resolve(id, "Foxie Litch", { "Studio Board" })).isEqualTo("Foxie Litch")
+        assertThat(names.resolve("other", null, { null })).isEmpty()
+        assertThat(ScanNames().resolve(id, null, { "New OS name" })).isEqualTo("New OS name")
+    }
+
     @MockK
     private lateinit var context: Context
 

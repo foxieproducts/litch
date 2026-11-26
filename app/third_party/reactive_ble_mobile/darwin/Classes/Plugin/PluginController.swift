@@ -12,6 +12,7 @@ final class PluginController {
 
     struct Scan {
         let services: [CBUUID]
+        let names = ScanNames()
     }
 
     let connectionDiagnostics = ConnectionDiagnostics()
@@ -83,14 +84,18 @@ final class PluginController {
                 context.reportState(state)
             },
             onDiscovery: papply(weak: self) { context, _, peripheral, advertisementData, rssi in
-                guard let sink = context.scan?.sink
+                guard let scan = context.scan, let sink = scan.sink
                 else { assert(false); return }
 
                 let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? ServiceData ?? [:]
                 let serviceUuids = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
                 let isConnectable = (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue
                 let manufacturerData = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data ?? Data()
-                let name = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? peripheral.name ?? String()
+                let name = scan.parameters.names.resolve(
+                    id: peripheral.identifier.uuidString,
+                    advertised: advertisementData[CBAdvertisementDataLocalNameKey] as? String,
+                    cached: peripheral.name
+                )
                 let deviceDiscoveryMessage = DeviceScanInfo.with {
                     $0.id = peripheral.identifier.uuidString
                     $0.name = name

@@ -204,6 +204,12 @@ class _PendingSettingTransaction {
   final _SettingReadObservation? readObservation;
 }
 
+typedef RememberedOwnedBoard = ({
+  List<String> aliases,
+  String historyStorageKey,
+  String? bluetoothSuffix,
+});
+
 class LitchBleService {
   static DateTime Function() _monotonicScanClock() {
     final elapsed = Stopwatch()..start();
@@ -1248,8 +1254,7 @@ class LitchBleService {
   static const _ownedBoardsKey = 'owned_litch_boards_v1';
   bool _ownedBoardsNeedReload = false;
   Future<void> _ownedBoardsWork = Future<void>.value();
-  Future<Map<String, ({List<String> aliases, String historyStorageKey})>>
-  rememberedOwnedBoards() async {
+  Future<Map<String, RememberedOwnedBoard>> rememberedOwnedBoards() async {
     final preferences = await SharedPreferences.getInstance();
     final raw = preferences.getString(_ownedBoardsKey);
     if (raw == null) return {};
@@ -1257,8 +1262,7 @@ class LitchBleService {
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('Invalid owned board registry.');
     }
-    final result =
-        <String, ({List<String> aliases, String historyStorageKey})>{};
+    final result = <String, RememberedOwnedBoard>{};
     for (final entry in decoded.entries) {
       final value = entry.value;
       if (!RegExp(r'^[0-9a-f]{32}$').hasMatch(entry.key) ||
@@ -1275,6 +1279,13 @@ class LitchBleService {
       result[entry.key] = (
         aliases: List<String>.from(value['aliases'] as List),
         historyStorageKey: value['historyStorageKey'] as String,
+        bluetoothSuffix:
+            value['bluetoothSuffix'] is String &&
+                RegExp(
+                  r'^[0-9A-F]{4}$',
+                ).hasMatch(value['bluetoothSuffix'] as String)
+            ? value['bluetoothSuffix'] as String
+            : null,
       );
     }
     return result;
@@ -1293,11 +1304,20 @@ class LitchBleService {
         _platformAliasHistoryStorageKey(deviceId);
   }
 
-  Future<void> _rememberOwnedBoard(String identity, String deviceId) {
+  Future<void> _rememberOwnedBoard(
+    String identity,
+    String deviceId, {
+    String? bluetoothSuffix,
+  }) {
     final generation = _connectionGeneration;
     final work = _ownedBoardsWork.then((_) async {
       if (generation != _connectionGeneration) return;
-      await _rememberOwnedBoardNow(identity, deviceId, generation);
+      await _rememberOwnedBoardNow(
+        identity,
+        deviceId,
+        generation,
+        bluetoothSuffix,
+      );
     });
     // Registry storage outlives a connection. Keep its mutations ordered even
     // when a retired connection's platform save has not returned yet.
@@ -1309,6 +1329,7 @@ class LitchBleService {
     String identity,
     String deviceId,
     int generation,
+    String? bluetoothSuffix,
   ) async {
     final preferences = await SharedPreferences.getInstance();
     if (_ownedBoardsNeedReload) {
@@ -1324,14 +1345,25 @@ class LitchBleService {
       () => (
         aliases: <String>[],
         historyStorageKey: _platformAliasHistoryStorageKey(deviceId),
+        bluetoothSuffix: null,
       ),
     );
-    if (record.aliases.contains(deviceId)) return;
-    record.aliases.add(deviceId);
+    final suffix = bluetoothSuffix ?? record.bluetoothSuffix;
+    if (record.aliases.contains(deviceId) && suffix == record.bluetoothSuffix) {
+      return;
+    }
+    if (!record.aliases.contains(deviceId)) record.aliases.add(deviceId);
+    records[identity] = (
+      aliases: record.aliases,
+      historyStorageKey: record.historyStorageKey,
+      bluetoothSuffix: suffix,
+    );
     final encoded = records.map(
       (identity, value) => MapEntry(identity, {
         'aliases': value.aliases,
         'historyStorageKey': value.historyStorageKey,
+        if (value.bluetoothSuffix != null)
+          'bluetoothSuffix': value.bluetoothSuffix,
       }),
     );
     _ownedBoardsNeedReload = true;
@@ -1339,6 +1371,100 @@ class LitchBleService {
       throw StateError('The owned board could not be remembered.');
     }
     _ownedBoardsNeedReload = false;
+  }
+
+  int _bluetoothSuffixGeneration = -1;
+  Future<String?>? _bluetoothSuffixRead;
+  String? _bluetoothSuffix;
+
+  String? get connectedBluetoothSuffix =>
+      productReady && _bluetoothSuffixGeneration == _connectionGeneration
+      ? _bluetoothSuffix
+      : null;
+
+  /// Optional paired metadata. Transport aliases never supply these digits.
+  Future<String?> fetchBoardBluetoothSuffix({required String deviceId}) {
+    if (!isConnected ||
+        connectedId != deviceId ||
+        !productReady ||
+        identifyConnectionActive ||
+        durableBoardIdentity == null ||
+        deviceCapabilities(deviceId).recoveryOnly) {
+      return Future.value(null);
+    }
+    final generation = _connectionGeneration;
+    if (_bluetoothSuffixGeneration == generation &&
+        _bluetoothSuffixRead != null) {
+      return _bluetoothSuffixRead!;
+    }
+    _bluetoothSuffixGeneration = generation;
+    _bluetoothSuffix = null;
+    return _bluetoothSuffixRead = _readBoardBluetoothSuffix(
+      deviceId,
+      durableBoardIdentity!,
+      generation,
+    );
+  }
+
+  Future<String?> _readBoardBluetoothSuffix(
+    String deviceId,
+    String identity,
+    int generation,
+  ) async {
+    bool current() =>
+        !_disposed &&
+        generation == _connectionGeneration &&
+        isConnected &&
+        connectedId == deviceId &&
+        productReady &&
+        durableBoardIdentity == identity;
+    try {
+      final remembered =
+          (await rememberedOwnedBoards())[identity]?.bluetoothSuffix;
+      if (!current()) return null;
+      if (remembered != null) return _bluetoothSuffix = remembered;
+      final channel = await _ensureOtaControlChannel(deviceId);
+      if (!current() || !_isActiveOtaChannel(deviceId, channel)) return null;
+      final cancelled = Completer<void>();
+      try {
+        final response = channel.waitFor(
+          (event) =>
+              event.kind == OtaStatusKind.bluetoothSuffix ||
+              event.kind == OtaStatusKind.deviceInfo,
+          timeout: const Duration(seconds: 2),
+          cancelled: cancelled.future,
+        );
+        // Old firmware ignores the selector and returns ordinary device info.
+        // Do not send an unknown command or consume another request's errors.
+        if (!await _sendOtaCommandForChannel(
+          deviceId,
+          channel,
+          <String, Object>{'cmd': 'info', 'bs': 1},
+          attempts: 1,
+          delay: Duration.zero,
+          isCurrent: current,
+        )) {
+          return null;
+        }
+        final event = await response;
+        if (!current() ||
+            !_isActiveOtaChannel(deviceId, channel) ||
+            event?.deviceId != deviceId ||
+            event?.generation != channel.generation) {
+          return null;
+        }
+        final suffix = event?.bluetoothSuffix;
+        if (suffix == null) return null;
+        _bluetoothSuffix = suffix;
+        await _rememberOwnedBoard(identity, deviceId, bluetoothSuffix: suffix);
+        return current() ? suffix : null;
+      } finally {
+        cancelled.complete();
+      }
+    } catch (_) {
+      // Display metadata cannot delay readiness or make a connection fail.
+      return current() ? _bluetoothSuffix : null;
+    }
   }
 
   /// Litchcraft shares this connection's resolved GATT instances and generation
@@ -4203,9 +4329,12 @@ class LitchBleService {
               return;
             }
 
-            final String cleanedName = device.name.trim().isEmpty
-                ? BleProtocol.litchNamePrefix
-                : device.name.trim();
+            // A primary advertisement may omit the local name carried by its
+            // scan response. Do not replace a learned name with that absence.
+            final advertisedName = device.name.trim();
+            final cleanedName = advertisedName.isNotEmpty
+                ? advertisedName
+                : _boardsById[device.id]?.name ?? '';
             final bool isNewBoard = !_boardsById.containsKey(device.id);
             _boardsById[device.id] = LitchBoard(
               id: device.id,
@@ -8777,7 +8906,8 @@ class LitchBleService {
             event.deviceId != deviceId) {
           return;
         }
-        if (event.kind == OtaStatusKind.runtimeHealth ||
+        if (event.kind == OtaStatusKind.bluetoothSuffix ||
+            event.kind == OtaStatusKind.runtimeHealth ||
             event.kind == OtaStatusKind.runtimeHealthMalformed ||
             event.kind == OtaStatusKind.runtimeHealthRecheckSucceeded ||
             event.kind == OtaStatusKind.runtimeHealthRecheckFailed ||

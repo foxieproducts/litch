@@ -5,6 +5,25 @@ import 'package:litch_mobile/src/models/runtime_health_snapshot.dart';
 import 'package:litch_mobile/src/services/ota/ota_status_event.dart';
 
 void main() {
+  test('Bluetooth suffix accepts only the exact board response', () {
+    OtaStatusEvent? read(Object? value) => OtaStatusEvent.decode(
+      utf8.encode(jsonEncode({'bs': value})),
+      deviceId: 'board',
+      generation: 1,
+    );
+    expect(read('3F81')?.bluetoothSuffix, '3F81');
+    final unrelatedError = OtaStatusEvent.decode(
+      utf8.encode(jsonEncode({'e': 'busy', 'bs': '3F81'})),
+      deviceId: 'board',
+      generation: 1,
+    );
+    expect(unrelatedError?.kind, OtaStatusKind.error);
+    expect(unrelatedError?.bluetoothSuffix, isNull);
+    for (final value in <Object?>[null, '3f81', 'AA:BB', '12345', 0x3f81, '']) {
+      expect(read(value)?.bluetoothSuffix, isNull);
+    }
+  });
+
   OtaStatusEvent decode(Map<String, Object?> payload) {
     return OtaStatusEvent.decode(
       utf8.encode(jsonEncode(payload)),

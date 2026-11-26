@@ -5854,7 +5854,7 @@ void main() {
   }
 
   testWidgets(
-    'startup timing: iOS discovers compatible names immediately and rejects unrelated devices',
+    'startup timing: scans retain advertised names and reject unrelated devices',
     (WidgetTester tester) async {
       final _ScanBle ble = _ScanBle();
       final LitchBleService service = LitchBleService(
@@ -5862,6 +5862,9 @@ void main() {
         ble: ble,
         permissionGateway: _PermissionGateway(<Permission, PermissionStatus>{
           Permission.bluetooth: PermissionStatus.granted,
+          Permission.bluetoothScan: PermissionStatus.granted,
+          Permission.bluetoothConnect: PermissionStatus.granted,
+          Permission.locationWhenInUse: PermissionStatus.granted,
         }),
       );
       final List<List<String>> discoveries = <List<String>>[];
@@ -5933,13 +5936,47 @@ void main() {
       );
       await tester.pump();
       expect(discoveries.last, <String>['legacy-v2', 'renamed-v3']);
+      // Android MACs and iOS peripheral UUIDs remain transport keys. A later
+      // primary advertisement can omit the scan-response name on either OS.
+      for (final id in <String>[
+        'AA:BB:CC:DD:EE:FF',
+        'CBAC74C1-949A-469A-897C-BCF04733BEEF',
+      ]) {
+        void advertise(String name, int rssi) => ble.scanController.add(
+          DiscoveredDevice(
+            id: id,
+            name: name,
+            serviceUuids: <Uuid>[BleProtocol.baseService],
+            serviceData: const <Uuid, Uint8List>{},
+            manufacturerData: Uint8List(0),
+            rssi: rssi,
+            connectable: Connectable.available,
+          ),
+        );
+        advertise('Studio Board', -45);
+        await tester.pump();
+        advertise('  ', -60);
+        await tester.pump();
+        expect(service.discoveredBoard(id)?.name, 'Studio Board');
+        expect(service.discoveredBoard(id)?.rssi, -60);
+        advertise('Renamed on another phone', -40);
+        await tester.pump();
+        expect(service.discoveredBoard(id)?.name, 'Renamed on another phone');
+        expect(service.discoveredBoard(id)?.id, id);
+      }
       expect(ble.scanForDevicesCalls, 1);
       await tester.pump(const Duration(seconds: 2));
       expect(ble.scanForDevicesCalls, 1);
-      expect(discoveries.last, <String>['legacy-v2', 'renamed-v3']);
-      debugPrint('STARTUP virtual iOS legacy-name discovery delay=0 ms');
+      expect(
+        discoveries.last,
+        containsAll(<String>['legacy-v2', 'renamed-v3']),
+      );
+      debugPrint('STARTUP virtual legacy-name discovery delay=0 ms');
     },
-    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    variant: const TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    }),
   );
 
   testWidgets(

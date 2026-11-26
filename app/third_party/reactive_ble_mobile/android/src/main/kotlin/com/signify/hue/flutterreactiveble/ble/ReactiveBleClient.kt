@@ -75,6 +75,7 @@ open class ReactiveBleClient(private val context: Context) : BleClient {
                     .build()
             }.toTypedArray()
 
+        val scanNames = ScanNames()
         return rxBleClient.scanBleDevices(
             ScanSettings.Builder()
                 .setScanMode(scanMode.toScanSettings())
@@ -87,8 +88,11 @@ open class ReactiveBleClient(private val context: Context) : BleClient {
             .map { result ->
                 ScanInfo(
                     result.bleDevice.macAddress,
-                    result.scanRecord.deviceName
-                        ?: result.bleDevice.name ?: "",
+                    scanNames.resolve(
+                        result.bleDevice.macAddress,
+                        result.scanRecord.deviceName,
+                        { result.bleDevice.name },
+                    ),
                     result.rssi,
                     when (result.isConnectable) {
                         null -> Connectable.UNKNOWN
@@ -476,4 +480,15 @@ open class ReactiveBleClient(private val context: Context) : BleClient {
                     .setShouldLogAttributeValues(true)
                     .build(),
             )
+}
+
+// Keep a received local name when later packets from the same scan omit it.
+internal class ScanNames {
+    private val advertisedNames = mutableMapOf<String, String>()
+
+    fun resolve(id: String, advertised: String?, cached: () -> String?): String {
+        val fresh = advertised?.trim()?.takeIf { it.isNotEmpty() }
+        if (fresh != null) advertisedNames[id] = fresh
+        return fresh ?: advertisedNames[id] ?: cached()?.trim().orEmpty()
+    }
 }

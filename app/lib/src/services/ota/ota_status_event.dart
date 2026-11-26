@@ -22,6 +22,7 @@ enum OtaStatusKind {
   runtimeHealthRecheckFailed,
   runtimeHealthRecheckMalformed,
   deviceInfo,
+  bluetoothSuffix,
   unknown,
 }
 
@@ -49,6 +50,16 @@ class OtaStatusEvent {
   final int? totalBytes;
   final String rawText;
   final Map<String, Object?> payload;
+
+  String? get bluetoothSuffix {
+    final value = payload['bs'];
+    return kind == OtaStatusKind.bluetoothSuffix &&
+            payload.length == 1 &&
+            value is String &&
+            RegExp(r'^[0-9A-F]{4}$').hasMatch(value)
+        ? value
+        : null;
+  }
 
   // Optional firmware write-path observations; never completion authority.
   int? get firmwareWriteBytes =>
@@ -169,6 +180,10 @@ class OtaStatusEvent {
       kind = OtaStatusKind.runtimeHealthRecheckMalformed;
       state = 'runtime_health_recheck_malformed';
       detail = _string(rawHealthRecheck);
+    } else if (decoded.length == 1 && decoded.containsKey('bs')) {
+      kind = OtaStatusKind.bluetoothSuffix;
+      state = 'bluetooth_suffix';
+      detail = '';
     } else if (deviceInfo is List<Object?> && deviceInfo.length >= 3) {
       kind = OtaStatusKind.deviceInfo;
       state = 'device_info';

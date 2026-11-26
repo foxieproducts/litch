@@ -77,15 +77,6 @@ Future<bool> _confirmAboutArtwork(BuildContext context) async {
       false;
 }
 
-String _shortLitchId(String deviceId) {
-  final String hex = deviceId.toUpperCase().replaceAll(
-    RegExp(r'[^0-9A-F]'),
-    '',
-  );
-  if (hex.length <= 4) return hex.isEmpty ? deviceId.toUpperCase() : hex;
-  return hex.substring(hex.length - 4);
-}
-
 Color _bottomNavigationColor(BuildContext context) =>
     MediaQuery.orientationOf(context) == Orientation.portrait
     ? NavigationBarTheme.of(context).backgroundColor ??
@@ -278,6 +269,8 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
   StreamSubscription<Object?>? _pairingRecoverySub;
   StreamSubscription<String>? _boardNameSub;
   final Map<String, String> _knownBoardNames = <String, String>{};
+  final Map<String, String> _knownBoardBluetoothSuffixes = <String, String>{};
+  String? _bluetoothSuffixProbe;
   List<LitchBoard> _boards = const <LitchBoard>[];
   Timer? _autoConnectTimer;
   Timer? _scanRetryTimer;
@@ -553,6 +546,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     } catch (_) {
       // Optional names and Console visibility must not prevent discovery.
     }
+    await _refreshKnownBoardIdentities();
     if (!mounted) return;
 
     setState(() => _noticeStartupReady = true);
@@ -580,6 +574,63 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
 
     _bleService.startScan();
     _startScanRetryTimer();
+  }
+
+  Future<void> _refreshKnownBoardIdentities() async {
+    final suffixes = <String, String>{};
+    try {
+      final records = await _bleService.rememberedOwnedBoards();
+      final identities = <String, String>{};
+      final ambiguousAliases = <String>{};
+      for (final entry in records.entries) {
+        for (final alias in entry.value.aliases) {
+          final previous = identities[alias];
+          if (previous != null && previous != entry.key) {
+            ambiguousAliases.add(alias);
+          } else {
+            identities[alias] = entry.key;
+          }
+        }
+      }
+      for (final entry in identities.entries) {
+        final suffix = records[entry.value]?.bluetoothSuffix;
+        if (!ambiguousAliases.contains(entry.key) && suffix != null) {
+          suffixes[entry.key] = suffix;
+        }
+      }
+    } catch (_) {
+      // Missing or damaged saved associations must not invent a board ID.
+    }
+    if (!mounted) return;
+    final connectedId = _bleService.connectedId;
+    if (_bleService.productReady && connectedId != null) {
+      final suffix = _bleService.connectedBluetoothSuffix;
+      if (suffix != null) {
+        suffixes[connectedId] = suffix;
+      } else {
+        suffixes.remove(connectedId);
+      }
+    }
+    setState(() {
+      _knownBoardBluetoothSuffixes
+        ..clear()
+        ..addAll(suffixes);
+    });
+  }
+
+  void _loadConnectedBluetoothSuffix(String deviceId) {
+    final token = _bleService.connectionSessionToken;
+    final probe = '$deviceId:$token';
+    if (_bluetoothSuffixProbe == probe) return;
+    _bluetoothSuffixProbe = probe;
+    unawaited(() async {
+      await _bleService.fetchBoardBluetoothSuffix(deviceId: deviceId);
+      if (mounted &&
+          _bleService.connectedId == deviceId &&
+          _bleService.connectionSessionToken == token) {
+        await _refreshKnownBoardIdentities();
+      }
+    }());
   }
 
   void _startScanRetryTimer() {
@@ -618,6 +669,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     _idleForLock = false;
     setState(() {});
     await _bleService.setAppForegroundActive(true);
+    await _refreshKnownBoardIdentities();
 
     if (!mounted ||
         lifecycleGeneration != _lifecycleGeneration ||
@@ -857,6 +909,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     if (!_bleService.productReady && !capabilities.recoveryOnly) {
       return;
     }
+    if (_bleService.productReady) _loadConnectedBluetoothSuffix(deviceId);
     // A fallback Play screen is usable when it has received a board position.
     // Mode inspection can finish with an error while the native link is up.
     final modeResolved =
@@ -2030,11 +2083,14 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
       final value = _bleService.latestSettingValue('BLE_DEVICE_NAME');
       if (value is String && value.trim().isNotEmpty) return value.trim();
     }
-    return _knownBoardNames[id] ?? advertisedName?.trim() ?? 'Foxie Litch';
+    final name = advertisedName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return _knownBoardNames[id] ?? 'Foxie Litch';
   }
 
   void _openConnectionHelp(String? targetId) {
-    final helpTargetId = targetId ?? _connectionEnd?.deviceId ?? _selectedBoardId;
+    final helpTargetId =
+        targetId ?? _connectionEnd?.deviceId ?? _selectedBoardId;
     final board =
         (_pendingDestinationBoard?.id == helpTargetId
             ? _pendingDestinationBoard
@@ -2781,9 +2837,12 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                   'W',
                 ).join()
               : _connectionBoardName(board.id, board.name);
-          final String boardIdentity = litchStrings(
-            context,
-          ).boardIdentity(board == null ? '8888' : _shortLitchId(board.id));
+          final shortId = board == null
+              ? '8888'
+              : _knownBoardBluetoothSuffixes[board.id];
+          final boardIdentity = shortId == null
+              ? '#$identifyNumber'
+              : '${litchStrings(context).boardIdentity(shortId)} · #$identifyNumber';
           final VoidCallback? identify =
               board == null || connecting || _isIdentifying
               ? null
@@ -2839,7 +2898,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                                 ?.copyWith(fontSize: 14, height: 1.2),
                           ),
                           const SizedBox(height: 4),
-                          label('$boardIdentity · #$identifyNumber'),
+                          label(boardIdentity),
                         ],
                       ),
                     ),
@@ -2877,7 +2936,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 4),
-                    label('$boardIdentity · #$identifyNumber'),
+                    label(boardIdentity),
                     const SizedBox(height: 12),
                     if (stackBoardActions) ...<Widget>[
                       SizedBox(width: double.infinity, child: connectButton),
@@ -2902,7 +2961,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                 : ValueKey<String>('discovered-board-${board.id}'),
             child: ListTile(
               title: label(boardName),
-              subtitle: label('$boardIdentity · #$identifyNumber'),
+              subtitle: label(boardIdentity),
               trailing: Wrap(
                 spacing: 8,
                 children: <Widget>[identifyButton, connectButton],
@@ -5614,6 +5673,7 @@ class _ConnectedBoardSheetState extends State<_ConnectedBoardSheet> {
   int? _pendingBrightnessPreview;
   String? _friendlyName;
   bool _boardNameResolved = false;
+  String? _bluetoothSuffix;
   bool _sleepPending = false;
   Timer? _sleepConfirmationTimer;
   Completer<void>? _sleepConfirmation;
@@ -5651,6 +5711,18 @@ class _ConnectedBoardSheetState extends State<_ConnectedBoardSheet> {
       }
     });
     unawaited(_loadFriendlyName());
+    _bluetoothSuffix = widget.bleService.connectedBluetoothSuffix;
+    final token = widget.bleService.connectionSessionToken;
+    unawaited(() async {
+      final suffix = await widget.bleService.fetchBoardBluetoothSuffix(
+        deviceId: widget.boardId,
+      );
+      if (mounted &&
+          widget.bleService.connectedId == widget.boardId &&
+          widget.bleService.connectionSessionToken == token) {
+        setState(() => _bluetoothSuffix = suffix);
+      }
+    }());
   }
 
   void _syncCachedSettings() {
@@ -6356,6 +6428,11 @@ class _ConnectedBoardSheetState extends State<_ConnectedBoardSheet> {
       }
       break;
     }
+    final shortId =
+        widget.bleService.connectedId == widget.boardId &&
+            widget.bleService.productReady
+        ? _bluetoothSuffix
+        : null;
     final String? visibleError = _inlineError;
     final menuContentPadding =
         ListTileTheme.of(context).contentPadding ??
@@ -6496,11 +6573,9 @@ class _ConnectedBoardSheetState extends State<_ConnectedBoardSheet> {
                     ),
                   ],
                 ),
-                subtitle: Text(
-                  litchStrings(
-                    context,
-                  ).boardIdentity(_shortLitchId(widget.boardId)),
-                ),
+                subtitle: shortId == null
+                    ? null
+                    : Text(litchStrings(context).boardIdentity(shortId)),
                 trailing: _expandedMenuLabels
                     ? null
                     : const Icon(Icons.edit_outlined),

@@ -1216,7 +1216,8 @@ GameLibraryWindow _windowFor(
 }
 
 class _PagedSettingsBleService extends _ConnectionGateBleService {
-  _PagedSettingsBleService() : super(useProductionConsoleStream: true);
+  _PagedSettingsBleService({super.board})
+    : super(useProductionConsoleStream: true);
 
   int sleepRequests = 0;
   Completer<ConnectionSessionOutcome?>? sleepResponse;
@@ -8244,8 +8245,69 @@ void main() {
     expect(service.settingsReadCalls, 0);
   });
 
+  testWidgets('Connected menu shows the paired board Bluetooth suffix', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final board = SettingsSessionBoard(includeHomeSnapshot: true)
+      ..capabilityMask =
+          LitchDeviceCapabilities.settingsBit |
+          LitchDeviceCapabilities.ownerPairingBit
+      ..state = 6
+      ..flags = 5
+      ..supportsBluetoothSuffix = true;
+    final service = _PagedSettingsBleService(board: board);
+    addTearDown(() => tester.runAsync(service.dispose));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConnectionGateScreen(
+          bleService: service,
+          firmwarePageBuilder: (_, _, _, _, _) => const SizedBox(),
+        ),
+      ),
+    );
+    await tester.pump();
+    service.emitBoards(const [
+      LitchBoard(id: 'board-1', name: 'Studio', rssi: -40),
+      LitchBoard(id: 'board-2', name: 'Other', rssi: -50),
+    ]);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect').first);
+    service.completeNextConnect(true);
+    for (
+      var frame = 0;
+      frame < 30 && service.ownerPairingStatus == null;
+      ++frame
+    ) {
+      await tester.pump();
+    }
+    expect(
+      service.ownerPairingStatus?.state,
+      OwnerPairingSessionState.ownedOther,
+    );
+    board.setState(5, nextFlags: 7);
+    await tester.runAsync(() async {
+      for (var turn = 0; turn < 20; ++turn) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    });
+    await tester.pumpAndSettle();
+    expect(service.productReady, isTrue);
+    await tester.tap(
+      find.byKey(const ValueKey('connected-board-status-action')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Litch ID: 3F81'), findsOneWidget);
+    expect(find.textContaining('0F10'), findsNothing);
+    expect(find.textContaining('BAD1'), findsNothing);
+    expect(board.bluetoothSuffixQueries, 1);
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(service.dispose);
+    await tester.pump();
+  });
+
   testWidgets(
-    'Connected menu shows stable identity and saves a friendly name',
+    'Connected menu omits unavailable product identity and saves a friendly name',
     (tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final service = _PagedSettingsBleService();
@@ -8257,7 +8319,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Connected'), findsWidgets);
-      expect(find.text('Litch ID: BAD1'), findsOneWidget);
+      expect(find.textContaining('Litch ID:'), findsNothing);
       expect(find.text('Foxie_Litch'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('board-menu-name')));
@@ -8275,7 +8337,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Studio Litch'), findsOneWidget);
       expect(find.text('Foxie One'), findsNothing);
-      expect(find.text('Litch ID: BAD1'), findsOneWidget);
+      expect(find.textContaining('Litch ID:'), findsNothing);
 
       final preferences = await SharedPreferences.getInstance();
       expect(preferences.getString('board_friendly_name:board-1'), isNull);
@@ -8328,7 +8390,7 @@ void main() {
       expect(find.text('Studio Litch'), findsNothing);
       expect(find.text('Foxie One'), findsNothing);
       expect(find.text('Connected'), findsWidgets);
-      expect(find.text('Litch ID: BAD1'), findsOneWidget);
+      expect(find.textContaining('Litch ID:'), findsNothing);
     },
   );
 
@@ -8381,7 +8443,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Studio Board'), findsOneWidget);
       expect(find.text('Foxie One'), findsNothing);
-      expect(find.text('Litch ID: BAD1'), findsOneWidget);
+      expect(find.textContaining('Litch ID:'), findsNothing);
     },
   );
 
@@ -13729,17 +13791,11 @@ void main() {
       Finder card(String id) =>
           find.byKey(ValueKey<String>('discovered-board-$id'));
       expect(
-        find.descendant(
-          of: card('board-b'),
-          matching: find.text('Litch ID: BADB · #1'),
-        ),
+        find.descendant(of: card('board-b'), matching: find.text('#1')),
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: card('board-a'),
-          matching: find.text('Litch ID: BADA · #2'),
-        ),
+        find.descendant(of: card('board-a'), matching: find.text('#2')),
         findsOneWidget,
       );
 
@@ -13750,24 +13806,15 @@ void main() {
       ]);
       await tester.pump();
       expect(
-        find.descendant(
-          of: card('board-b'),
-          matching: find.text('Litch ID: BADB · #1'),
-        ),
+        find.descendant(of: card('board-b'), matching: find.text('#1')),
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: card('board-a'),
-          matching: find.text('Litch ID: BADA · #2'),
-        ),
+        find.descendant(of: card('board-a'), matching: find.text('#2')),
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: card('board-c'),
-          matching: find.text('Litch ID: BADC · #3'),
-        ),
+        find.descendant(of: card('board-c'), matching: find.text('#3')),
         findsOneWidget,
       );
       expect(
@@ -13964,34 +14011,87 @@ void main() {
     });
   }
 
-  testWidgets('nearby boards show only the final two identity bytes', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    final service = _ConnectionGateBleService();
-    addTearDown(service.dispose);
-    await tester.pumpWidget(
-      MaterialApp(home: ConnectionGateScreen(bleService: service)),
-    );
-    await tester.pump();
+  testWidgets(
+    'nearby boards show learned Bluetooth suffixes across platforms',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'owned_litch_boards_v1': jsonEncode({
+          '1234567890abcdef1234567890abcafe': {
+            'aliases': [
+              'CBAC74C1-949A-469A-897C-BCF04733BEEF',
+              'AA:BB:CC:DD:EE:FF',
+            ],
+            'historyStorageKey': '1234567890abcdef1234567890abcafe',
+            'bluetoothSuffix': '3F81',
+          },
+          '22222222222222222222222222222222': {
+            'aliases': ['11:22:33:44:55:66'],
+            'historyStorageKey': '22222222222222222222222222222222',
+          },
+          '33333333333333333333333333333333': {
+            'aliases': ['77:88:99:AA:BB:CC'],
+            'historyStorageKey': '33333333333333333333333333333333',
+            'bluetoothSuffix': 'AA02',
+          },
+        }),
+        'board_friendly_name:CBAC74C1-949A-469A-897C-BCF04733BEEF': 'Old name',
+        'board_friendly_name:AA:BB:CC:DD:EE:FF': 'Travel Litch',
+      });
+      final service = _ConnectionGateBleService();
+      addTearDown(service.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ConnectionGateScreen(bleService: service)),
+      );
+      await tester.pump();
 
-    service.emitBoards(const <LitchBoard>[
-      LitchBoard(
-        id: '00000000-000000000000BEEF',
-        name: 'Studio Litch',
-        rssi: -35,
-      ),
-      LitchBoard(id: 'AA:BB:CC:DD:EE:FF', name: 'Travel Litch', rssi: -45),
-    ]);
-    await tester.pump();
+      service.emitBoards(const <LitchBoard>[
+        LitchBoard(
+          id: 'CBAC74C1-949A-469A-897C-BCF04733BEEF',
+          name: 'Studio Litch',
+          rssi: -35,
+        ),
+        LitchBoard(id: 'AA:BB:CC:DD:EE:FF', name: '', rssi: -45),
+        LitchBoard(id: '77:88:99:AA:BB:CC', name: 'Another board', rssi: -55),
+      ]);
+      await tester.pump();
 
-    expect(find.text('Litch ID: BEEF · #1'), findsOneWidget);
-    expect(find.text('Litch ID: EEFF · #2'), findsOneWidget);
-    expect(find.textContaining('00000000-000000000000BEEF'), findsNothing);
-    expect(find.textContaining('AA:BB:CC:DD:EE:FF'), findsNothing);
-  });
+      expect(find.text('Litch ID: 3F81 · #1'), findsOneWidget);
+      expect(find.text('Litch ID: 3F81 · #2'), findsOneWidget);
+      expect(find.text('Litch ID: AA02 · #3'), findsOneWidget);
+      expect(
+        find.textContaining('CBAC74C1-949A-469A-897C-BCF04733BEEF'),
+        findsNothing,
+      );
+      expect(find.textContaining('AA:BB:CC:DD:EE:FF'), findsNothing);
+      expect(find.text('Studio Litch'), findsOneWidget);
+      expect(find.text('Travel Litch'), findsOneWidget);
+      expect(find.text('Old name'), findsNothing);
+
+      service.emitBoards(const <LitchBoard>[
+        LitchBoard(id: '11:22:33:44:55:66', name: '', rssi: -50),
+        LitchBoard(id: 'unknown-ios-UUID', name: 'Guest Litch', rssi: -60),
+      ]);
+      await tester.pump();
+      expect(find.textContaining('Litch ID:'), findsNothing);
+      expect(find.text('#1'), findsOneWidget);
+      expect(find.text('#2'), findsOneWidget);
+      expect(find.text('Foxie Litch'), findsWidgets);
+      final first = find.byKey(
+        const ValueKey('discovered-board-11:22:33:44:55:66'),
+      );
+      await tester.tap(
+        find.descendant(
+          of: first,
+          matching: find.widgetWithText(OutlinedButton, 'Identify'),
+        ),
+      );
+      await tester.pump();
+      expect(service.identifyCalls.single.deviceId, '11:22:33:44:55:66');
+      expect(service.identifyCalls.single.number, 1);
+    },
+  );
 
   for (final sameBoard in [false, true]) {
     testWidgets(
@@ -18909,7 +19009,7 @@ void main() {
           await capture('scan');
           tester.binding.scheduleFrameCallback(
             (_) => service.emitBoards(const [
-              LitchBoard(id: 'board-1', name: 'Foxie Litch', rssi: -40),
+              LitchBoard(id: 'board-1', name: '', rssi: -40),
             ]),
           );
           await tester.pump(const Duration(milliseconds: 16));
@@ -18963,8 +19063,10 @@ void main() {
         } finally {
           await tester.pumpWidget(const SizedBox());
           if (!preferences.ready.isCompleted) preferences.ready.complete();
-          await service.dispose();
-          await repository.close();
+          await tester.runAsync(() async {
+            await service.dispose();
+            await repository.close();
+          });
         }
       }
     },
@@ -19043,7 +19145,7 @@ void main() {
             final chosenStage = tester.getSize(stage);
             final chosenCard = tester.getRect(card('board-2'));
             expect(service.connectCalls, ['board-2']);
-            expect(find.text('Connecting to Travel Board...'), findsOneWidget);
+            expect(find.text('Connecting to Foxie Two...'), findsOneWidget);
             service.emitBoards(const []);
             await tester.pump(const Duration(milliseconds: 16));
             expect(
@@ -19053,7 +19155,7 @@ void main() {
             );
             expect(tester.getSize(stage), chosenStage);
             expect(tester.getRect(card('board-2')), chosenCard);
-            expect(find.text('Litch ID: BAD2 · #2'), findsOneWidget);
+            expect(find.text('#2'), findsOneWidget);
             await tester.tap(find.byKey(const ValueKey('chosen-board-cancel')));
             await tester.pump(const Duration(milliseconds: 16));
             service.completeNextConnect(false);
@@ -19113,8 +19215,10 @@ void main() {
             expect(find.byType(GameLibraryScreen), findsOneWidget);
           } finally {
             await tester.pumpWidget(const SizedBox());
-            await service.dispose();
-            await repository.close();
+            await tester.runAsync(() async {
+              await service.dispose();
+              await repository.close();
+            });
           }
         }
       } finally {

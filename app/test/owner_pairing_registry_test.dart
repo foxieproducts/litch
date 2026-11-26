@@ -116,6 +116,83 @@ void main() {
     SharedPreferences.resetStatic();
   });
 
+  test(
+    'paired Bluetooth suffix is board reported, durable and alias independent',
+    () async {
+      const android = 'AA:BB:CC:DD:EE:FF';
+      const ios = 'CBAC74C1-949A-469A-897C-BCF04733BEEF';
+      preferences.seed([android]);
+      await _connectOwner(service, board, deviceId: android);
+      expect(
+        await service.fetchBoardBluetoothSuffix(deviceId: android),
+        isNull,
+      );
+      expect(board.bluetoothSuffixQueries, 0, reason: 'No pre-owner query.');
+      board.setState(5, nextFlags: 7);
+      expect(await service.ensureProductReady(android), isTrue);
+      expect(
+        await service.fetchBoardBluetoothSuffix(deviceId: android),
+        isNull,
+      );
+      expect(
+        board.bluetoothSuffixQueries,
+        1,
+        reason: 'Old info response is a quiet fallback.',
+      );
+      expect(
+        (await service.rememberedOwnedBoards())[_identity]?.bluetoothSuffix,
+        isNull,
+      );
+
+      board.supportsBluetoothSuffix = true;
+      await _connectOwner(service, board, deviceId: android);
+      board.setState(5, nextFlags: 7);
+      expect(await service.ensureProductReady(android), isTrue);
+      final first = service.fetchBoardBluetoothSuffix(deviceId: android);
+      final second = service.fetchBoardBluetoothSuffix(deviceId: android);
+      expect(identical(first, second), isTrue);
+      expect(await first, '3F81');
+      expect(board.bluetoothSuffixQueries, 2);
+      expect(
+        (await service.rememberedOwnedBoards())[_identity]?.bluetoothSuffix,
+        '3F81',
+      );
+      expect(await service.historyStorageIdentity(android), _historyKey);
+
+      board.supportsBluetoothSuffix = false;
+      await _connectOwner(service, board, deviceId: ios);
+      board.setState(5, nextFlags: 7);
+      expect(await service.ensureProductReady(ios), isTrue);
+      expect(await service.fetchBoardBluetoothSuffix(deviceId: ios), '3F81');
+      expect(
+        board.bluetoothSuffixQueries,
+        2,
+        reason: 'Retain the learned reading across downgrade.',
+      );
+      expect((await service.rememberedOwnedBoards())[_identity]?.aliases, [
+        android,
+        ios,
+      ]);
+
+      board.identity[15] = 0x99;
+      board.supportsBluetoothSuffix = true;
+      board.bluetoothSuffixReply = 'AA02';
+      await _connectOwner(service, board, deviceId: '11:22:33:44:55:66');
+      board.setState(5, nextFlags: 7);
+      expect(await service.ensureProductReady('11:22:33:44:55:66'), isTrue);
+      expect(
+        await service.fetchBoardBluetoothSuffix(deviceId: '11:22:33:44:55:66'),
+        'AA02',
+      );
+      final records = await service.rememberedOwnedBoards();
+      expect(records, hasLength(2));
+      expect(records[_identity]?.bluetoothSuffix, '3F81');
+      expect(
+        records['0102030405060708090a0b0c0d0e0f99']?.bluetoothSuffix,
+        'AA02',
+      );
+    },
+  );
   test('quiet owner reconnect skips unchanged registry persistence', () async {
     final raw = preferences.seed(['board-1']);
     await _connectOwner(service, board);

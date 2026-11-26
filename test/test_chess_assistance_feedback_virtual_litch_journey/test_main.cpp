@@ -2461,6 +2461,121 @@ bool RawUndoTap(runtime::VirtualLitchSession& s) {
            s.Advance(20U) == VIRTUAL_LITCH_OK;
 }
 
+// The actual CPU move is acknowledged through the shared reducer before the
+// next human Hint is published. Engine choice is controlled; chess legality,
+// both Hall inputs, presentation and mapped LED output remain production.
+void CpuLastMoveCaptureHintJourney(bool automatic, bool minimal, bool firstP2,
+                                  bool rotate, bool sourceFirst, uint16_t brightness, bool v3 = false) {
+    char run[160];
+    std::snprintf(run, sizeof(run), "CpuLastMoveCaptureHint/%s/%s/%s/P%u/rotate%u/%s/brightness%u",
+                  v3 ? "V3" : "V3.3", automatic ? "Coach" : "manual", minimal ? "minimal" : "normal",
+                  firstP2 ? 2U : 1U, rotate, sourceFirst ? "mover-first" : "victim-first", brightness);
+    auto config = Config(rotate);
+    config.hardware = v3 ? VIRTUAL_LITCH_HARDWARE_V3 : VIRTUAL_LITCH_HARDWARE_V3_3;
+    config.first_player_is_p2 = firstP2;
+    config.brightness_scale_256 = brightness;
+    PublicationEngine engine;
+    runtime::VirtualLitchSession session(config, engine);
+    uint64_t occupied = Bit(4U) | Bit(11U) | Bit(36U) | Bit(60U);
+    const bool ready = session.Reset() == VIRTUAL_LITCH_OK &&
+        session.LoadExternalFen("4k3/3p4/8/8/4P3/8/8/4K3 b - - 0 1") &&
+        Observe(session, occupied) && session.Advance(1000U) == VIRTUAL_LITCH_OK &&
+        (!minimal || Setting(session, "MINIMAL_ANIMATIONS", "true")) &&
+        (!automatic || Setting(session, "P1_AUTO_HINTS", "true"));
+    Check(ready, run, "real position and settings enter the production session");
+    if (!ready) return;
+    engine.Choose(11U, 27U);
+    engine.finishCpu = true;
+    engine.finish = true;
+    Check(Setting(session, "VS_CPU_PLAYER", "2") && Setting(session, "VS_CPU_LEVEL", "2"),
+          run, "Black CPU and controlled legal d7-d5 result are selected");
+    for (uint8_t tick = 0U; tick < 80U && !session.HomeStateSnapshot().physicalMoveValid; ++tick)
+        Check(session.Advance(100U) == VIRTUAL_LITCH_OK, run, "wait for CPU physical move");
+    auto home = session.HomeStateSnapshot();
+    const bool cpuReady = home.physicalMoveValid && home.physicalFromSquare == 11U &&
+        home.physicalToSquare == 27U;
+    Check(cpuReady, run, "CPU directs the pawn from d7 to d5");
+    if (!cpuReady) return;
+    occupied &= ~Bit(11U);
+    Check(Observe(session, occupied), run, "lift CPU pawn from d7");
+    occupied |= Bit(27U);
+    Check(Observe(session, occupied), run, "place CPU pawn on d5");
+    engine.Choose(36U, 27U);
+    engine.finish = false;
+    for (uint8_t tick = 0U; tick < 40U && session.UndoHistoryMoveCount() != 1U; ++tick)
+        Check(session.Advance(100U) == VIRTUAL_LITCH_OK, run, "wait for CPU move acknowledgement");
+    const bool committed = session.UndoHistoryMoveCount() == 1U &&
+        session.State().side_to_move_black == 0U &&
+        std::strstr(session.HomeStateLine().CStr(), "\"m\":\"----d7d5b\"") != nullptr;
+    Check(committed, run, "CPU move commits once and remains the last move at d5");
+    if (!committed) return;
+    if (!automatic) {
+        Check(session.Advance(2500U) == VIRTUAL_LITCH_OK && Tap(session), run,
+              "a physical Circle tap requests the next human Hint");
+    }
+    uint8_t from = 64U, to = 64U;
+    for (uint8_t tick = 0U; tick < 120U && !session.TryGetHintMoveSquares(from, to); ++tick)
+        Check(session.Advance(100U) == VIRTUAL_LITCH_OK, run, "wait for the current human Hint");
+    const bool hintReady = session.HintDisplayRequested() && from == 36U && to == 27U &&
+        std::strstr(session.HomeStateLine().CStr(), "\"m\":\"----d7d5b\"") != nullptr;
+    Check(hintReady, run, "human Hint captures the still-present CPU last-move destination");
+    if (!hintReady) return;
+
+    const auto first = AllSquarePixels(session, 27U);
+    bool railsAgree = true, victimPieceDark = true, steady = true;
+    bool wasBright = false;
+    unsigned brightStarts = 0U;
+    uint8_t dimmest = 255U, brightest = 0U;
+    for (uint16_t sample = 0U; sample <= 120U; ++sample) {
+        const auto pixels = AllSquarePixels(session, 27U);
+        const auto left = pixels.mapped[0U], right = pixels.mapped[3U];
+        railsAgree = railsAgree && Equal(left, right) && left.r > 0U &&
+            left.r >= left.g && left.g > 0U && left.b == 0U && left.w == 0U;
+        victimPieceDark = victimPieceDark && Energy(pixels.semantic[1U]) == 0U &&
+            Energy(pixels.mapped[1U]) == 0U && Energy(pixels.mapped[2U]) == 0U;
+        steady = steady && SameSquarePixels(first, pixels);
+        const bool bright = pixels.semantic[0U].r > 200U;
+        if (bright && !wasBright) ++brightStarts;
+        wasBright = bright;
+        dimmest = std::min(dimmest, left.r);
+        brightest = std::max(brightest, left.r);
+        if (sample != 120U) Check(session.Advance(20U) == VIRTUAL_LITCH_OK, run,
+                                  "sample actual victim emitters through two full cue cycles");
+    }
+    Check(railsAgree && victimPieceDark, run,
+          "both mapped victim rails agree while both occupied Piece LEDs remain dark");
+    Check(minimal ? steady : brightStarts >= 4U && brightest > dimmest, run,
+          minimal ? "Minimal keeps the victim's steady removal cue"
+                  : "the last-move overlap retains repeated amber strikes and a dim rest");
+    std::printf("[CPU_LAST_CAPTURE] run=%s bright_starts=%u mapped_red_min=%u mapped_red_max=%u "
+                "victim_piece_dark=%u minimal_steady=%u next=remove-d5-or-lift-e4\n",
+                run, brightStarts, dimmest, brightest, victimPieceDark, steady);
+    Checkpoint(session, run, "hinted-victim-overlap", "remove-d5-or-lift-e4", "accepted", Bit(11U)|Bit(27U)|Bit(36U));
+
+    const uint8_t firstLift = sourceFirst ? 36U : 27U;
+    const uint8_t secondLift = sourceFirst ? 27U : 36U;
+    occupied &= ~Bit(firstLift);
+    Check(Observe(session, occupied), run, "first capture pickup reaches the real Hall reducer");
+    occupied &= ~Bit(secondLift);
+    Check(Observe(session, occupied), run, "both capture pickups are observed");
+    const auto emptyTarget = AllSquarePixels(session, 27U);
+    Check(session.State().required_action == static_cast<uint8_t>(runtime::RequiredPhysicalAction::PlacePrimary) &&
+              Energy(emptyTarget.mapped[1U]) > 0U && Energy(emptyTarget.mapped[2U]) > 0U &&
+              !Equal(emptyTarget.semantic[0U], {255U,101U,0U,0U}) &&
+              !Equal(emptyTarget.semantic[0U], {64U,25U,0U,0U}) &&
+              !Equal(emptyTarget.semantic[0U], {255U,85U,0U,0U}), run,
+          "removing the victim replaces amber brackets with the empty landing invitation");
+    Checkpoint(session, run, "both-pieces-held", "seat-white-pawn-d5", "accepted", Bit(27U)|Bit(36U));
+    occupied |= Bit(27U);
+    Check(Observe(session, occupied) && Energy(Piece(session, 27U)) > 0U, run,
+          "seating the capturing pawn restores its actual Piece light immediately");
+    Check(session.Advance(2500U) == VIRTUAL_LITCH_OK && session.UndoHistoryMoveCount() == 2U &&
+              session.State().side_to_move_black != 0U &&
+              std::string(session.HomeStateSnapshot().fen) == "4k3/8/8/3P4/8/8/8/4K3 b - - 0 2",
+          run, "the hinted capture commits exactly once and play advances");
+    Checkpoint(session, run, "capture-complete", "Black-to-move", "accepted", Bit(27U)|Bit(36U));
+}
+
 void CpuOffTargetAndPendingUndoJourney() {
     const char* run = "CPUOffTarget/V3.3/d7d5-pawn-on-d6-pending-Undo";
     auto config = Config(); config.hardware = VIRTUAL_LITCH_HARDWARE_V3_3;
@@ -3048,6 +3163,11 @@ int main() {
     ImmobilePinnedHintJourney();
     ReportedLateHintJourney();
     CoachingNoPublicationDeadlineJourney();
+    CpuLastMoveCaptureHintJourney(false, false, false, false, true, 128U);
+    CpuLastMoveCaptureHintJourney(true, false, true, true, false, 128U);
+    CpuLastMoveCaptureHintJourney(false, true, true, false, false, 128U);
+    CpuLastMoveCaptureHintJourney(true, false, false, true, true, 8U);
+    CpuLastMoveCaptureHintJourney(false, false, false, false, true, 128U, true);
     CpuOffTargetAndPendingUndoJourney();
     HumanCoachAlternateQuietMoveJourney("settle_2s", 2000U);
     HumanCoachAlternateQuietMoveJourney("settle_5s", 5000U);

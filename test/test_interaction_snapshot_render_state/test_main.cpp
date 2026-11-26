@@ -4,6 +4,7 @@
 
 #include "foxie_embedded/millis.hpp"
 #include "hardware/led_layout.hpp"
+#include "hardware/board_led_output_mapping.hpp"
 #include "modules/engine_derived_state.hpp"
 #include "modules/led_frame_composer.hpp"
 #include "modules/led_frame_composer_internal.hpp"
@@ -27,6 +28,72 @@ void Check(const bool cond, const char* msg) {
 
 bool RgbEq(const modules::Rgb lhs, const modules::Rgb rhs) {
     return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b;
+}
+
+void TestPublishedCaptureHintOnLastMove() {
+    constexpr uint8_t VICTIM = 27U; // d5: CPU last move and White's capture target.
+    constexpr uint64_t VICTIM_BIT = UINT64_C(1) << VICTIM;
+    constexpr uint64_t OCCUPIED = (UINT64_C(1) << 4U) | VICTIM_BIT |
+        (UINT64_C(1) << 36U) | (UINT64_C(1) << 60U);
+    fxe::ManualMillis::SetNowMs(1000U);
+    runtime::GameStateMachine sm;
+    sm.Reset();
+    sm.HandleInteractionPositionAcknowledged(OCCUPIED,
+        (UINT64_C(1) << 4U) | (UINT64_C(1) << 60U), 0ULL,
+        (UINT64_C(1) << 36U) | (UINT64_C(1) << 60U),
+        (UINT64_C(1) << 4U) | VICTIM_BIT, VICTIM_BIT | (UINT64_C(1) << 36U));
+    sm.ApplyPhysicalOccupancySnapshot(OCCUPIED);
+    sm.SetLastMoveForSide(modules::PersistedSide::Black, 11U, VICTIM);
+    sm.SetLastMoveMostRecentSide(modules::PersistedSide::Black);
+    sm.SetHintDisplayRequested(true);
+    sm.SetHintMoveSquares(36U, VICTIM);
+    modules::EngineDerivedState derived;
+    derived.sideToMove = modules::SideToMove::White;
+    const auto snapshot = runtime::BuildInteractionModelSnapshot({
+        .stateMachine = &sm, .derived = &derived,
+        .authoritativeFen = "4k3/8/8/3p4/4P3/8/8/4K3 w - d6 0 2",
+    });
+    Check(snapshot.render.hintCaptureSquare == VICTIM &&
+              snapshot.render.blackLastMoveValid && snapshot.render.blackLastMoveToSquare == VICTIM,
+          "captured publication carries both the last move and the next capture victim");
+    const auto published = runtime::CaptureInteractionModelPresentation(sm, snapshot);
+    modules::SettingsStoreConfig config;
+    config.path = "build/test_published_last_move_capture_hint.json";
+    modules::SettingsStore settings(config);
+    (void)settings.Load();
+    struct Sample { uint32_t age; bool bright; };
+    constexpr Sample samples[] = {{0U,true},{119U,true},{120U,false},{239U,false},
+        {240U,true},{359U,true},{360U,false},{1199U,false},{1200U,true}};
+    for (const auto sample : samples) {
+        // Deliberately leave the game publication untouched: this is how the
+        // independent hardware animation task samples a captured snapshot.
+        const auto current = runtime::SampleInteractionModelPresentation(published, 1000U + sample.age);
+        modules::led_frame_composer::ComposeInputs inputs;
+        inputs.settings = &settings;
+        inputs.interactionSnapshot = &current;
+        modules::BoardLedFrame board{};
+        std::array<modules::Rgb, modules::EDGE_LED_COUNT> edge{};
+        std::array<modules::Rgb, 64U> grid{};
+        uint64_t removal = 0ULL, taps = 0ULL;
+        modules::led_frame_composer::Compose(inputs, board, edge, grid,
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &removal, nullptr, nullptr, &taps);
+        const auto& square = board[VICTIM];
+        const modules::Rgb expected = sample.bright ? modules::Rgb{255U,101U,0U}
+                                                    : modules::Rgb{64U,25U,0U};
+        Check(removal == VICTIM_BIT && (taps == VICTIM_BIT) == sample.bright,
+              "a retained publication keeps removal ownership and advances tap ownership");
+        Check(RgbEq(square.left, expected) && RgbEq(square.right, expected) &&
+                  RgbEq(square.top, {}) && RgbEq(square.bottom, {}),
+              "last-move overlap cannot replace the synchronized capture rails or dark victim pair");
+        for (const bool rotate : {false, true}) {
+            const auto mapped = hardware::MapSemanticBoardFrame(
+                {hardware::BoardRevision::V3_3S3, rotate, false}, board);
+            const uint16_t base = runtime::MapSquareIndex(VICTIM, rotate) * 4U;
+            Check(RgbEq(mapped[base], expected) && RgbEq(mapped[base + 2U], expected) &&
+                      RgbEq(mapped[base + 1U], {}) && RgbEq(mapped[base + 3U], {}),
+                  "V3.3 mapping preserves capture ownership of all four victim emitters after rotation");
+        }
+    }
 }
 
 void TestAllPiecesFlashUptimeWrap() {
@@ -130,6 +197,7 @@ int main() {
 
     fxe::ScopedMillisProviderOverride millisGuard(&fxe::ManualMillisProvider);
     TestAllPiecesFlashUptimeWrap();
+    TestPublishedCaptureHintOnLastMove();
     fxe::ManualMillis::SetNowMs(0U);
 
     runtime::GameStateMachine sm;

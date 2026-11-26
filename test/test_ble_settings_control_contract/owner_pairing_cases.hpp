@@ -952,6 +952,35 @@ void TestIdentifyRatePolicyAndUnpairedOrderedPath() {
     Check(!fixture.service.TryReadConsoleInputChar(ch) && !Peer::ProductAccess(fixture.service),
           "typed Identify does not open an unpaired legacy Console backdoor");
     }
+    {
+        OwnerPreviewFixture fixture;
+        owner_native_fixture::connectionResult = 0;
+        owner_native_fixture::connection.peer_id_addr.val[0U] = 7U;
+        std::array<uint8_t, 20U> packet{}; size_t size = 0U;
+        std::array<uint8_t, 8U> open{};
+        fxe::WriteU16LE(modules::ConnectionSession::LITCHCRAFT_ORDERED_TOPIC, open.data());
+        open[3U] = modules::ConnectionSession::ORDERED_CAPACITY;
+        fxe::WriteU16LE(10U, open.data() + 4U);
+        Check(wire::Codec::Encode({{wire::Kind::Control, uint8_t(wire::Control::Open),
+            Peer::ConnectionToken(fixture.service), 2U}, {open.data(), open.size()}},
+            {packet.data(), packet.size()}, size) == wire::Error::None, "disconnect Identify opens Ordered");
+        fixture.service.OnConnectionSessionWrite(packet.data(), size); fixture.service.DrainEventQueue();
+        Check(wire::Codec::Encode({{wire::Kind::Ordered, 28U, Peer::OrderedToken(fixture.service), 1U},
+            {start.data(), start.size()}}, {packet.data(), packet.size()}, size) == wire::Error::None,
+            "disconnect Identify encodes Start");
+        fixture.service.OnConnectionSessionWrite(packet.data(), size); fixture.service.DrainEventQueue();
+        modules::BleIdentifyPresentation presentation;
+        modules::MenuLevelOverlay overlay;
+        const std::array<modules::Rgb, 64U> background{};
+        presentation.Consume(fixture.service, 100U);
+        Check(presentation.Update(100U, false, overlay, background), "Identify active before disconnect");
+        fixture.service.OnDisconnected(7U, 19); fixture.service.DrainEventQueue();
+        presentation.Consume(fixture.service, 101U);
+        Check(presentation.Update(3099U, false, overlay, background),
+              "disconnect alone leaves the original bounded Identify deadline");
+        Check(!presentation.Update(3100U, false, overlay, background) && !overlay.IsActive(),
+              "disconnected Identify expires without another phone command");
+    }
     std::puts("[BLE_IDENTIFY] typed-unpaired=pass three-starts=pass fourth-cooldown=pass dedupe=pass stop-free=pass fixed-peers=pass");
 }
 }
@@ -1107,6 +1136,11 @@ void TestTypedIdentifyVirtualLitchTimedJourney() {
         closeQuick();
         Check(board.DisplayText() != "7", "closing Quick Setup after expiry cannot resurrect Identify");
         checkpoint("QuickSetup-closed-after-expiry", "expired-no-late-cue", "ordinary-board-use");
+        board.ShowIdentifyOverlay(7U, {0U, 0U, 255U});
+        board.Advance(100U);
+        openQuick();
+        Check(board.DisplayText() != "7", "opening Quick Setup preempts active Identify");
+        closeQuick();
        }
       }
     }

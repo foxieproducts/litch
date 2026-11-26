@@ -69,6 +69,9 @@ class LedAnimationTask final {
     bool EndArtworkMutation(uint32_t lease);
 
   private:
+#if defined(LITCH_NATIVE)
+    friend struct LedAnimationTaskTestPeer;
+#endif
     using Command = std::variant<PhysicalLedCommand, RawDieLedCommand>;
     bool SubmitCommand(const Command& command, LedCommandUrgency urgency);
     void Lock() const;

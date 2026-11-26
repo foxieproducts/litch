@@ -56,6 +56,9 @@ class LedAnimationRenderer final {
     }
 
   private:
+#if defined(LITCH_NATIVE)
+    friend struct LedAnimationTaskTestPeer;
+#endif
     void RenderGame(LedAnimationPresentation& presentation,
                     GameLedPresentation& game,
                     LedAnimationFrameResult& result);
@@ -70,6 +73,7 @@ class LedAnimationRenderer final {
         uint64_t captureRemoval = 0U;
         uint64_t captureTaps = 0U;
         uint64_t duckReminder = 0U;
+        modules::UiOwner menuOwner = modules::UiOwner::None;
         bool menuActive = false;
     };
     void ComposeGame(LedAnimationPresentation& presentation,
@@ -100,6 +104,7 @@ class LedAnimationRenderer final {
     modules::BootDisplay m_boot{};
     modules::StartupPieceAccent m_startupAccent{};
     modules::BleIdentifyPresentation m_identify{};
+    modules::MenuLevelOverlay m_identifyMenu{};
     bool m_restartMessageVisible = false;
     modules::litchcraft_physical_presentation::ModeCrossfade<
         hardware::MAX_PHYSICAL_LED_COUNT> m_crossfade{};

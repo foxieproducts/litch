@@ -30,7 +30,7 @@ void LedAnimationRenderer::OutputGameFrame(LedAnimationPresentation& presentatio
         presentation.firstPlayerIsP2, canvas);
     const bool statusRotate = countdown.active && !paused ? presentation.boardRotate
         : ownership.menuActive ? presentation.boardRotate : controlSwap;
-    const bool controlRotate = controlSwap != (presentation.menu.GetOwner() == modules::UiOwner::P2);
+    const bool controlRotate = controlSwap != (ownership.menuOwner == modules::UiOwner::P2);
     const hardware::LedFrameMappingConfig mapping{m_profile->revision, squareRotate,
         statusRotate, countdown.active && !paused ? 0U : ownership.prioritySquares};
     auto physical = ownership.menuActive && ownership.foreground.IsVisible()

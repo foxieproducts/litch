@@ -26,6 +26,7 @@ void LedAnimationRenderer::RenderGame(LedAnimationPresentation& presentation,
     ownership.captureRemoval = 0U;
     ownership.captureTaps = 0U;
     ownership.duckReminder = 0U;
+    ownership.menuOwner = modules::UiOwner::None;
     ownership.menuActive = false;
     ComposeGame(presentation, game, result, ownership);
     OutputGameFrame(presentation, ownership, result);
@@ -38,15 +39,17 @@ void LedAnimationRenderer::ComposeGame(LedAnimationPresentation& presentation,
             game.interaction, result.receipt.frameStartedMs);
         m_identify.Apply(presentation.identify);
         const bool identify = m_identify.Update(result.receipt.frameStartedMs,
-            presentation.quickSettingsActive, presentation.menu, result.menuBackground);
+            presentation.quickSettingsActive, m_identifyMenu, result.menuBackground);
         const bool controlSwap = modules::ComputeControlBankSwap(presentation.boardRotate,
             presentation.firstPlayerIsP2, presentation.output.canvasVisible);
         const bool pairingAllowed = presentation.pairingAllowed && !identify;
         const bool restart = modules::BoardOwnerPairingRuntime::SyncPhysicalMessage(
             presentation.pairing, m_restartMessageVisible, presentation.menu,
             result.menuBackground, controlSwap, pairingAllowed);
+        auto& menu = identify ? m_identifyMenu : presentation.menu;
+        ownership.menuOwner = menu.GetOwner();
         snapshot.board.physicalOccupiedMask = presentation.physicalOccupiedMask;
-        snapshot.render.menuOverlayActive = presentation.menu.IsActive();
+        snapshot.render.menuOverlayActive = menu.IsActive();
         snapshot.render.quickSettingsOverlayActive = presentation.quickSettingsActive;
         snapshot.render.allPiecesFlashActive = presentation.allPiecesFlash.IsActive(
             result.receipt.frameStartedMs);
@@ -59,11 +62,11 @@ void LedAnimationRenderer::ComposeGame(LedAnimationPresentation& presentation,
         inputs.runtimeHealth = presentation.health;
         inputs.firstPlayerIsP2 = presentation.firstPlayerIsP2;
         inputs.litchcraftActive = presentation.output.canvasVisible;
-        inputs.menuOverlay = &presentation.menu;
+        inputs.menuOverlay = &menu;
         inputs.menuActive = presentation.menuControllerActive || presentation.quickSettingsActive ||
             snapshot.render.menuOverlayActive;
         ownership.menuActive = inputs.menuActive;
-        inputs.menuOverlayPreservesTurnIndicator = presentation.menu.PreservesTurnIndicator();
+        inputs.menuOverlayPreservesTurnIndicator = menu.PreservesTurnIndicator();
         inputs.menuIntent = presentation.menuIntent;
         if (inputs.menuIntent.menuHoldActive && presentation.menuHoldThresholdMs != 0U) {
             const uint32_t original = uint32_t(inputs.menuIntent.menuValue01_255) *
@@ -163,7 +166,7 @@ void LedAnimationRenderer::ComposeGame(LedAnimationPresentation& presentation,
                 presentation.firstPlayerIsP2, presentation.output.canvasVisible);
             const bool controlRotate = modules::ComputeControlBankSwap(presentation.boardRotate,
                 presentation.firstPlayerIsP2, presentation.output.canvasVisible) !=
-                (presentation.menu.GetOwner() == modules::UiOwner::P2);
+                (ownership.menuOwner == modules::UiOwner::P2);
             hardware::ClipGridForegroundToOccupiedPreview(snapshot.board.physicalOccupiedMask,
                 squareRotate, controlRotate, ownership.foreground);
         }

@@ -27,8 +27,7 @@ def PairingCorpus(sm):
         'ble_store_read', 'ble_store_read_our_sec', 'ble_store_persist_sec',
         'ble_store_write_our_sec', 'ble_store_write_peer_sec'))
     if 'litch_sm_pairing_admission(' in sm:
-        functions += ('\nextern int LitchSdkPairingAdmission(uint16_t) __attribute__((weak));\n' +
-                      Function(sm, 'litch_sm_pairing_admission'))
+        functions += '\n' + hardening.SM_ADMISSION_HOOK
     functions += '\n' + '\n'.join(Function(sm, name) for name in (
         'ble_sm_update_sec_state', 'ble_sm_fill_store_value', 'ble_sm_persist_keys',
         'ble_sm_process_result', 'ble_sm_pair_req_rx', 'ble_sm_ltk_restore_exec',
@@ -105,7 +104,8 @@ class PairingAdmissionTests(unittest.TestCase):
                  'denial_precedes_handler_security_proc_mutation',
                  'l2cap_unsolicited_justworks', 'l2cap_exact_lease',
                  'rpa_write_failure_after_keys', 'direct_identity_needs_no_rpa_mapping',
-                 'rpa_capacity_failure_after_keys')
+                 'rpa_capacity_failure_after_keys', 'authorized_add_rpa_writer',
+                 'add_lease_revoked_after_keys', 'add_lease_replaced_after_keys')
         old_failures = []
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -131,7 +131,8 @@ class PairingAdmissionTests(unittest.TestCase):
             source = root / 'new.c'; binary = root / 'absent_hook'
             # Darwin ld requires an explicit permitted undefined weak import;
             # ELF targets (including S3) accept the weak declaration directly.
-            weak_link = ['-Wl,-U,_LitchSdkPairingAdmission'] if sys.platform=='darwin' else []
+            weak_link = ['-Wl,-U,_LitchSdkPairingAdmission',
+                         '-Wl,-U,_LitchSdkPairingAddRpaToken'] if sys.platform=='darwin' else []
             build = subprocess.run([compiler, '-std=c11', '-O1', '-DWITH_ADMISSION_HOOK=0',
                                     '-fsanitize=address,undefined', '-fno-sanitize-recover=all',
                                     '-I', str(SCRIPT.parent), str(source), '-o', str(binary)] + weak_link,
@@ -141,7 +142,7 @@ class PairingAdmissionTests(unittest.TestCase):
                 result = subprocess.run([str(binary),str(case)],capture_output=True,text=True,timeout=5)
                 self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
                 self.assertEqual(result.stderr, '')
-        self.assertEqual(old_failures, [0,1,2,5,6,7,8,9,10,11,12,13,15,16,18,19,20])
+        self.assertEqual(old_failures, [0,1,2,5,6,7,8,9,10,11,12,13,15,16,18,19,20,21,22,23])
 
 
 if __name__ == '__main__':

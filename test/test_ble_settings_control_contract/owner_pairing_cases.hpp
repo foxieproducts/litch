@@ -100,6 +100,8 @@ void TestOwnerPreviewSharedConsentAndNativeLease(bool phoneInitiated = false) {
     const auto effect = runtime.Custody().PendingEffect();
     Check(effect.type == Controller::EffectType::RequestSecurity && service.NativePairingAllowed(7U) &&
               !service.NativePairingAllowed(8U), "fresh physical consent leases only exact native connection");
+    Check(service.NativeAddRpaToken(7U) == 0U,
+          "first pairing has no Add rollback journal and cannot reclaim orphan metadata");
     Check(NimBLEDevice::SecurityRequests() == (phoneInitiated ? 0U : 1U) &&
               ((Peer::OwnerWireFlags(service) & modules::owner_pairing_session_wire::NativeBondAllowed) != 0U) == phoneInitiated,
           "first phone chooses exact post-consent native initiation mode");
@@ -821,11 +823,14 @@ void TestNativeSavedPhonesThroughSharedSession() {
               "production adapter snapshots all prior identities and orphan RPA before security");
         Check((Peer::OwnerWireFlags(fixture.service) & modules::owner_pairing_session_wire::NativeBondAllowed) == 0U,
               "Securing while Adding journal is pending grants no phone security admission");
+        Check(fixture.service.NativeAddRpaToken(7U) == 0U,
+              "pending Add journal never authorizes orphan cache replacement");
         fixture.persistence.outcome = OwnerPreviewPersistence::Outcome::Saved;
         fixture.persistence.release = !phoneInitiated;
         fixture.runtime.UpdateDurableState(Record::Adding, true); fixture.service.UpdateOwnerPairing();
         if (phoneInitiated) {
             Check(NimBLEDevice::SecurityRequests() == 0U && !fixture.service.NativePairingAllowed(7U) &&
+                      fixture.service.NativeAddRpaToken(7U) == 0U &&
                       (Peer::OwnerWireFlags(fixture.service) & modules::owner_pairing_session_wire::NativeBondAllowed) == 0U,
                   "Saved but unreleased Adding receipt cannot advertise or install native admission");
             fixture.persistence.release = true;
@@ -834,6 +839,9 @@ void TestNativeSavedPhonesThroughSharedSession() {
         Check(NimBLEDevice::SecurityRequests() == (phoneInitiated ? 0U : 1U) &&
                   fixture.service.NativePairingAllowed(7U),
               "released Adding receipt installs exact lease without peripheral request in phone mode");
+        Check(fixture.service.NativeAddRpaToken(7U) == fixture.runtime.Custody().PendingEffect().token &&
+                  fixture.service.NativeAddRpaToken(8U) == 0U,
+              "only the exact journaled Add connection receives the cache write token");
         Check(((Peer::OwnerWireFlags(fixture.service) & modules::owner_pairing_session_wire::NativeBondAllowed) != 0U) == phoneInitiated,
               "only phone mode publishes the authoritative post-receipt native bond flag");
         for (unsigned replay = 0U; replay < 3U; ++replay) fixture.service.UpdateOwnerPairing();
@@ -852,7 +860,11 @@ void TestNativeSavedPhonesThroughSharedSession() {
               "resolved new identity can preserve its preexisting exact RPA mapping before key writes");
         owner_native_fixture::peerCount = saved + 1U;
         descriptor.sec_state.encrypted = 1U; descriptor.sec_state.bonded = 1U;
+        Check(fixture.service.NativeAddRpaToken(7U) == fixture.runtime.Custody().PendingEffect().token,
+              "same Add lease remains valid while the newly written peer joins native inventory");
         fixture.service.OnNativeEncryptionChange(7U, 0); fixture.service.DrainEventQueue();
+        Check(fixture.service.NativeAddRpaToken(7U) == 0U,
+              "security acknowledgement revokes the one Add cache write lease");
         Check(fixture.persistence.written == Record::Active && !Peer::ProductAccess(fixture.service),
               "actual completion carries complete baseline plus new identity into pending Active save");
         fixture.persistence.outcome = OwnerPreviewPersistence::Outcome::Saved;
@@ -860,6 +872,8 @@ void TestNativeSavedPhonesThroughSharedSession() {
         Check(Peer::ProductAccess(fixture.service) && fixture.runtime.Custody().SavedPhoneCount() == saved + 1U,
               "second and third phone become ready only after durable save");
         fixture.service.OnDisconnected(7U, 19); fixture.service.DrainEventQueue();
+        Check(fixture.service.NativeAddRpaToken(7U) == 0U,
+              "disconnected Add leaves no reusable cache authority");
         descriptor.peer_id_addr = owner_native_fixture::peers[0U];
         descriptor.peer_id_addr.type = BLE_ADDR_PUBLIC_ID;
         descriptor.peer_ota_addr.type = BLE_ADDR_RANDOM; descriptor.peer_ota_addr.val[0U] = 0x81U;

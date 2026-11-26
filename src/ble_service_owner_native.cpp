@@ -41,6 +41,11 @@ extern "C" int LitchSdkPairingAdmission(uint16_t connHandle) {
     return !modules::OWNER_PAIRING_ENABLED || (service != nullptr &&
         service->NativePairingAllowed(connHandle)) ? 0 : BLE_HS_EAUTHEN;
 }
+
+extern "C" uint32_t LitchSdkPairingAddRpaToken(uint16_t connHandle) {
+    const auto* service = modules::ble_internal::g_bleService;
+    return service != nullptr ? service->NativeAddRpaToken(connHandle) : 0U;
+}
 #endif
 
 namespace modules {

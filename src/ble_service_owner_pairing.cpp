@@ -97,6 +97,16 @@ bool BleService::OwnerAcceptsNewConnection(const uint16_t connHandle) const {
 
 bool BleService::NativePairingAllowed(uint16_t connHandle) const {
     if (!OwnerPairingEnabled()) return true;
+    const uint32_t token = NativePairingLeaseToken(connHandle);
+    return token != 0U &&
+#if defined(ARDUINO) && defined(LITCH_ESP32S3)
+        OwnerNativePairingCandidate(connHandle) &&
+#endif
+        m_ownerAdmissionToken.load(std::memory_order_acquire) == token;
+}
+
+uint32_t BleService::NativePairingLeaseToken(uint16_t connHandle) const {
+    if (!OwnerPairingEnabled()) return 0U;
     const uint32_t token = m_ownerAdmissionToken.load(std::memory_order_acquire);
     return token != 0U && !m_ownerQuiescing.load(std::memory_order_acquire) &&
         m_ownerAdmissionHandle.load(std::memory_order_acquire) == connHandle &&
@@ -106,10 +116,16 @@ bool BleService::NativePairingAllowed(uint16_t connHandle) const {
         m_ownerAdmissionEpoch.load(std::memory_order_acquire) !=
             m_ownerRejectedEpoch.load(std::memory_order_acquire) &&
         m_ownerAdmissionSession.load(std::memory_order_acquire) != 0U &&
-#if defined(ARDUINO) && defined(LITCH_ESP32S3)
-        OwnerNativePairingCandidate(connHandle) &&
-#endif
-        m_ownerAdmissionToken.load(std::memory_order_acquire) == token;
+        m_ownerAdmissionToken.load(std::memory_order_acquire) == token ? token : 0U;
+}
+
+uint32_t BleService::NativeAddRpaToken(uint16_t connHandle) const {
+    const uint32_t token = NativePairingLeaseToken(connHandle);
+    // The Add journal is durable before RequestSecurity publishes this bit.
+    // Unlike fresh-pair admission, this remains valid after key persistence
+    // makes the new peer appear in inventory. Retirement still revokes it.
+    return token != 0U && m_ownerAdmissionAdding.load(std::memory_order_relaxed) &&
+        m_ownerAdmissionToken.load(std::memory_order_acquire) == token ? token : 0U;
 }
 
 BoardOwnerPairingRuntime::Connection BleService::OwnerConnection() const {
@@ -331,6 +347,8 @@ void BleService::UpdateOwnerPairing() {
             m_ownerAdmissionHandle.store(connection.handle, std::memory_order_relaxed);
             m_ownerAdmissionEpoch.store(connection.epoch, std::memory_order_relaxed);
             m_ownerAdmissionSession.store(connection.sessionToken, std::memory_order_relaxed);
+            m_ownerAdmissionAdding.store(custody.IsAdding() && custody.AddBaseline().Valid(),
+                                        std::memory_order_relaxed);
             m_ownerAdmissionToken.store(effect.token, std::memory_order_release);
             m_ownerStartedSecurityToken = effect.token;
             if (!m_ownerRuntime->PhoneInitiatesSecurity()) {

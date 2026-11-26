@@ -4,6 +4,83 @@
 #include <stddef.h>
 
 static int
+litch_add_address_valid(const ble_addr_t *address)
+{
+    static const uint8_t zero[6] = {0};
+    return address->type <= BLE_ADDR_RANDOM_ID &&
+        memcmp(address->val, zero, sizeof zero) != 0;
+}
+
+static int
+litch_add_same_identity(const ble_addr_t *left, const ble_addr_t *right)
+{
+    return (left->type & 1U) == (right->type & 1U) &&
+        memcmp(left->val, right->val, sizeof left->val) == 0;
+}
+
+/* Called only by the consent-bound SMP Add path. Ordinary store callbacks
+ * retain their non-evicting capacity policy. */
+int
+LitchSdkWriteAddRpaRec(const struct ble_store_value_rpa_rec *value)
+{
+    extern int litch_nimble_store_restore_status;
+    int rc = BLE_HS_ESTORE_FAIL;
+    ble_hs_lock();
+    /* Unavailable or malformed custody cannot prove any mapping disposable.
+     * Even a partial security record protects its canonical identity. */
+    if (value == NULL || !litch_add_address_valid(&value->peer_addr) ||
+        !litch_add_address_valid(&value->peer_rpa_addr) ||
+        litch_nimble_store_restore_status != 0 ||
+        ble_store_config_num_our_secs < 0 || ble_store_config_num_our_secs > MYNEWT_VAL(BLE_STORE_MAX_BONDS) ||
+        ble_store_config_num_peer_secs < 0 || ble_store_config_num_peer_secs > MYNEWT_VAL(BLE_STORE_MAX_BONDS) ||
+        ble_store_config_num_rpa_recs < 0 || ble_store_config_num_rpa_recs > MYNEWT_VAL(BLE_STORE_MAX_BONDS)) goto done;
+    for (int i = 0; i < ble_store_config_num_our_secs; ++i)
+        if (!litch_add_address_valid(&ble_store_config_our_secs[i].peer_addr)) goto done;
+    for (int i = 0; i < ble_store_config_num_peer_secs; ++i)
+        if (!litch_add_address_valid(&ble_store_config_peer_secs[i].peer_addr)) goto done;
+    for (int i = 0; i < ble_store_config_num_rpa_recs; ++i) {
+        if (!litch_add_address_valid(&ble_store_config_rpa_recs[i].peer_addr) ||
+            !litch_add_address_valid(&ble_store_config_rpa_recs[i].peer_rpa_addr)) goto done;
+        for (int j = 0; j < i; ++j)
+            if (!ble_addr_cmp(&ble_store_config_rpa_recs[i].peer_rpa_addr,
+                              &ble_store_config_rpa_recs[j].peer_rpa_addr)) goto done;
+        if (litch_add_same_identity(&ble_store_config_rpa_recs[i].peer_rpa_addr, &value->peer_rpa_addr) &&
+            !litch_add_same_identity(&ble_store_config_rpa_recs[i].peer_addr, &value->peer_addr)) goto done;
+    }
+    /* Distinguish structural exhaustion BEFORE persistence. A persistence
+     * error (even ESTORE_CAP) must never authorize a second, different write. */
+    if (ble_store_config_num_rpa_recs < MYNEWT_VAL(BLE_STORE_MAX_BONDS)) goto ordinary;
+    for (int i = 0; i < ble_store_config_num_rpa_recs; ++i) {
+        if (litch_add_same_identity(&ble_store_config_rpa_recs[i].peer_addr, &value->peer_addr)) goto ordinary;
+        for (int j = 0; j < i; ++j)
+            if (litch_add_same_identity(&ble_store_config_rpa_recs[i].peer_addr,
+                                       &ble_store_config_rpa_recs[j].peer_addr)) goto ordinary;
+    }
+    /* Only Add may replace a unique orphan, after a durable rollback snapshot. */
+    rc = BLE_HS_ESTORE_CAP;
+    for (int i = 0; i < ble_store_config_num_rpa_recs; ++i) {
+        const ble_addr_t *identity = &ble_store_config_rpa_recs[i].peer_addr;
+        int retained = 0;
+        for (int j = 0; j < ble_store_config_num_our_secs; ++j)
+            retained |= litch_add_same_identity(identity, &ble_store_config_our_secs[j].peer_addr);
+        for (int j = 0; j < ble_store_config_num_peer_secs; ++j)
+            retained |= litch_add_same_identity(identity, &ble_store_config_peer_secs[j].peer_addr);
+        if (retained) continue;
+        const struct ble_store_value_rpa_rec previous = ble_store_config_rpa_recs[i];
+        ble_store_config_rpa_recs[i] = *value;
+        rc = ble_store_config_persist_rpa_recs();
+        if (rc != 0) ble_store_config_rpa_recs[i] = previous;
+        break;
+    }
+    goto done;
+ordinary:
+    rc = ble_store_config_write_rpa_rec(value);
+done:
+    ble_hs_unlock();
+    return rc;
+}
+
+static int
 litch_add_contains(const ble_addr_t *saved, int count, const ble_addr_t *peer)
 {
     for (int i = 0; i < count; ++i) if (!ble_addr_cmp(&saved[i], peer)) return 1;

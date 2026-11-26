@@ -5,6 +5,7 @@
 #define BLE_HS_ENOTCONN 7
 #define BLE_HS_EBADDATA 10
 #define BLE_HS_EAUTHOR 29
+#define BLE_HS_EAUTHEN 23
 #define BLE_HS_CONN_HANDLE_NONE 65535
 #define BLE_HS_SM_US_ERR(x) (0x400 + (x))
 #define BLE_HS_HCI_ERR(x) ((x) ? 0x200 + (x) : 0)
@@ -92,13 +93,20 @@ static int hook_calls,lease_valid=1,hook_epoch=1,session_epoch=1,identity_revoke
 static uint16_t lease_handle=42;
 static int our_attempts,peer_attempts,rpa_attempts,identity_events;
 static int rpa_result;
+static uint32_t add_claim_token;
+static int add_rpa_attempts, retire_after_keys, replace_after_keys;
 static int enc_events,enc_status,enc_bonded,enc_restore,pair_events,pair_status;
 static int pair_observed_our,pair_observed_peer,ltk_replies,ltk_nacks,tx_failures;
 static uint8_t restored_ltk[16];
 static int counted_store_write(int type,const union ble_store_value *v) {
     if(type==BLE_STORE_OBJ_TYPE_OUR_SEC) ++our_attempts;
     if(type==BLE_STORE_OBJ_TYPE_PEER_SEC) ++peer_attempts;
-    return ble_store_config_write(type,v);
+    int rc=ble_store_config_write(type,v);
+    if(type==BLE_STORE_OBJ_TYPE_PEER_SEC) {
+        if(retire_after_keys) lease_valid=0;
+        if(replace_after_keys) ++add_claim_token;
+    }
+    return rc;
 }
 static struct ble_hs_conn *ble_hs_conn_find(uint16_t h) { return h==42 ? &connection : NULL; }
 static struct ble_hs_conn *ble_hs_conn_find_assert(uint16_t h) {
@@ -138,6 +146,9 @@ static int ble_sm_ltk_req_reply_tx(uint16_t h,const uint8_t *ltk) {
 static int ble_sm_ltk_req_neg_reply_tx(uint16_t h) { (void)h; ++ltk_nacks; return 0; }
 static int ble_hs_pvcy_add_entry(const uint8_t *a,uint8_t t,const uint8_t *i) { (void)a; (void)t; (void)i; return 0; }
 static int ble_store_write_rpa_rec(const struct ble_store_value_rpa_rec *r) { (void)r; ++rpa_attempts; return rpa_result; }
+int LitchSdkWriteAddRpaRec(const struct ble_store_value_rpa_rec *r) {
+    (void)r; BLE_HS_DBG_ASSERT(!host_locked); ++add_rpa_attempts; return rpa_result;
+}
 static void ble_gap_identity_event(uint16_t h,const ble_addr_t *a) {
     (void)h; (void)a; BLE_HS_DBG_ASSERT(!host_locked); ++identity_events;
     if(identity_revokes) lease_valid=0;
@@ -155,6 +166,10 @@ static void ble_gap_passkey_event(uint16_t h,struct ble_gap_passkey_params *p) {
 int LitchSdkPairingAdmission(uint16_t h) {
     BLE_HS_DBG_ASSERT(!host_locked); ++hook_calls;
     return lease_valid && h==lease_handle && hook_epoch==session_epoch ? 0 : BLE_HS_EAUTHOR;
+}
+uint32_t LitchSdkPairingAddRpaToken(uint16_t h) {
+    BLE_HS_DBG_ASSERT(!host_locked);
+    return lease_valid && h==lease_handle && hook_epoch==session_epoch ? add_claim_token : 0;
 }
 #endif
 static void ble_sm_ltk_restore_exec(struct ble_sm_proc *,struct ble_sm_result *,void *);
@@ -209,6 +224,17 @@ int main(int argc,char **argv) {
         CHECK(writes==0 && commits==0 && our_attempts==0 && peer_attempts==0);
         printf("pairReq case%d status%d hooks%d capacity%d alloc%d stores%d/%d writes%d\n",
             which,result.app_status,hook_calls,capacity_calls,allocations,our_attempts,peer_attempts,writes);
+    } else if(which>=21 && which<=23) {
+        begin_claim(); add_claim_token=91;
+        retire_after_keys=which==22; replace_after_keys=which==23;
+        struct ble_sm_result result={0};
+        ble_hs_lock();ble_sm_key_exch_success(&procedure,&result);ble_hs_unlock();
+        ble_sm_process_result(42,&result,true);
+        CHECK(our_attempts==1 && peer_attempts==1 && disk_count(1)==1 && disk_count(2)==1);
+        CHECK(enc_events==1 && pair_events==1 && rpa_attempts==0);
+        if(which==21) CHECK(add_rpa_attempts==1 && enc_status==0 && enc_bonded && pair_status==0);
+        else CHECK(add_rpa_attempts==0 && enc_status==BLE_HS_EAUTHEN && !enc_bonded && pair_status==BLE_SM_ERR_UNSPECIFIED);
+        printf("addRpaLease case%d status%d bonded%d ordinary%d add%d\n",which,enc_status,enc_bonded,rpa_attempts,add_rpa_attempts);
     } else if(which>=18 && which<=20) {
         begin_claim();
         rpa_result=which==20?BLE_HS_ESTORE_CAP:BLE_HS_ESTORE_FAIL;

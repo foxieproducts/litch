@@ -421,6 +421,7 @@ class BleService {
     void OnDisconnected(uint16_t connHandle, int reason);
     bool OwnerCallbackAllowed(uint16_t connHandle, bool bootstrap = false) const;
     bool NativePairingAllowed(uint16_t connHandle) const;
+    uint32_t NativeAddRpaToken(uint16_t connHandle) const;
     struct OwnerStoreDiagnostics {
         bool available = false;
         uint8_t savedPeers = 0U, rpas = 0U, orphanRpas = 0U;
@@ -462,6 +463,7 @@ class BleService {
     void ObserveOwnerNativePeer(uint16_t connHandle);
     bool StartOwnerNativeSecurity(uint16_t connHandle, int* nativeResult = nullptr);
     bool OwnerNativePairingCandidate(uint16_t connHandle) const;
+    uint32_t NativePairingLeaseToken(uint16_t connHandle) const;
     bool ReadIdentifyNativePeer(ble_identify::PeerIdentity& peer) const;
     bool OwnerNativeLinksQuiescent() const;
     bool OwnerNativeGapQuiescent() const;
@@ -702,6 +704,7 @@ class BleService {
     std::atomic<uint32_t> m_ownerAdmissionEpoch{0U};
     std::atomic<uint32_t> m_ownerAdmissionSession{0U};
     std::atomic<uint16_t> m_ownerAdmissionHandle{0xffffU};
+    std::atomic<bool> m_ownerAdmissionAdding{false};
     std::atomic<uint32_t> m_ownerProductEpoch{0U};
     std::atomic<uint32_t> m_ownerRejectedEpoch{0U};
     std::atomic<uint32_t> m_ownerForeignEpoch{0U};

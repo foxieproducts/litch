@@ -815,6 +815,8 @@ SM_ADMISSION_HOOK = """/* The optional Litch runtime owns consent and connection
  * Absence preserves feature-off SDK behavior. The predicate must be bounded,
  * read synchronized state only, and return a native host error to refuse. */
 extern int LitchSdkPairingAdmission(uint16_t conn_handle) __attribute__((weak));
+extern uint32_t LitchSdkPairingAddRpaToken(uint16_t conn_handle) __attribute__((weak));
+extern int LitchSdkWriteAddRpaRec(const struct ble_store_value_rpa_rec *value);
 
 static int
 litch_sm_pairing_admission(uint16_t conn_handle)
@@ -842,11 +844,12 @@ def HardenSmSource(source: bytes) -> bytes:
         ("static void\nble_sm_persist_keys(struct ble_sm_proc *proc)",
          "static int\nble_sm_persist_keys(struct ble_sm_proc *proc)"),
         ("    int identity_ev = 0;\n    int sc;",
-         "    int identity_ev = 0;\n    int sc;\n    int rc;"),
+         "    int identity_ev = 0;\n    int sc;\n    int rc;\n    uint32_t add_rpa_token;"),
         ("    authenticated = proc->flags & BLE_SM_PROC_F_AUTHENTICATED;\n    sc = proc->flags & BLE_SM_PROC_F_SC;",
          "    /* Consent can retire while native key exchange is in progress. */\n"
          "    rc = litch_sm_pairing_admission(proc->conn_handle);\n"
-         "    if (rc != 0) return rc;\n\n"
+         "    if (rc != 0) return rc;\n"
+         "    add_rpa_token = LitchSdkPairingAddRpaToken ? LitchSdkPairingAddRpaToken(proc->conn_handle) : 0;\n\n"
          "    authenticated = proc->flags & BLE_SM_PROC_F_AUTHENTICATED;\n    sc = proc->flags & BLE_SM_PROC_F_SC;"),
         ("    ble_store_write_our_sec(&value_sec);",
          "    rc = ble_store_write_our_sec(&value_sec);\n    if (rc != 0) return rc;"),
@@ -855,6 +858,11 @@ def HardenSmSource(source: bytes) -> bytes:
         ("    ble_store_write_rpa_rec(&value_rpa_rec);\n}",
          "    /* A zero RPA denotes a direct identity connection: no mapping. */\n"
          "    if (memcmp(value_rpa_rec.peer_rpa_addr.val, BLE_ADDR_ANY->val, 6) == 0) return 0;\n"
+         "    if (add_rpa_token != 0) {\n"
+         "        /* No expired/replaced consent may reclaim transport metadata. */\n"
+         "        if (LitchSdkPairingAddRpaToken(proc->conn_handle) != add_rpa_token) return BLE_HS_EAUTHEN;\n"
+         "        return LitchSdkWriteAddRpaRec(&value_rpa_rec);\n"
+         "    }\n"
          "    return ble_store_write_rpa_rec(&value_rpa_rec);\n}"),
         ("        if (res->enc_cb &&\n"
          "            res->app_status != BLE_HS_ENOTCONN) {\n"

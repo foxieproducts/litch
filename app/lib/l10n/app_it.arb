@@ -456,6 +456,7 @@
   "disconnectedScanning": "Cerco i non morti…",
   "connectingToBoard": "Connessione a {name}…",
   "connectFailedBoard": "Connessione a {name} non riuscita. Tocca Connetti per riprovare.",
+  "savedEncryptionKeyMissingHelp": "Android non è riuscito a usare la chiave Bluetooth salvata per proteggere questa connessione. Se questo è il tuo Litch, dissocialo nelle impostazioni Bluetooth del telefono, poi torna qui e riprova.",
   "freshPairingDidNotFinish": "L’abbinamento non è stato completato. Riprova, segui le indicazioni della scacchiera e accetta la richiesta di abbinamento sul telefono.",
   "connectionEndedBeforeReady": "La connessione è terminata prima del completamento della configurazione. Tieni la scacchiera accesa e vicina, poi riprova. Per assistenza, tocca Aiuto connessione.",
   "disconnectedChoose": "Disconnesso. Scegli una scacchiera a cui connetterti.",

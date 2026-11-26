@@ -234,6 +234,59 @@ void main() {
   });
   tearDown(() => debugDefaultTargetPlatformOverride = null);
 
+  test(
+    'scoped saved encryption key failure stops early retry without removing keys',
+    () async {
+      const channel = MethodChannel('test/litch-encryption-key-missing');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      Map<dynamic, dynamic>? watch;
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        if (call.method == 'watchDevice' &&
+            (call.arguments as Map)['deviceId'] != null) {
+          watch = call.arguments as Map;
+        }
+        return call.method == 'canRepairPairing' ? true : null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final board = _RecoveryBoard();
+      final service = _service(
+        board,
+        MethodChannelBluetoothPairingRecovery(channel: channel),
+      );
+      final connecting = service.connect(_boardId);
+      await _connectionAdmitted(board, 1);
+      Future<void> event(Map<dynamic, dynamic> target) =>
+          messenger.handlePlatformMessage(
+            channel.name,
+            const StandardMethodCodec().encodeMethodCall(
+              MethodCall('pairingKeyMissing', {
+                ...target,
+                'source': 'android_encryption_key_missing',
+              }),
+            ),
+            (_) {},
+          );
+      await event({...watch!, 'deviceId': _otherId});
+      await event({...watch!, 'generation': (watch!['generation'] as int) - 1});
+      expect(service.pairingRecovery, isNull);
+      await event(watch!);
+      await _turns();
+      expect(await connecting, isFalse);
+      expect(
+        service.pairingRecovery?.reason,
+        BluetoothPairingRecoveryReason.savedEncryptionKeyMissing,
+      );
+      expect(service.pairingRecovery?.canRepair, isFalse);
+      expect(board.connections, hasLength(1));
+      expect(calls, isNot(contains('repairPairing')));
+      expect(calls, isNot(contains('canRepairPairing')));
+      expect(await service.connect(_boardId), isFalse);
+    },
+  );
+
   for (final early in [false, true]) {
     test(
       'failed native bond during saved-owner verification stops doomed retry early=$early',
@@ -865,6 +918,63 @@ void main() {
     expect(repairs, 0);
     debugDefaultTargetPlatformOverride = null;
   });
+
+  testWidgets(
+    'saved encryption key failure offers phone-only help and explicit retry',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var settings = 0;
+      var retries = 0;
+      await tester.pumpWidget(
+        _screen(
+          state: const BluetoothPairingRecoveryState(
+            deviceId: _boardId,
+            stage: BluetoothPairingRecoveryStage.ready,
+            reason: BluetoothPairingRecoveryReason.savedEncryptionKeyMissing,
+          ),
+          onOpenSettings: () async {
+            ++settings;
+            return true;
+          },
+          onRetry: () async {
+            ++retries;
+            return true;
+          },
+        ),
+      );
+      expect(
+        find.textContaining('could not use the saved Bluetooth key'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('forget it in this phone'), findsOneWidget);
+      expect(find.textContaining('board steps below'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('owner-verification-recovery-steps')),
+        findsNothing,
+      );
+      expect(find.text('Repair pairing'), findsNothing);
+      final primary = find.byKey(const ValueKey('pairing-recovery-primary'));
+      await tester.ensureVisible(primary);
+      await tester.pump();
+      await tester.tap(primary);
+      await tester.pump();
+      expect(
+        find.descendant(of: primary, matching: find.text('Try again')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(primary);
+      await tester.pump();
+      await tester.tap(primary);
+      await tester.pump();
+      expect(settings, 1);
+      expect(retries, 1);
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
 
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
     testWidgets(

@@ -57,6 +57,31 @@ class BluetoothPairingRecoveryTest {
         assertTrue(os.createdBonds.isEmpty())
     }
 
+    @Test fun encryptionMissingKeyIsScopedToWatchedPreviouslyBondedLePeer() {
+        val os = Os()
+        val events = mutableListOf<PairingRecoveryTarget>()
+        val owner = BluetoothPairingRecovery(os, {}, {}, events::add)
+        owner.watch(board, 7)
+        owner.encryptionChanged(other, 2, 6, false)
+        owner.encryptionChanged(board, 1, 6, false)
+        owner.encryptionChanged(board, 2, 5, false)
+        owner.encryptionChanged(board, 2, 6, true)
+        owner.encryptionChanged(board, 2, 6, null)
+        assertTrue(events.isEmpty())
+        owner.encryptionChanged(board, 2, 6, false)
+        assertEquals(listOf(PairingRecoveryTarget(board, 7)), events)
+        owner.encryptionChanged(board, 2, 6, false)
+        assertEquals(1, events.size)
+        owner.watch(null, 8)
+        owner.encryptionChanged(board, 2, 6, false)
+        os.state = PairingRecoveryBond.NONE
+        owner.watch(board, 9)
+        owner.encryptionChanged(board, 2, 6, false)
+        assertEquals(1, events.size)
+        assertTrue(os.removed.isEmpty())
+        assertTrue(os.createdBonds.isEmpty())
+    }
+
     @Test fun normalBondStartsOnceForTheExactWatchedAttemptWithoutRepairEffects() {
         val os = Os().apply { state = PairingRecoveryBond.NONE }
         val owner = BluetoothPairingRecovery(os, {})

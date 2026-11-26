@@ -44,6 +44,7 @@ internal class BluetoothPairingRecovery(
     private val platform: PairingRecoveryPlatform,
     private val emitKeyMissing: (PairingRecoveryTarget) -> Unit,
     private val emitBondFailure: (PairingRecoveryTarget) -> Unit = {},
+    private val emitEncryptionKeyMissing: (PairingRecoveryTarget) -> Unit = {},
 ) {
     private class Repair(
         val target: PairingRecoveryTarget,
@@ -61,6 +62,8 @@ internal class BluetoothPairingRecovery(
     private var bondingTarget: PairingRecoveryTarget? = null
     private var bondAttempt = 0
     private var bondAdmission = "failed"
+    private var watchedWasBonded = false
+    private var reportedEncryptionKeyMissing = false
 
     fun watch(deviceId: String?, generation: Long) {
         val next = deviceId?.takeIf {
@@ -68,6 +71,9 @@ internal class BluetoothPairingRecovery(
         }?.let { PairingRecoveryTarget(it, generation) }
         if (watched == next) return
         watched = next
+        watchedWasBonded = next != null &&
+            runCatching { platform.bond(next.address) == PairingRecoveryBond.BONDED }.getOrDefault(false)
+        reportedEncryptionKeyMissing = false
         bondingTarget = null
         bondAttempt = 0
         bondAdmission = "failed"
@@ -96,6 +102,18 @@ internal class BluetoothPairingRecovery(
 
     fun keyMissing(address: String) {
         watched?.takeIf { it.address.equals(address, ignoreCase = true) }?.let(emitKeyMissing)
+    }
+
+    fun encryptionChanged(address: String, transport: Int, status: Int, enabled: Boolean?) {
+        // HCI error 0x06 is PIN or Key Missing. Only a watched LE peer that
+        // already had phone keys can enter saved-pairing recovery; this is not
+        // evidence that a new pairing should be removed or started.
+        val target = watched ?: return
+        if (!target.address.equals(address, ignoreCase = true) ||
+            !watchedWasBonded || reportedEncryptionKeyMissing || pending != null ||
+            transport != BluetoothDevice.TRANSPORT_LE || status != 0x06 || enabled != false) return
+        reportedEncryptionKeyMissing = true
+        emitEncryptionKeyMissing(target)
     }
 
     fun repair(deviceId: String, generation: Long, completion: (String) -> Unit) {
@@ -206,6 +224,12 @@ internal class AndroidBluetoothPairingRecovery(
             "generation" to target.generation,
             "source" to "android_bond_failed",
         ))
+    }, emitEncryptionKeyMissing = { target ->
+        channel.invokeMethod("pairingKeyMissing", mapOf(
+            "deviceId" to target.deviceId,
+            "generation" to target.generation,
+            "source" to "android_encryption_key_missing",
+        ))
     })
     private val manager: CompanionDeviceManager?
         get() = if (Build.VERSION.SDK_INT >= 36) activity.getSystemService(CompanionDeviceManager::class.java) else null
@@ -219,6 +243,14 @@ internal class AndroidBluetoothPairingRecovery(
                 else intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)) ?: return
             when (intent.action) {
                 BluetoothDevice.ACTION_KEY_MISSING -> if (Build.VERSION.SDK_INT >= 36) owner.keyMissing(device.address)
+                BluetoothDevice.ACTION_ENCRYPTION_CHANGE -> if (Build.VERSION.SDK_INT >= 36) owner.encryptionChanged(
+                    device.address,
+                    intent.getIntExtra(BluetoothDevice.EXTRA_TRANSPORT, -1),
+                    intent.getIntExtra(BluetoothDevice.EXTRA_ENCRYPTION_STATUS, -1),
+                    if (intent.hasExtra(BluetoothDevice.EXTRA_ENCRYPTION_ENABLED))
+                        intent.getBooleanExtra(BluetoothDevice.EXTRA_ENCRYPTION_ENABLED, true)
+                    else null,
+                )
                 BluetoothDevice.ACTION_BOND_STATE_CHANGED -> owner.bondChanged(
                     device.address, decodeBond(intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, -1)),
                     decodeBond(intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, -1)),
@@ -229,7 +261,10 @@ internal class AndroidBluetoothPairingRecovery(
 
     init {
         val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED).apply {
-            if (Build.VERSION.SDK_INT >= 36) addAction(BluetoothDevice.ACTION_KEY_MISSING)
+            if (Build.VERSION.SDK_INT >= 36) {
+                addAction(BluetoothDevice.ACTION_KEY_MISSING)
+                addAction(BluetoothDevice.ACTION_ENCRYPTION_CHANGE)
+            }
         }
         receiverRegistered = runCatching {
             if (Build.VERSION.SDK_INT >= 33) activity.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)

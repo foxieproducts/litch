@@ -4,9 +4,14 @@ import 'package:flutter/services.dart';
 
 /// Native evidence of missing keys, rather than a generic connection failure.
 final class BluetoothPairingKeyMissing {
-  const BluetoothPairingKeyMissing(this.deviceId, this.generation);
+  const BluetoothPairingKeyMissing(
+    this.deviceId,
+    this.generation, {
+    this.encryptionKeyMissing = false,
+  });
   final String deviceId;
   final int generation;
+  final bool encryptionKeyMissing;
 }
 
 /// A native bond attempt ended without a bond. This does not identify its cause.
@@ -20,6 +25,7 @@ enum BluetoothPairingRecoveryReason {
   keyMissing,
   ownerVerificationFailed,
   freshBondFailed,
+  savedEncryptionKeyMissing,
 }
 
 enum BluetoothPairingRepairResult { removed, unsupported, cancelled, failed }
@@ -120,13 +126,22 @@ final class MethodChannelBluetoothPairingRecovery
     }
     if (call.method != 'pairingKeyMissing' || _events.isClosed) return;
     final arguments = call.arguments;
-    if (arguments is! Map || arguments['source'] != 'android_key_missing') {
+    if (arguments is! Map ||
+        (arguments['source'] != 'android_key_missing' &&
+            arguments['source'] != 'android_encryption_key_missing')) {
       return;
     }
     final id = arguments['deviceId'];
     final generation = arguments['generation'];
     if (id is String && id.isNotEmpty && generation is int && generation >= 0) {
-      _events.add(BluetoothPairingKeyMissing(id, generation));
+      _events.add(
+        BluetoothPairingKeyMissing(
+          id,
+          generation,
+          encryptionKeyMissing:
+              arguments['source'] == 'android_encryption_key_missing',
+        ),
+      );
     }
   }
 

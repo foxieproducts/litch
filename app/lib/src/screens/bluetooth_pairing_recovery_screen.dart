@@ -138,6 +138,9 @@ class _BluetoothPairingRecoveryScreenState
         state.reason == BluetoothPairingRecoveryReason.ownerVerificationFailed;
     final freshBondFailed =
         state.reason == BluetoothPairingRecoveryReason.freshBondFailed;
+    final savedEncryptionKeyMissing =
+        state.reason ==
+        BluetoothPairingRecoveryReason.savedEncryptionKeyMissing;
     final retryOnly = verificationFailed || freshBondFailed;
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final automatic = !ios && state.canRepair && !_manual;
@@ -238,7 +241,9 @@ class _BluetoothPairingRecoveryScreenState
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      freshBondFailed
+                      savedEncryptionKeyMissing
+                          ? strings.savedEncryptionKeyMissingHelp
+                          : freshBondFailed
                           ? strings.freshPairingDidNotFinish
                           : verificationFailed
                           ? strings.ownerVerificationRecoveryHelp
@@ -282,9 +287,10 @@ class _BluetoothPairingRecoveryScreenState
                         spacing: 8,
                         children: actions,
                       ),
-                    const SizedBox(height: 24),
-                    if (!freshBondFailed)
+                    if (!savedEncryptionKeyMissing && !freshBondFailed) ...[
+                      const SizedBox(height: 24),
                       const _BluetoothConnectionRecoverySteps(),
+                    ],
                   ],
                 ),
               ),

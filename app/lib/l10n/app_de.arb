@@ -456,6 +456,7 @@
   "disconnectedScanning": "Suche nach den Untoten…",
   "connectingToBoard": "Verbindung mit {name} wird hergestellt…",
   "connectFailedBoard": "Verbindung mit {name} fehlgeschlagen. Tippe auf Verbinden, um es erneut zu versuchen.",
+  "savedEncryptionKeyMissingHelp": "Android konnte den gespeicherten Bluetooth-Schlüssel für diese Verbindung nicht verwenden. Wenn dies dein Litch ist, entferne es in den Bluetooth-Einstellungen dieses Smartphones und versuche es danach erneut.",
   "freshPairingDidNotFinish": "Die Kopplung wurde nicht abgeschlossen. Versuche es erneut, folge den Hinweisen auf dem Brett und bestätige die Kopplungsanfrage auf deinem Smartphone.",
   "connectionEndedBeforeReady": "Die Verbindung wurde vor Abschluss der Einrichtung beendet. Halte dein Brett eingeschaltet und in der Nähe und versuche es erneut. Tippe für weitere Hilfe auf Verbindungshilfe.",
   "disconnectedChoose": "Getrennt. Wähle ein Brett zum Verbinden.",

@@ -456,6 +456,7 @@
   "disconnectedScanning": "À la recherche des morts-vivants…",
   "connectingToBoard": "Connexion à {name}…",
   "connectFailedBoard": "Échec de la connexion à {name}. Touchez Connecter pour réessayer.",
+  "savedEncryptionKeyMissingHelp": "Android n’a pas pu utiliser la clé Bluetooth enregistrée pour sécuriser cette connexion. Si ce Litch est le vôtre, oubliez-le dans les réglages Bluetooth de ce téléphone, puis revenez réessayer.",
   "freshPairingDidNotFinish": "L’association n’a pas abouti. Réessayez, suivez les indications du plateau et acceptez la demande d’association sur votre téléphone.",
   "connectionEndedBeforeReady": "La connexion a pris fin avant la fin de la configuration. Gardez votre plateau allumé et à proximité, puis réessayez. Pour obtenir de l’aide, touchez Aide à la connexion.",
   "disconnectedChoose": "Déconnecté. Choisissez un échiquier à connecter.",

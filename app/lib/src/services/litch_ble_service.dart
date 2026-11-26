@@ -265,7 +265,12 @@ class LitchBleService {
           event.generation == _connectionGeneration &&
           event.deviceId.toUpperCase() ==
               _pairingWatchDeviceId?.toUpperCase()) {
-        _suspendForPairingRecovery(_pairingWatchDeviceId!);
+        _suspendForPairingRecovery(
+          _pairingWatchDeviceId!,
+          reason: event.encryptionKeyMissing
+              ? BluetoothPairingRecoveryReason.savedEncryptionKeyMissing
+              : BluetoothPairingRecoveryReason.keyMissing,
+        );
       }
     });
     _pairingBondFailureSub = nativePairing?.bondFailures.listen((event) {
@@ -427,13 +432,16 @@ class LitchBleService {
         'Native pairing failed while verifying a saved connection; automatic reconnect paused.',
       BluetoothPairingRecoveryReason.freshBondFailed =>
         'Native pairing did not finish. Automatic reconnect is paused.',
+      BluetoothPairingRecoveryReason.savedEncryptionKeyMissing =>
+        'Android could not use the saved Bluetooth key. Automatic reconnect is paused.',
     });
     unawaited(stopScan());
     unawaited(disconnect());
     unawaited(() async {
       var canRepair = false;
       try {
-        canRepair = reason == BluetoothPairingRecoveryReason.keyMissing &&
+        canRepair =
+            reason == BluetoothPairingRecoveryReason.keyMissing &&
             await _pairingRecoveryGateway.canRepairPairing();
       } catch (_) {
         // The manual recovery journey remains available.

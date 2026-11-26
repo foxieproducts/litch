@@ -456,6 +456,7 @@
   "disconnectedScanning": "Looking for the undead...",
   "connectingToBoard": "Connecting to {name}...",
   "connectFailedBoard": "Failed to connect to {name}. Tap Connect to retry.",
+  "savedEncryptionKeyMissingHelp": "Android could not use the saved Bluetooth key to secure this connection. If this is your Litch, forget it in this phone’s Bluetooth settings, then return and try again.",
   "freshPairingDidNotFinish": "Pairing did not finish. Try again, follow the board’s prompts, and accept the pairing request on your phone.",
   "connectionEndedBeforeReady": "Connection ended before setup finished. Keep your board powered and nearby, then try again. For more help, tap Connection help.",
   "disconnectedChoose": "Disconnected. Select a board to connect.",

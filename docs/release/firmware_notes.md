@@ -1,7 +1,7 @@
 ## 1.0.5
 
 - Stored artwork plays once at startup and returns to Play or Litchcraft.
-- Adjust light-square brightness in finer steps.
+- Adjust light squares from a faint glow to a brighter maximum, with the familiar brightness in the middle.
 
 ## 1.0.4
 

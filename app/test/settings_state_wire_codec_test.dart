@@ -16,8 +16,8 @@ void main() {
     ]);
   }
 
-  test('both light-square ranges use the same settings field', () {
-    for (final entry in {'defaults': 8, 'defaults_1.0.5': 15}.entries) {
+  test('both light-square defaults use the same settings field', () {
+    for (final entry in {'defaults': 8, 'defaults_1.0.5': 4}.entries) {
       final settings = SettingsStateWireCodec.tryDecode(fixture(entry.key));
       expect(settings?.values['LIGHT_SQUARE_BRIGHTNESS'], entry.value);
     }

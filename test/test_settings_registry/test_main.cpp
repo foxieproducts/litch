@@ -271,9 +271,9 @@ void CheckSpecificMetadata() {
           "light-square hue exposes the continuous color wheel");
     Check(lightSquareBrightness != nullptr &&
               lightSquareBrightness->type == fxe::SettingType::UInt32 &&
-              lightSquareBrightness->defaultUint == 15U &&
+              lightSquareBrightness->defaultUint == 4U &&
               lightSquareBrightness->min == 1U &&
-              lightSquareBrightness->max == 15U,
+              lightSquareBrightness->max == 8U,
           "light-square brightness preserves existing output by default and has no duplicate off value");
 
     Check(gameFen != nullptr, "game fen descriptor exists");
@@ -1119,7 +1119,7 @@ void CheckBoardSetupAssistancePersistence() {
                   appearance.as<JsonVariantConst>()) ==
                   modules::settings_registry::ValidateAndSetResult::Ok,
               "light-square hue validates before persistence");
-        appearance.set(4U);
+        appearance.set(7U);
         Check(modules::settings_registry::ValidateAndSet(
                   settings, "LIGHT_SQUARE_BRIGHTNESS",
                   appearance.as<JsonVariantConst>()) ==
@@ -1146,7 +1146,7 @@ void CheckBoardSetupAssistancePersistence() {
                   "color") == 0 &&
                   settings.ReadValue("LIGHT_SQUARE_HUE", 0U) == 91U &&
                   modules::settings_registry::ReadCurrentUInt32(settings,
-                      *modules::settings_registry::LookupByKey("LIGHT_SQUARE_BRIGHTNESS")) == 4U,
+                      *modules::settings_registry::LookupByKey("LIGHT_SQUARE_BRIGHTNESS")) == 7U,
               "light-square mode, hue, and brightness survive save and reload together");
     }
 

@@ -23,7 +23,10 @@ fxe::CachedSetting<uint32_t> s_p2EndWheelCache(
 
 ComposeSettings CaptureComposeSettings(const fxe::SettingsStore& settings) {
     ComposeSettings captured;
-    captured.minimumBrightness = white_squares_setting::ReadBrightness0To8(settings) == 0U;
+    const uint32_t displayLevel = white_squares_setting::ReadBrightness0To8(settings);
+    captured.minimumBrightness = displayLevel == 0U;
+    captured.lightSquareMinimumChannel = light_square_appearance::MinimumVisibleChannel(
+        displayLevel, settings.ReadValue("AUTO_BRIGHTNESS", true));
     captured.whiteSquaresOn = white_squares_setting::ReadWhiteSquaresOn(settings);
     captured.coloredLightSquares = light_square_appearance::UsesColor(settings);
     captured.lightSquareHue = light_square_appearance::ReadHue(settings);

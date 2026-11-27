@@ -429,7 +429,7 @@ void ApplyPreparedMutation(fxe::SettingsStore& settings,
     switch (descriptor.type) {
         case fxe::SettingType::UInt32:
             if (std::strcmp(storageKey, light_square_appearance::KEY_BRIGHTNESS) == 0) {
-                settings.Doc()[storageKey] = light_square_appearance::StoredBrightness(mutation.uintValue);
+                light_square_appearance::StoreBrightness(settings, mutation.uintValue);
                 return;
             }
             settings.Doc()[storageKey] = mutation.uintValue;

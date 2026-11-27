@@ -1,6 +1,7 @@
 #include "modules/led_frame_composer_internal.hpp"
 
 #include "runtime/directed_physical_prompt.hpp"
+#include <algorithm>
 #include <new>
 
 #include "modules/light_square_appearance.hpp"
@@ -142,29 +143,36 @@ bool BuildComposeContext(const ComposeInputs& in, ComposeContext& outCtx) {
     outCtx.minimumBrightness =
         settings.minimumBrightness;
 
-    modules::Rgb lightSquareRgb = modules::ui_color_presets::SQUARE_COLOR_PRESETS[0];
-    if (!in.neutralStartupGrid &&
-        settings.coloredLightSquares) {
-        static constexpr uint16_t RESTRAINED_COLOR_SCALE256 =
-            modules::ui_color_presets::SQUARE_COLOR_PRESETS[0].r;
-        lightSquareRgb = ScaleRgbSaturating(
-            modules::ui_color_wheel::WheelToRgb(
-                settings.lightSquareHue),
-            RESTRAINED_COLOR_SCALE256);
+    if (settings.whiteSquaresOn && !outCtx.minimumBrightness) {
+        constexpr uint8_t established = ui_color_presets::SQUARE_COLOR_PRESETS[0].r;
+        // Near black, sharing the light unevenly gives adjacent settings
+        // different total output even when each emitter has only a few codes.
+        struct EmitterLevels { uint8_t primary, alternate; };
+        constexpr EmitterLevels levels[] = {
+            {1, 0}, {3, 3}, {11, 3}, {established, established},
+            {30, 30}, {52, 52}, {74, 74}, {96, 96},
+        };
+        const uint8_t step = in.neutralStartupGrid ? light_square_appearance::DEFAULT_BRIGHTNESS
+            : std::clamp(settings.lightSquareBrightness, light_square_appearance::MIN_BRIGHTNESS,
+                         light_square_appearance::MAX_BRIGHTNESS);
+        const auto tint = !in.neutralStartupGrid && settings.coloredLightSquares
+            ? ui_color_wheel::WheelToRgb(settings.lightSquareHue) : RGB_WHITE;
+        const uint8_t peak = std::max({tint.r, tint.g, tint.b});
+        const auto lit = [&](uint8_t level) {
+            if (level == 0U) return RGB_BLACK;
+            auto color = ScaleRgbSaturating(tint, level);
+            // Keep a nonzero setting visible without lifting every component
+            // of a mixed hue into the same LED code. White has three equal peaks.
+            const uint8_t floor = settings.lightSquareMinimumChannel;
+            if (tint.r == peak) color.r = std::max(color.r, floor);
+            if (tint.g == peak) color.g = std::max(color.g, floor);
+            if (tint.b == peak) color.b = std::max(color.b, floor);
+            return color;
+        };
+        const auto pair = levels[step - 1U];
+        outCtx.boostedLightSquareRgb = lit(pair.primary);
+        outCtx.alternateLightSquareRgb = lit(pair.alternate);
     }
-    {
-        const bool whiteSquaresOn = settings.whiteSquaresOn;
-        if (!whiteSquaresOn || outCtx.minimumBrightness) {
-            lightSquareRgb = modules::RGB_BLACK;
-        }
-    }
-
-    const uint8_t step = in.neutralStartupGrid ? light_square_appearance::MAX_BRIGHTNESS
-                                               : settings.lightSquareBrightness;
-    // At a half step, the two background LEDs straddle adjacent levels.
-    // The midpoint therefore survives output rounding without flashing either LED.
-    outCtx.boostedLightSquareRgb = ScaleRgbSaturating(lightSquareRgb, ((step + 1U) / 2U) * 32U);
-    outCtx.lightSquareUpperRgb = ScaleRgbSaturating(lightSquareRgb, ((step + 2U) / 2U) * 32U);
     outCtx.boostedDarkSquareRgb = modules::RGB_BLACK;
 
     const uint8_t p1Wheel = settings.nearEndPieceWheel;

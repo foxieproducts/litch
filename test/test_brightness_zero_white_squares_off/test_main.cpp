@@ -4,11 +4,13 @@
 
 #include "foxie_embedded/millis.hpp"
 #include "bounded_hint_engine.hpp"
+#include "modules/ambient_lux_averager.hpp"
 #include "modules/brightness_scale_policy.hpp"
 #include "modules/settings_registry.hpp"
 #include "hardware/led_layout.hpp"
 #include "modules/engine_derived_state.hpp"
 #include "modules/led_frame_composer.hpp"
+#include "modules/light_square_appearance.hpp"
 #include "modules/litch_max_engine.hpp"
 #include "modules/rgb.hpp"
 #include "modules/settings_store.hpp"
@@ -45,54 +47,69 @@ modules::Rgb PieceLedAt(const std::array<modules::Rgb, hardware::TOTAL_LED_COUNT
     return ledFrame[hardware::LedIndexForSquare(physicalSq, hardware::SquareLedSlot::Piece)];
 }
 
-void CheckLightSquareSteps(const uint8_t boardBrightness) {
+void CheckLightSquareSteps(uint8_t boardBrightness, bool automatic, int hue) {
+    modules::AmbientLuxAverager ambient;
+    ambient.OnLuxSample(0U, 2.0f);
     virtual_litch_config config{};
     virtual_litch_default_config(&config);
     config.hardware = VIRTUAL_LITCH_HARDWARE_V3_3;
     config.strong_power_source = 1U;
     config.brightness_scale_256 = modules::brightness_scale_policy::ComputeEffectiveScale256(
-        boardBrightness, false, 0.0F, 256U, false);
+        boardBrightness, true, ambient.ComputeAmbientFactor01(0U), 256U, automatic);
+
     test_support::BoundedHintSession fixture(config);
     auto& board = fixture.session;
     auto& settings = board.SettingsForPersistenceTest();
     settings.Doc()["BRIGHTNESS"] = boardBrightness;
+    settings.Doc()["AUTO_BRIGHTNESS"] = automatic;
+    settings.Doc()["LIGHT_SQUARE_MODE"] = hue < 0 ? "white" : "color";
+    settings.Doc()["LIGHT_SQUARE_HUE"] = hue < 0 ? 0 : hue;
     board.ObserveHallMask(0U);
     board.Advance(3000U);
     const auto measure = [&]() {
         board.Advance(20U);
         const auto& pixels = board.PhysicalFrame().pixels;
-        constexpr size_t square = 27U; // clear D4
-        return pixels[square * 4U].r + pixels[square * 4U + 2U].r;
+        const auto total = [](const virtual_litch_color& p) { return p.r + p.g + p.b + p.w; };
+        constexpr size_t first = 27U * 4U; // both background emitters on D4
+        return total(pixels[first]) + total(pixels[first + 2U]);
     };
-    std::array<int, 8> anchors{};
-    for (uint8_t level = 1U; level <= 8U; ++level) {
-        settings.Doc()["LIGHT_SQUARE_BRIGHTNESS"] = level; // pre-1.0.5 storage
-        anchors[level - 1U] = measure();
-    }
-    unsigned oldLevels = 1U, newLevels = 1U;
-    int previous = -1;
-    for (uint8_t step = 1U; step <= 15U; ++step) {
+
+    std::array<int, 8> levels{};
+    for (uint8_t step = 1U; step <= levels.size(); ++step) {
         StaticJsonDocument<32> value;
         value.set(step);
         Check(modules::settings_registry::ValidateAndSet(settings, "LIGHT_SQUARE_BRIGHTNESS",
                   value.as<JsonVariantConst>()) == modules::settings_registry::ValidateAndSetResult::Ok,
-              "advertised slider step accepted");
-        const int actual = measure();
-        const int lower = anchors[(step - 1U) / 2U], upper = anchors[step / 2U];
-        Check(actual == (lower + upper) / 2, "physical square preserves each old level and its midpoint");
-        Check(actual == measure(), "half steps stay steady across LED frames");
-        if (step > 1U && actual > previous) ++newLevels;
-        if (lower != upper) ++oldLevels;
-        previous = actual;
+              "each of the eight app slider positions is accepted");
+        levels[step - 1U] = measure();
+        Check(levels[step - 1U] == measure(), "square LEDs stay steady between frames");
     }
-    std::printf("[LightSquareSliderV33] board=%u old=%u new=%u\n", boardBrightness, oldLevels, newLevels);
-    Check(newLevels > oldLevels && anchors.back() > anchors.front(), "slider gains distinct physical levels");
+    if (boardBrightness == 0U) {
+        for (int level : levels) Check(level == 0, "whole-display zero keeps all square levels off");
+        return;
+    }
+    Check(levels.front() > 0 && levels.front() <= 3, "minimum gives only a faint light on each square");
+    Check(levels.back() >= (boardBrightness == 1U ? 2 : 3) * levels[3],
+          "brightest square is substantially brighter than the midpoint");
+    if (boardBrightness == 8U && automatic && (hue < 0 || hue == 255)) {
+        Check(levels[3] == (hue < 0 ? 12 : 4), "midpoint matches the 1.0.4 maximum at 2 lux");
+    }
+    for (size_t i = 1; i < levels.size(); ++i) {
+        Check(levels[i] >= levels[i - 1U], "raising square brightness never dims the square");
+        if (boardBrightness == 8U || (boardBrightness >= 5U && i >= 4U))
+            Check(levels[i] > levels[i - 1U], "square levels remain distinct after output quantization");
+    }
 }
 } // namespace
 
 int main() {
     std::puts("[BRIGHTNESS_ZERO_WHITE_SQUARES_OFF] start");
-    for (const uint8_t level : {5U, 7U, 8U}) CheckLightSquareSteps(level);
+    for (const bool automatic : {false, true}) {
+        for (const uint8_t level : {0U, 1U, 5U}) {
+            for (const int hue : {-1, 255, 42, 170}) CheckLightSquareSteps(level, automatic, hue);
+        }
+        for (int hue = -1; hue <= 255; ++hue) CheckLightSquareSteps(8U, automatic, hue);
+    }
 
     fxe::SetMillisProviderForTests(&fxe::ManualMillisProvider);
     fxe::ManualMillis::SetNowMs(0);
@@ -178,12 +195,18 @@ int main() {
     (void)settings.Doc().remove("LIGHT_SQUARE_MODE");
     (void)settings.Doc().remove("LIGHT_SQUARE_HUE");
     (void)settings.Doc().remove("LIGHT_SQUARE_BRIGHTNESS");
+    (void)settings.Doc().remove(modules::light_square_appearance::KEY_WIDE_RANGE);
     test_support::ComposeWithSnapshot(
         in, sm, derived, &engine, ledFrame0, edgeFrame0, gridFrame0);
     const modules::Rgb legacyDefault = SquareGridAt(gridFrame0, 0);
 
     settings.Doc()["LIGHT_SQUARE_MODE"] = "white";
-    settings.Doc()["LIGHT_SQUARE_BRIGHTNESS"] = 8U;
+    constexpr uint8_t upgraded[] = {1, 2, 2, 3, 3, 3, 4, 4};
+    for (uint8_t old = 1U; old <= 8U; ++old) {
+        settings.Doc()["LIGHT_SQUARE_BRIGHTNESS"] = old;
+        Check(modules::light_square_appearance::ReadBrightness(settings) == upgraded[old - 1U],
+              "saved 1.0.4 brightness maps into the lower half of the new range");
+    }
     test_support::ComposeWithSnapshot(
         in, sm, derived, &engine, ledFrame1, edgeFrame1, gridFrame1);
     const modules::Rgb defaultWhite = SquareGridAt(gridFrame1, 0);

@@ -111,7 +111,7 @@ struct ComposeContext {
     // placement. Literal board rotation then moves those colors with the UI.
 
     modules::Rgb boostedLightSquareRgb = modules::RGB_BLACK;
-    modules::Rgb lightSquareUpperRgb = modules::RGB_BLACK;
+    modules::Rgb alternateLightSquareRgb = modules::RGB_BLACK;
     modules::Rgb boostedDarkSquareRgb = modules::RGB_BLACK;
 
     uint8_t p1Wheel = 0;

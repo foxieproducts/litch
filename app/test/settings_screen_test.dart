@@ -10003,7 +10003,7 @@ void main() {
   });
 
   testWidgets(
-    'light-square slider uses the range advertised by firmware 1.0.5',
+    'light-square slider opens at the 1.0.5 midpoint and keeps eight positions',
     (WidgetTester tester) async {
       final service = _FakeLitchBleService(
         settings: <LitchSetting>[
@@ -10015,10 +10015,10 @@ void main() {
             key: 'LIGHT_SQUARE_BRIGHTNESS',
             type: 'u32',
             category: 'display',
-            value: 15,
-            defaultValue: 15,
+            value: 4,
+            defaultValue: 4,
             min: 1,
-            max: 15,
+            max: 8,
           ),
         ],
       );
@@ -10029,13 +10029,14 @@ void main() {
       );
       await scrollIntoView(tester, finder);
       final slider = tester.widget<Slider>(finder);
-      expect(slider.divisions, 14);
-      slider.onChangeStart!(15);
-      slider.onChanged!(12);
-      slider.onChangeEnd!(12);
+      expect(slider.divisions, 7);
+      expect(slider.value, 4);
+      slider.onChangeStart!(4);
+      slider.onChanged!(8);
+      slider.onChangeEnd!(8);
       await tester.pumpAndSettle();
       expect(service.settingWrites.last.key, 'LIGHT_SQUARE_BRIGHTNESS');
-      expect(service.settingWrites.last.value, 12);
+      expect(service.settingWrites.last.value, 8);
     },
   );
 

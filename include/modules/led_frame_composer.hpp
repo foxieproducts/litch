@@ -53,6 +53,7 @@ struct ComposeSettings {
     bool coloredLightSquares = false;
     uint8_t lightSquareHue = 0U;
     uint8_t lightSquareBrightness = light_square_appearance::DEFAULT_BRIGHTNESS;
+    uint8_t lightSquareMinimumChannel = 1U;
     uint8_t nearEndPieceWheel = 0U;
     uint8_t farEndPieceWheel = 0U;
     bool initialKingPlacementAssistance = true;

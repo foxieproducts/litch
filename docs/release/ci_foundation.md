@@ -106,6 +106,10 @@ retain their original notes and verification behavior.
    digest but cannot distinguish successful executions of that same source;
    successful-run admission remains required. Promotion still requires its
    retained Actions candidate within the 14-day window.
+6. After the release tags and delivery are verified, switch to `main` and
+   remove finished release and feature branches locally and on GitHub. Check
+   each branch tip against `main`, its open pull requests and any active
+   worktrees before deleting it.
 
 Restrict the environment to the `main` branch and configure required reviewers
 where supported. Set the AWS role, bucket and lock key as masked environment

@@ -1616,8 +1616,8 @@ void TestAppendedDisplaySettingsUseExtendedSettingsSnapshot() {
                 sawLightSquareBrightness = true;
                 Check(item["i"].as<uint32_t>() == 36U &&
                           item["mn"].as<uint32_t>() == 1U &&
-                          item["mx"].as<uint32_t>() == 8U &&
-                          item["v"].as<uint32_t>() == 8U,
+                          item["mx"].as<uint32_t>() == 15U &&
+                          item["v"].as<uint32_t>() == 15U,
                       "light-square brightness appends at index 36 without a duplicate Off value");
             }
         }

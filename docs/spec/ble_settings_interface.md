@@ -174,7 +174,7 @@ persistence:
 
 - `LIGHT_SQUARE_MODE` is an enum with `white`, then `color`; default `white`.
 - `LIGHT_SQUARE_HUE` is a `u32` continuous wheel value `0..255`; default `0`.
-- `LIGHT_SQUARE_BRIGHTNESS` is a `u32` intensity `1..8`; default `8`.
+- `LIGHT_SQUARE_BRIGHTNESS` is a `u32` intensity. Firmware through 1.0.4 advertises `1..8` with default `8`. Firmware 1.0.5 advertises `1..15` with default `15`. The eight original levels occupy odd slider positions. Even positions use the two background LEDs to produce steady intermediate brightness. Clients read the range from the board's descriptor.
 
 Their visible indices are 34, 35, and 36 respectively. The existing
 `WHITE_SQUARES_ON` boolean remains the sole on/off setting. Brightness therefore

@@ -10003,6 +10003,43 @@ void main() {
   });
 
   testWidgets(
+    'light-square slider uses the range advertised by firmware 1.0.5',
+    (WidgetTester tester) async {
+      final service = _FakeLitchBleService(
+        settings: <LitchSetting>[
+          ..._defaultSettings,
+          ..._lightSquareAppearanceSettings.where(
+            (s) => s.key != 'LIGHT_SQUARE_BRIGHTNESS',
+          ),
+          const LitchSetting(
+            key: 'LIGHT_SQUARE_BRIGHTNESS',
+            type: 'u32',
+            category: 'display',
+            value: 15,
+            defaultValue: 15,
+            min: 1,
+            max: 15,
+          ),
+        ],
+      );
+      addTearDown(service.dispose);
+      await pumpSettings(tester, service);
+      final finder = find.byKey(
+        const ValueKey<String>('setting-editor:LIGHT_SQUARE_BRIGHTNESS'),
+      );
+      await scrollIntoView(tester, finder);
+      final slider = tester.widget<Slider>(finder);
+      expect(slider.divisions, 14);
+      slider.onChangeStart!(15);
+      slider.onChanged!(12);
+      slider.onChangeEnd!(12);
+      await tester.pumpAndSettle();
+      expect(service.settingWrites.last.key, 'LIGHT_SQUARE_BRIGHTNESS');
+      expect(service.settingWrites.last.value, 12);
+    },
+  );
+
+  testWidgets(
     'square-light controls keep Off on the existing switch and disclose hue only for Color',
     (WidgetTester tester) async {
       final _FakeLitchBleService oldService = _FakeLitchBleService();

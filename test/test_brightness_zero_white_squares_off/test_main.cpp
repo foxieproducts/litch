@@ -3,6 +3,9 @@
 #include <cstdio>
 
 #include "foxie_embedded/millis.hpp"
+#include "bounded_hint_engine.hpp"
+#include "modules/brightness_scale_policy.hpp"
+#include "modules/settings_registry.hpp"
 #include "hardware/led_layout.hpp"
 #include "modules/engine_derived_state.hpp"
 #include "modules/led_frame_composer.hpp"
@@ -42,10 +45,54 @@ modules::Rgb PieceLedAt(const std::array<modules::Rgb, hardware::TOTAL_LED_COUNT
     return ledFrame[hardware::LedIndexForSquare(physicalSq, hardware::SquareLedSlot::Piece)];
 }
 
+void CheckLightSquareSteps(const uint8_t boardBrightness) {
+    virtual_litch_config config{};
+    virtual_litch_default_config(&config);
+    config.hardware = VIRTUAL_LITCH_HARDWARE_V3_3;
+    config.strong_power_source = 1U;
+    config.brightness_scale_256 = modules::brightness_scale_policy::ComputeEffectiveScale256(
+        boardBrightness, false, 0.0F, 256U, false);
+    test_support::BoundedHintSession fixture(config);
+    auto& board = fixture.session;
+    auto& settings = board.SettingsForPersistenceTest();
+    settings.Doc()["BRIGHTNESS"] = boardBrightness;
+    board.ObserveHallMask(0U);
+    board.Advance(3000U);
+    const auto measure = [&]() {
+        board.Advance(20U);
+        const auto& pixels = board.PhysicalFrame().pixels;
+        constexpr size_t square = 27U; // clear D4
+        return pixels[square * 4U].r + pixels[square * 4U + 2U].r;
+    };
+    std::array<int, 8> anchors{};
+    for (uint8_t level = 1U; level <= 8U; ++level) {
+        settings.Doc()["LIGHT_SQUARE_BRIGHTNESS"] = level; // pre-1.0.5 storage
+        anchors[level - 1U] = measure();
+    }
+    unsigned oldLevels = 1U, newLevels = 1U;
+    int previous = -1;
+    for (uint8_t step = 1U; step <= 15U; ++step) {
+        StaticJsonDocument<32> value;
+        value.set(step);
+        Check(modules::settings_registry::ValidateAndSet(settings, "LIGHT_SQUARE_BRIGHTNESS",
+                  value.as<JsonVariantConst>()) == modules::settings_registry::ValidateAndSetResult::Ok,
+              "advertised slider step accepted");
+        const int actual = measure();
+        const int lower = anchors[(step - 1U) / 2U], upper = anchors[step / 2U];
+        Check(actual == (lower + upper) / 2, "physical square preserves each old level and its midpoint");
+        Check(actual == measure(), "half steps stay steady across LED frames");
+        if (step > 1U && actual > previous) ++newLevels;
+        if (lower != upper) ++oldLevels;
+        previous = actual;
+    }
+    std::printf("[LightSquareSliderV33] board=%u old=%u new=%u\n", boardBrightness, oldLevels, newLevels);
+    Check(newLevels > oldLevels && anchors.back() > anchors.front(), "slider gains distinct physical levels");
+}
 } // namespace
 
 int main() {
     std::puts("[BRIGHTNESS_ZERO_WHITE_SQUARES_OFF] start");
+    for (const uint8_t level : {5U, 7U, 8U}) CheckLightSquareSteps(level);
 
     fxe::SetMillisProviderForTests(&fxe::ManualMillisProvider);
     fxe::ManualMillis::SetNowMs(0);

@@ -5,16 +5,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:litch_mobile/src/models/settings_state_wire_codec.dart';
 
 void main() {
-  Uint8List fixture() {
+  Uint8List fixture([String name = 'defaults']) {
     final row = File(
       '../test/fixtures/settings_state_wire_v3.csv',
-    ).readAsLinesSync().firstWhere((line) => line.startsWith('defaults,'));
+    ).readAsLinesSync().firstWhere((line) => line.startsWith('$name,'));
     final hex = row.substring(row.indexOf(',') + 1);
     return Uint8List.fromList(<int>[
       for (var index = 0; index < hex.length; index += 2)
         int.parse(hex.substring(index, index + 2), radix: 16),
     ]);
   }
+
+  test('both light-square ranges use the same settings field', () {
+    for (final entry in {'defaults': 8, 'defaults_1.0.5': 15}.entries) {
+      final settings = SettingsStateWireCodec.tryDecode(fixture(entry.key));
+      expect(settings?.values['LIGHT_SQUARE_BRIGHTNESS'], entry.value);
+    }
+  });
 
   test('Settings epoch 2 rejects epoch 1 snapshots and encodes promotion', () {
     final old = Uint8List.sublistView(fixture(), 0, 82);

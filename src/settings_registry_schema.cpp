@@ -5,6 +5,7 @@
 #include "hardware/lis2dw12_settings.hpp"
 #include "hardware/usb_cc_sense.hpp"
 #include "modules/hint_thinking_style_setting.hpp"
+#include "modules/light_square_appearance.hpp"
 #include "modules/settle_animation_setting.hpp"
 
 namespace modules::settings_registry {
@@ -591,10 +592,10 @@ static constexpr fxe::SettingDescriptor SETTINGS[] = {
     fxe::SettingDescriptor("LIGHT_SQUARE_BRIGHTNESS",
                            fxe::SettingType::UInt32,
                            fxe::SettingCategory::Display,
-                           8U,
+                           modules::light_square_appearance::DEFAULT_BRIGHTNESS,
                            nullptr,
-                           1U,
-                           8U,
+                           modules::light_square_appearance::MIN_BRIGHTNESS,
+                           modules::light_square_appearance::MAX_BRIGHTNESS,
                            nullptr,
                            0U,
                            "Light-square brightness",

@@ -15,9 +15,10 @@ inline constexpr const char* MODE_WHITE = "white";
 inline constexpr const char* MODE_COLOR = "color";
 
 inline constexpr uint8_t DEFAULT_HUE = 0U;
-inline constexpr uint8_t DEFAULT_BRIGHTNESS = 8U;
+inline constexpr uint8_t DEFAULT_BRIGHTNESS = 15U;
 inline constexpr uint8_t MIN_BRIGHTNESS = 1U;
-inline constexpr uint8_t MAX_BRIGHTNESS = 8U;
+inline constexpr uint8_t MAX_BRIGHTNESS = 15U;
+inline constexpr uint8_t LEGACY_LEVELS = 8U;
 
 inline bool UsesColor(const fxe::SettingsStore& settings) {
     const char* const mode = settings.ReadValue(KEY_MODE, MODE_WHITE);
@@ -31,12 +32,17 @@ inline uint8_t ReadHue(const fxe::SettingsStore& settings) {
 }
 
 inline uint8_t ReadBrightness(const fxe::SettingsStore& settings) {
-    const uint32_t raw = settings.ReadValue(
-        KEY_BRIGHTNESS, static_cast<uint32_t>(DEFAULT_BRIGHTNESS));
-    if (raw < MIN_BRIGHTNESS) {
-        return MIN_BRIGHTNESS;
-    }
-    return static_cast<uint8_t>(raw > MAX_BRIGHTNESS ? MAX_BRIGHTNESS : raw);
+    // Stored 1..8 keep their original light levels. Slots 9..15 hold the
+    // seven midpoints. The slider presents both in brightness order.
+    const uint32_t stored = settings.ReadValue(KEY_BRIGHTNESS, uint32_t{LEGACY_LEVELS});
+    if (stored == 0U) return MIN_BRIGHTNESS;
+    if (stored <= LEGACY_LEVELS) return static_cast<uint8_t>(2U * stored - 1U);
+    if (stored <= MAX_BRIGHTNESS) return static_cast<uint8_t>(2U * (stored - LEGACY_LEVELS));
+    return MAX_BRIGHTNESS;
+}
+
+inline uint32_t StoredBrightness(uint32_t step) {
+    return step % 2U == 0U ? LEGACY_LEVELS + step / 2U : (step + 1U) / 2U;
 }
 
 } // namespace modules::light_square_appearance

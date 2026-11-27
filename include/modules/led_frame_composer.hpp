@@ -4,6 +4,7 @@
 #include "modules/board_style_preview.hpp"
 #include "modules/checkmate_animation_setting.hpp"
 #include "modules/hint_thinking_style_setting.hpp"
+#include "modules/light_square_appearance.hpp"
 #include "modules/settle_animation_setting.hpp"
 #include "modules/turn_anim_style.hpp"
 
@@ -51,7 +52,7 @@ struct ComposeSettings {
     bool whiteSquaresOn = true;
     bool coloredLightSquares = false;
     uint8_t lightSquareHue = 0U;
-    uint8_t lightSquareBrightness = 8U;
+    uint8_t lightSquareBrightness = light_square_appearance::DEFAULT_BRIGHTNESS;
     uint8_t nearEndPieceWheel = 0U;
     uint8_t farEndPieceWheel = 0U;
     bool initialKingPlacementAssistance = true;

@@ -384,6 +384,12 @@ uint64_t ComposeBoard(const ComposeContext& ctx,
                 modules::ApplyToBoardSquare(ledSlots,
                                             modules::BoardLedSlots::SquarePair,
                                             adjustedFinalSquare);
+                if (!dark && !forceOff && !dimDirectedUndo &&
+                    adjustedFinalSquare.r == squareRgb.r && adjustedFinalSquare.g == squareRgb.g &&
+                    adjustedFinalSquare.b == squareRgb.b) {
+                    auto& upper = (r & 1U) == 0U ? ledSlots.right : ledSlots.left;
+                    upper = ctx.lightSquareUpperRgb;
+                }
                 modules::ApplyToBoardSquare(ledSlots,
                                             modules::BoardLedSlots::PiecePair,
                                             adjustedFinalPiece);

@@ -70,8 +70,8 @@ void TestDefaultSnapshotMatchesSharedFixture() {
     std::ifstream fixture("test/fixtures/settings_state_wire_v3.csv");
     TEST_ASSERT_TRUE(fixture.good());
     std::string line;
-    std::getline(fixture, line);
-    std::getline(fixture, line);
+    while (std::getline(fixture, line) && line.rfind("defaults_1.0.5,", 0U) != 0U) {}
+    TEST_ASSERT_TRUE(line.rfind("defaults_1.0.5,", 0U) == 0U);
     const size_t comma = line.find(',');
     TEST_ASSERT_NOT_EQUAL(std::string::npos, comma);
     const std::string hex = line.substr(comma + 1U);

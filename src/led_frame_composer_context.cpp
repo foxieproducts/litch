@@ -159,13 +159,12 @@ bool BuildComposeContext(const ComposeInputs& in, ComposeContext& outCtx) {
         }
     }
 
-    const uint16_t lightSquareScale256 = static_cast<uint16_t>(
-        (in.neutralStartupGrid
-             ? modules::light_square_appearance::MAX_BRIGHTNESS
-             : settings.lightSquareBrightness) *
-        32U);
-    outCtx.boostedLightSquareRgb =
-        ScaleRgbSaturating(lightSquareRgb, lightSquareScale256);
+    const uint8_t step = in.neutralStartupGrid ? light_square_appearance::MAX_BRIGHTNESS
+                                               : settings.lightSquareBrightness;
+    // At a half step, the two background LEDs straddle adjacent levels.
+    // The midpoint therefore survives output rounding without flashing either LED.
+    outCtx.boostedLightSquareRgb = ScaleRgbSaturating(lightSquareRgb, ((step + 1U) / 2U) * 32U);
+    outCtx.lightSquareUpperRgb = ScaleRgbSaturating(lightSquareRgb, ((step + 2U) / 2U) * 32U);
     outCtx.boostedDarkSquareRgb = modules::RGB_BLACK;
 
     const uint8_t p1Wheel = settings.nearEndPieceWheel;

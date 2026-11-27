@@ -1,5 +1,6 @@
 #include "modules/settings_registry.hpp"
 #include "modules/assistance_preferences.hpp"
+#include "modules/light_square_appearance.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -168,10 +169,7 @@ ValidateAndSetResult PrepareUInt32(const fxe::SettingsStore& settings,
     numericValue =
         CoercePieceWheelValueForPair(settings, storageKey, numericValue);
     outMutation.uintValue = numericValue;
-    outMutation.changed = modules::player_end_palette::ReadSettingUInt32(
-                              settings,
-                              storageKey,
-                              descriptor.defaultUint) != numericValue;
+    outMutation.changed = ReadCurrentUInt32(settings, descriptor) != numericValue;
     return ValidateAndSetResult::Ok;
 }
 
@@ -327,6 +325,8 @@ bool IsDirectAppAccessible(const fxe::SettingDescriptor& descriptor) {
 
 uint32_t ReadCurrentUInt32(const fxe::SettingsStore& settings,
                            const fxe::SettingDescriptor& descriptor) {
+    if (std::strcmp(descriptor.key, light_square_appearance::KEY_BRIGHTNESS) == 0)
+        return light_square_appearance::ReadBrightness(settings);
     return modules::player_end_palette::ReadSettingUInt32(
         settings, descriptor.key, descriptor.defaultUint);
 }
@@ -428,6 +428,10 @@ void ApplyPreparedMutation(fxe::SettingsStore& settings,
     }
     switch (descriptor.type) {
         case fxe::SettingType::UInt32:
+            if (std::strcmp(storageKey, light_square_appearance::KEY_BRIGHTNESS) == 0) {
+                settings.Doc()[storageKey] = light_square_appearance::StoredBrightness(mutation.uintValue);
+                return;
+            }
             settings.Doc()[storageKey] = mutation.uintValue;
             if (IsPieceWheelSettingKey(descriptor.key) ||
                 std::strcmp(descriptor.key, "GAME_FIRST_PLAYER") == 0) {

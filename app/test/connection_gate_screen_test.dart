@@ -2764,14 +2764,15 @@ void main() {
     );
   }
 
-  for (final (size, manualReconnect) in <(Size, bool)>[
-    (const Size(390, 844), false),
-    (const Size(390, 844), true),
-    (const Size(844, 390), false),
-    (const Size(844, 390), true),
+  for (final (size, manualReconnect, accessibility) in <(Size, bool, bool)>[
+    (const Size(390, 844), false, false),
+    (const Size(390, 844), true, false),
+    (const Size(844, 390), false, false),
+    (const Size(844, 390), true, false),
+    (const Size(390, 844), false, true),
   ]) {
     testWidgets(
-      '${manualReconnect ? 'manual reconnect' : 'cold connection'} keeps useful discovery under compact progress and routes directly to Craft $size',
+      '${manualReconnect ? 'manual reconnect' : 'cold connection'} keeps useful discovery under compact progress and routes directly to Craft $size accessibility=$accessibility',
       (tester) async {
         await loadHealthReviewFonts(tester, useSdkFonts: true);
         tester.view.physicalSize = size;
@@ -2805,7 +2806,23 @@ void main() {
               theme: buildLitchTheme(),
               builder: (context, child) => RepaintBoundary(
                 key: const ValueKey('connection-underlay-review-root'),
-                child: child!,
+                child: accessibility
+                    ? MediaQuery(
+                        data: MediaQuery.of(context).copyWith(
+                          boldText: true,
+                          textScaler: const TextScaler.linear(2),
+                        ).applyTextStyleOverrides(
+                          lineHeightScaleFactorOverride: null,
+                          letterSpacingOverride: 2,
+                          wordSpacingOverride: 3,
+                          paragraphSpacingOverride: null,
+                        ),
+                        child: Directionality(
+                          textDirection: TextDirection.rtl,
+                          child: child!,
+                        ),
+                      )
+                    : child!,
               ),
               home: ConnectionGateScreen(
                 bleService: service,
@@ -4055,70 +4072,92 @@ void main() {
     );
   }
 
-  testWidgets(
-    'explicit Litchcraft selection admits immediately and keeps the first board canvas',
-    (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      SharedPreferences.setMockInitialValues(<String, Object>{
-        'litchcraft_discovery_dismissed': true,
-      });
-      final service = _CraftNavigationBle()
-        ..active = true
-        ..artwork = LitchcraftCanvas.blank().paint(<int>[37], 15, 0x26a7df)
-        ..capabilityGate = Completer<LitchDeviceCapabilities>();
-      final craft = LitchcraftController(service);
-      final library = LitchcraftLibrary(craft);
-      await library.ready;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ConnectionGateScreen(
-            bleService: service,
-            craftController: craft,
-            craftLibrary: library,
-            firmwarePageBuilder: (_, _, _, _, _) => const SizedBox(),
+  for (final alreadyActive in [false, true]) {
+    testWidgets(
+      'explicit Litchcraft selection waits for current mode proof and keeps the first board canvas active=$alreadyActive',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'litchcraft_discovery_dismissed': true,
+        });
+        final service = _CraftNavigationBle()
+          ..active = alreadyActive
+          ..artwork = LitchcraftCanvas.blank().paint(<int>[37], 15, 0x26a7df)
+          ..capabilityGate = Completer<LitchDeviceCapabilities>();
+        final craft = LitchcraftController(service);
+        final library = LitchcraftLibrary(craft);
+        await library.ready;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ConnectionGateScreen(
+              bleService: service,
+              craftController: craft,
+              craftLibrary: library,
+              firmwarePageBuilder: (_, _, _, _, _) => const SizedBox(),
+            ),
           ),
-        ),
-      );
-      await tester.pump();
+        );
+        await tester.pump();
 
-      service.emitConnection('board-1', DeviceConnectionState.connected);
-      await tester.pump();
-      await tester.tap(
-        find.byKey(const ValueKey<String>('main-destination-craft')),
-      );
-      await tester.pump();
-      expect(find.byType(LitchcraftScreen), findsOneWidget);
+        service.emitConnection('board-1', DeviceConnectionState.connected);
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('connection-progress-overlay')),
+          findsOneWidget,
+        );
+        expect(find.byType(LitchcraftScreen), findsNothing);
+        expect(
+          service.commands.where((op) => op == LitchcraftProtocol.enter),
+          isEmpty,
+          reason: 'The board must finish mode proof before protected Craft work.',
+        );
 
-      service.capabilityGate!.complete(
-        const LitchDeviceCapabilities(
-          contractVersion: 3,
-          hardwareRevision: LitchHardwareRevision.v3,
-          capabilityMask: LitchDeviceCapabilities.litchcraftBit,
-          explicitlyReported: true,
-        ),
-      );
-      await tester.pumpAndSettle();
+        service.capabilityGate!.complete(
+          const LitchDeviceCapabilities(
+            contractVersion: 3,
+            hardwareRevision: LitchHardwareRevision.v3,
+            capabilityMask: LitchDeviceCapabilities.litchcraftBit,
+            explicitlyReported: true,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('connection-progress-overlay')),
+          findsNothing,
+        );
+        if (alreadyActive) {
+          expect(find.byType(LitchcraftScreen), findsOneWidget);
+          await tester.tap(_navigationAction(tester, 'setup'));
+          await tester.pump();
+        }
+        final craftAction = find.byKey(
+          const ValueKey<String>('main-destination-craft'),
+        );
+        expect(craftAction.hitTestable(), findsOneWidget);
+        await tester.tap(craftAction);
+        await tester.pumpAndSettle();
+        expect(find.byType(LitchcraftScreen), findsOneWidget);
 
-      expect(craft.status, LitchcraftStatus.live);
-      expect(craft.canvas.colors, contains(0x26a7df));
-      expect(
-        service.commands.where((opcode) => opcode == LitchcraftProtocol.enter),
-        hasLength(1),
-        reason:
-            'explicit selection preempts the passive probe with idempotent Enter',
-      );
-      expect(_activeNavigationIndex(tester), 1);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      await library.flush();
-      library.dispose();
-      craft.dispose();
-      await service.dispose();
-    },
-  );
+        expect(craft.status, LitchcraftStatus.live);
+        expect(craft.canvas.colors, contains(0x26a7df));
+        expect(
+          service.commands.where((opcode) => opcode == LitchcraftProtocol.enter),
+          hasLength(alreadyActive ? 0 : 1),
+          reason: 'active boards are adopted; inactive boards enter once',
+        );
+        expect(_activeNavigationIndex(tester), 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await library.flush();
+        library.dispose();
+        craft.dispose();
+        await service.dispose();
+      },
+    );
+  }
 
   for (final configuration in [
     ('android-hidden', const Size(844, 390), EdgeInsets.zero),
@@ -15736,56 +15775,70 @@ void main() {
               identical(tester.state(find.byType(LitchMainScaffold)), shell),
               isTrue,
             );
-            final action = find.byKey(
-              ValueKey<String>(
-                landscape
-                    ? 'connected-board-status-action'
-                    : 'disconnected-board-status-action',
-              ),
-            );
-            expect(
-              action,
-              findsOneWidget,
-              reason:
-                  'Warm offline connection recovery must be reachable without restart',
-            );
-            expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
-            if (!landscape) {
+            if (destination == 'setup') {
+              final cancel = find.byKey(const ValueKey('chosen-board-cancel'));
+              expect(cancel.hitTestable(), findsOneWidget);
+              expect(tester.getSize(cancel).height, greaterThanOrEqualTo(48));
               expect(
-                tester.getSemantics(
-                  find.byKey(
-                    const ValueKey('disconnected-board-status-live-region'),
-                  ),
+                tester.getSemantics(cancel).getSemanticsData().hasAction(
+                  ui.SemanticsAction.tap,
                 ),
-                isSemantics(
-                  label: 'Disconnected. Select a board to connect.',
-                  isButton: true,
-                  isLiveRegion: true,
-                  hasTapAction: true,
-                ),
+                isTrue,
               );
-            } else {
-              expect(tester.widget<TextButton>(action).onPressed, isNotNull);
-              expect(
-                tester.getSemantics(
-                  find.byKey(
-                    const ValueKey('compact-board-status-live-region'),
-                  ),
-                ),
-                isSemantics(
-                  label: 'Disconnected. Select a board to connect.',
-                  isButton: true,
-                  isLiveRegion: true,
-                  hasTapAction: true,
-                ),
-              );
-            }
-            await tester.tap(action);
-            await tester.pump();
-            final cancel = find.byKey(const ValueKey('chosen-board-cancel'));
-            if (cancel.evaluate().isNotEmpty) {
               await tester.tap(cancel);
               await tester.pump();
+            } else {
+              final action = find.byKey(
+                ValueKey<String>(
+                  landscape
+                      ? 'connected-board-status-action'
+                      : 'disconnected-board-status-action',
+                ),
+              );
+              expect(
+                action,
+                findsOneWidget,
+                reason:
+                    'Warm offline connection recovery must be reachable without restart',
+              );
+              expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+              if (!landscape) {
+                expect(
+                  tester.getSemantics(
+                    find.byKey(
+                      const ValueKey('disconnected-board-status-live-region'),
+                    ),
+                  ),
+                  isSemantics(
+                    label: 'Disconnected. Select a board to connect.',
+                    isButton: true,
+                    isLiveRegion: true,
+                    hasTapAction: true,
+                  ),
+                );
+              } else {
+                expect(tester.widget<TextButton>(action).onPressed, isNotNull);
+                expect(
+                  tester.getSemantics(
+                    find.byKey(
+                      const ValueKey('compact-board-status-live-region'),
+                    ),
+                  ),
+                  isSemantics(
+                    label: 'Disconnected. Select a board to connect.',
+                    isButton: true,
+                    isLiveRegion: true,
+                    hasTapAction: true,
+                  ),
+                );
+              }
+              await tester.tap(action);
+              await tester.pump();
+              final cancel = find.byKey(const ValueKey('chosen-board-cancel'));
+              if (cancel.evaluate().isNotEmpty) {
+                await tester.tap(cancel);
+                await tester.pump();
+              }
             }
           }
           expect(
@@ -15838,6 +15891,13 @@ void main() {
             expect(
               tester.getSize(offlineAction).height,
               greaterThanOrEqualTo(48),
+            );
+            expect(offlineAction.hitTestable(), findsOneWidget);
+            expect(
+              tester.getSemantics(offlineAction).getSemanticsData().hasAction(
+                ui.SemanticsAction.tap,
+              ),
+              isTrue,
             );
             await tester.tap(offlineAction);
             await tester.pump();

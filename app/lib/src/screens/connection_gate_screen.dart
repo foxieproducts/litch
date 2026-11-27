@@ -7065,20 +7065,44 @@ Widget _oneLineBoardStatus(
   TextStyle style,
 ) => LayoutBuilder(
   builder: (context, constraints) {
+    final effectiveStyle = DefaultTextStyle.of(context).style.merge(
+      TextStyle(
+        fontWeight: MediaQuery.boldTextOf(context) ? FontWeight.bold : null,
+        height: MediaQuery.maybeLineHeightScaleFactorOverrideOf(context),
+        letterSpacing: MediaQuery.maybeLetterSpacingOverrideOf(context),
+        wordSpacing: MediaQuery.maybeWordSpacingOverrideOf(context),
+      ),
+    );
     final painter = TextPainter(
-      text: TextSpan(text: label, style: style),
+      text: TextSpan(text: label, style: effectiveStyle),
       textDirection: Directionality.of(context),
       locale: Localizations.localeOf(context),
-    )..layout();
-    final naturalWidth = painter.width;
-    painter.dispose();
-    final preferredScale =
-        LitchCompactControls.textScalerOf(context).scale(style.fontSize!) /
-        style.fontSize!;
-    final scale = math.min(
-      preferredScale,
-      math.max(0.0, constraints.maxWidth - .5) / math.max(1.0, naturalWidth),
     );
+    final fontSize = effectiveStyle.fontSize ?? style.fontSize!;
+    final preferredScale =
+        LitchCompactControls.textScalerOf(context).scale(fontSize) / fontSize;
+    final maxWidth = math.max(0.0, constraints.maxWidth - .5);
+    painter.textScaler = TextScaler.linear(preferredScale);
+    painter.layout();
+    var scale = preferredScale;
+    if (painter.width > maxWidth) {
+      var low = 0.0;
+      var high = preferredScale;
+      // Accessibility spacing overrides are fixed logical pixels, not
+      // proportional to font size. Measure the same scaler Text will use.
+      for (var attempt = 0; attempt < 14; ++attempt) {
+        final candidate = (low + high) / 2;
+        painter.textScaler = TextScaler.linear(candidate);
+        painter.layout();
+        if (painter.width <= maxWidth) {
+          low = candidate;
+        } else {
+          high = candidate;
+        }
+      }
+      scale = low;
+    }
+    painter.dispose();
     return Text(
       label,
       textScaler: TextScaler.linear(scale),

@@ -74,6 +74,8 @@ InteractionModelSnapshot SampleInteractionModelPresentation(
     render.hintBrewingScale256 = published.hintBrewing.Scale256(nowMs);
     render.hintBrewingElapsedMs = published.hintBrewing.ElapsedMs(nowMs);
     if (render.hintFeedbackTimingValid) render.hintFeedbackElapsedMs += elapsed;
+    if (render.hintRemovalSquare < 64U) render.hintRemovalElapsedMs += elapsed;
+    if (render.previousHintRemovalSquare < 64U) render.previousHintRemovalElapsedMs += elapsed;
     SampleHintRefinement(published, nowMs, render);
     render.allPiecesFlashActive = published.allPiecesFlash.IsActive(nowMs);
     render.allPiecesFlashOn = published.allPiecesFlash.IsOn(nowMs);

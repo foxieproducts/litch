@@ -202,6 +202,12 @@ struct RenderStateView {
     bool hintFeedbackPending = false;
     bool hintFeedbackTimingValid = false;
     uint32_t hintFeedbackElapsedMs = 0U;
+    uint8_t hintRemovalSquare = CHESS_INTERACTION_INVALID_SQUARE;
+    uint8_t previousHintRemovalSquare = CHESS_INTERACTION_INVALID_SQUARE;
+    uint32_t hintRemovalElapsedMs = 0U;
+    uint32_t previousHintRemovalElapsedMs = 0U;
+    uint32_t hintRemovalDelayMs = 0U;
+    uint32_t previousHintRemovalDelayMs = 0U;
     bool hintMoveValid = false;
     uint8_t hintMoveFromSquare = 255;
     uint8_t hintMoveToSquare = 255;

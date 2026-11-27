@@ -1,5 +1,7 @@
 #include "runtime/game_state_machine.hpp"
 
+#include <utility>
+
 namespace runtime {
 
 uint32_t GameStateMachine::GetUndoPromptElapsedMs() const {
@@ -369,14 +371,65 @@ bool GameStateMachine::TryGetHintMoveSquares(uint8_t& outFromSquare, uint8_t& ou
     return outFromSquare < 64U && outToSquare < 64U;
 }
 
+void GameStateMachine::SyncHintRemovalCue() {
+    auto& state = m_renderState;
+    uint8_t victim = CHESS_INTERACTION_INVALID_SQUARE;
+    const auto& position = m_chessInteractionModel.acknowledged;
+    const uint8_t from = state.hintMoveFromSquare;
+    const uint8_t to = state.hintMoveToSquare;
+    if (state.hintDisplayRequested && state.hintMoveValid) victim = HintCaptureSquare(position, from, to);
+    if (victim == state.hintRemovalSquare) return;
+    const auto& fade = state.hintRefinement;
+    if (victim < 64U && victim == state.previousHintRemovalSquare && fade.elapsed.Started()) {
+        const auto& shown = fade.elapsed.ElapsedMs() < fade.durationMs / 2U
+            ? fade.outgoing : fade.incoming;
+        if (HintCaptureSquare(position, shown.fromSquare, shown.toSquare) == victim) {
+            std::swap(state.hintRemovalSquare, state.previousHintRemovalSquare);
+            std::swap(state.hintRemovalElapsed, state.previousHintRemovalElapsed);
+            std::swap(state.hintRemovalDelayMs, state.previousHintRemovalDelayMs);
+            return;
+        }
+    }
+    // Coalesced candidates can replace an incoming move repeatedly while the
+    // original victim is still on screen. Keep the displayed clock, not an
+    // intermediate candidate which never became visible.
+    bool previousIsDisplayed = false;
+    if (state.hintDisplayRequested && fade.elapsed.Started()) {
+        const auto& shown = fade.elapsed.ElapsedMs() < fade.durationMs / 2U
+            ? fade.outgoing : fade.incoming;
+        previousIsDisplayed = state.previousHintRemovalSquare < 64U &&
+            HintCaptureSquare(position, shown.fromSquare, shown.toSquare) ==
+                state.previousHintRemovalSquare;
+    }
+    if (!previousIsDisplayed) {
+        state.previousHintRemovalSquare = state.hintRemovalSquare;
+        state.previousHintRemovalElapsed = state.hintRemovalElapsed;
+        state.previousHintRemovalDelayMs = state.hintRemovalDelayMs;
+    }
+    state.hintRemovalSquare = victim;
+    state.hintRemovalElapsed = {};
+    state.hintRemovalDelayMs = 0U;
+    if (victim >= 64U) return;
+    state.hintRemovalElapsed.Reset();
+    if (fade.elapsed.Started()) {
+        const uint32_t age = fade.elapsed.ElapsedMs();
+        const bool isIncoming = fade.incoming.fromSquare == from && fade.incoming.toSquare == to;
+        const uint32_t start = isIncoming ? fade.durationMs / 2U
+            : fade.durationMs + fade.durationMs / 4U;
+        state.hintRemovalDelayMs = start > age ? start - age : 0U;
+    }
+}
+
 void GameStateMachine::SetHintDisplayRequested(const bool requested) {
     runtime::SetHintDisplayRequested(m_renderState, requested);
+    SyncHintRemovalCue();
     if (!requested) RetireManualHintRequest();
     RefreshThinkingControls();
 }
 
 void GameStateMachine::HandleHintButtonTap() {
     runtime::ToggleHintDisplayRequested(m_renderState);
+    SyncHintRemovalCue();
     if (!m_renderState.hintDisplayRequested) RetireManualHintRequest();
     RefreshThinkingControls();
 }
@@ -402,8 +455,10 @@ HintPresentationTuple GameStateMachine::GetVisibleHintPresentation(const bool re
 
 void GameStateMachine::ReplayHintMove() {
     runtime::RetainVisibleHintPresentation(m_renderState, GetVisibleHintPresentation(true));
+    SyncHintRemovalCue();
     runtime::ClearHintRefinement(m_renderState);
     runtime::ReplayHintMove(m_renderState);
+    SyncHintRemovalCue();
     ++m_renderState.hintPresentationEpoch;
     if (m_hintPresentationPublisher != nullptr)
         m_hintPresentationPublisher(m_hintPresentationContext);
@@ -427,6 +482,7 @@ void GameStateMachine::CancelHintRefinement() {
 
 void GameStateMachine::ClearHintMove() {
     runtime::ClearHintMove(m_renderState);
+    SyncHintRemovalCue();
     RefreshThinkingControls();
 }
 
@@ -434,6 +490,7 @@ void GameStateMachine::SetHintMoveSquares(const uint8_t fromSquare, const uint8_
     const bool allowRefinement = m_chessInteractionModel.phase.tag == ChessInteractionPhase::Idle &&
         !m_placementModeActive && !m_textOverlayActive && !m_kingQueenSwapPromptActive;
     runtime::SetHintMoveSquares(m_renderState, fromSquare, toSquare, allowRefinement);
+    SyncHintRemovalCue();
     RefreshThinkingControls();
 }
 

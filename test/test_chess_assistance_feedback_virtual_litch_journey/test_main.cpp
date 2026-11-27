@@ -2557,6 +2557,28 @@ void CpuLastMoveCaptureHintJourney(bool automatic, bool minimal, bool firstP2,
     Check(hintReady, run, "human Hint captures the still-present CPU last-move destination");
     if (!hintReady) return;
 
+    if (automatic && brightness == 8U) {
+        bool sawPeak = false, sawRest = false;
+        for (uint8_t tap = 0U; tap < 24U; ++tap) {
+            Check(Tap(session) && session.Advance(60U) == VIRTUAL_LITCH_OK && session.HintDisplayRequested(), run,
+                  "raw Coaching replays at 100 ms intervals retain the same capture Hint");
+            const auto rails = AllSquarePixels(session, 27U);
+            sawPeak = sawPeak || rails.semantic[0U].r > 200U;
+            sawRest = sawRest || (rails.semantic[0U].r > 0U && rails.semantic[0U].r < 100U);
+            std::printf("[REPLAY_VICTIM] tap=%u t=%u semantic=%u mapped=%u\n",tap,session.State().now_ms,rails.semantic[0U].r,rails.mapped[0U].r);
+        }
+        Check(sawPeak && sawRest,run,"replaying the same hinted capture does not freeze the victim pulse");
+        bool heldPeak = false, heldRest = false;
+        for (uint8_t cycle = 0U; cycle < 24U; ++cycle) {
+            Check(Observe(session, occupied & ~Bit(36U)) && session.Advance(40U)==VIRTUAL_LITCH_OK &&
+                      Observe(session, occupied) && session.Advance(60U)==VIRTUAL_LITCH_OK,run,
+                  "repeated real Hall pickup and return keep the same coaching victim eligible");
+            const auto rails=AllSquarePixels(session,27U);
+            heldPeak=heldPeak || rails.semantic[0U].r>200U;
+            heldRest=heldRest || (rails.semantic[0U].r>0U && rails.semantic[0U].r<100U);
+        }
+        Check(heldPeak && heldRest,run,"changing Hall observations do not freeze the retained victim cue");
+    }
     const auto first = AllSquarePixels(session, 27U);
     bool railsAgree = true, victimPieceDark = true, steady = true;
     bool wasBright = false;
@@ -2592,6 +2614,19 @@ void CpuLastMoveCaptureHintJourney(bool automatic, bool minimal, bool firstP2,
     const uint8_t secondLift = sourceFirst ? 27U : 36U;
     occupied &= ~Bit(firstLift);
     Check(Observe(session, occupied), run, "first capture pickup reaches the real Hall reducer");
+    if (sourceFirst) {
+        bool heldBright = false, heldDim = false, heldPieceDark = true;
+        for (uint16_t sample = 0U; sample <= 120U; ++sample) {
+            const auto pixels = AllSquarePixels(session, 27U);
+            heldBright = heldBright || pixels.semantic[0U].r > 200U;
+            heldDim = heldDim || pixels.semantic[0U].r < 100U;
+            heldPieceDark = heldPieceDark && Energy(pixels.mapped[1U]) == 0U && Energy(pixels.mapped[2U]) == 0U;
+            if (sample != 120U) Check(session.Advance(20U) == VIRTUAL_LITCH_OK && Observe(session, occupied), run,
+                "stationary Hall samples while holding the capturer do not restart the cue");
+        }
+        Check(heldPieceDark && (minimal || (heldBright && heldDim)), run,
+              "held capturer retains animated removal rails and a dark victim pair");
+    }
     occupied &= ~Bit(secondLift);
     Check(Observe(session, occupied), run, "both capture pickups are observed");
     const auto emptyTarget = AllSquarePixels(session, 27U);
@@ -2610,6 +2645,56 @@ void CpuLastMoveCaptureHintJourney(bool automatic, bool minimal, bool firstP2,
               std::string(session.HomeStateSnapshot().fen) == "4k3/8/8/3P4/8/8/8/4K3 b - - 0 2",
           run, "the hinted capture commits exactly once and play advances");
     Checkpoint(session, run, "capture-complete", "Black-to-move", "accepted", Bit(27U)|Bit(36U));
+}
+
+
+// A CPU capture has different reducer history from a quiet CPU move: the
+// subsequent Hint must treat its newly seated mover as a fresh victim.
+void CpuCaptureThenRecaptureHintJourney(bool automatic) {
+    const char* run = automatic ? "CPU-capture-recapture/automatic" : "CPU-capture-recapture/manual";
+    auto config = Config(); config.hardware = VIRTUAL_LITCH_HARDWARE_V3_3;
+    PublicationEngine engine; runtime::VirtualLitchSession session(config, engine);
+    uint64_t occupied = Bit(4U) | Bit(11U) | Bit(20U) | Bit(27U) | Bit(60U);
+    const bool ready = session.Reset() == VIRTUAL_LITCH_OK &&
+        session.LoadExternalFen("4k3/3p4/4N3/3P4/8/8/8/4K3 b - - 0 1") &&
+        Observe(session, occupied) && session.Advance(1000U) == VIRTUAL_LITCH_OK &&
+        (!automatic || Setting(session, "P1_AUTO_HINTS", "true"));
+    Check(ready, run, "real recapture position and settings");
+    if (!ready) return;
+    engine.Choose(11U,20U); engine.finishCpu = true; engine.finish = true;
+    Check(Setting(session,"VS_CPU_PLAYER","2") && Setting(session,"VS_CPU_LEVEL","2"),run,"request CPU capture");
+    for (uint8_t tick=0U; tick<80U && !session.HomeStateSnapshot().physicalMoveValid; ++tick)
+        Check(session.Advance(100U)==VIRTUAL_LITCH_OK,run,"wait for CPU capture");
+    const auto home=session.HomeStateSnapshot();
+    const bool cpuReady=home.physicalMoveValid && home.physicalFromSquare==11U && home.physicalToSquare==20U;
+    Check(cpuReady,run,"CPU chooses actual d7xe6 capture");
+    if (!cpuReady) return;
+    occupied &= ~Bit(20U); Check(Observe(session,occupied),run,"remove white victim e6");
+    occupied &= ~Bit(11U); Check(Observe(session,occupied),run,"lift black pawn d7");
+    occupied |= Bit(20U); Check(Observe(session,occupied),run,"seat black pawn e6");
+    engine.Choose(27U,20U); engine.finish=false;
+    for (uint8_t tick=0U; tick<40U && session.UndoHistoryMoveCount()!=1U; ++tick)
+        Check(session.Advance(100U)==VIRTUAL_LITCH_OK,run,"wait for committed CPU capture");
+    Check(session.UndoHistoryMoveCount()==1U && !session.State().side_to_move_black,run,"CPU capture committed");
+    if (!automatic) Check(session.Advance(2500U)==VIRTUAL_LITCH_OK && Tap(session),run,"request Hint physically");
+    uint8_t from=64U,to=64U;
+    for (uint8_t tick=0U; tick<120U && !session.TryGetHintMoveSquares(from,to); ++tick)
+        Check(session.Advance(100U)==VIRTUAL_LITCH_OK,run,"wait for recapture Hint");
+    const bool hinted=session.HintDisplayRequested() && from==27U && to==20U;
+    Check(hinted,run,"human Hint identifies d5xe6 recapture");
+    if (!hinted) return;
+    for (bool held : {false,true}) {
+        if (held) { occupied &= ~Bit(27U); Check(Observe(session,occupied),run,"hold capturer"); }
+        bool bright=false,dim=false,dark=true;
+        for (uint16_t sample=0U; sample<=120U; ++sample) {
+            const auto pixels=AllSquarePixels(session,20U);
+            bright=bright || pixels.semantic[0U].r>200U;
+            dim=dim || (pixels.semantic[0U].r>0U && pixels.semantic[0U].r<100U);
+            dark=dark && Energy(pixels.mapped[1U])==0U && Energy(pixels.mapped[2U])==0U;
+            if(sample!=120U) Check(session.Advance(20U)==VIRTUAL_LITCH_OK && Observe(session,occupied),run,"sample stationary recapture");
+        }
+        Check(bright && dim && dark,run,"CPU capture destination retains repeated removal animation and dark victim pair");
+    }
 }
 
 void CpuOffTargetAndPendingUndoJourney() {
@@ -3199,10 +3284,13 @@ int main() {
     ImmobilePinnedHintJourney();
     ReportedLateHintJourney();
     CoachingNoPublicationDeadlineJourney();
+    CpuCaptureThenRecaptureHintJourney(false);
+    CpuCaptureThenRecaptureHintJourney(true);
     CpuLastMoveCaptureHintJourney(false, false, false, false, true, 128U);
     CpuLastMoveCaptureHintJourney(true, false, true, true, false, 128U);
     CpuLastMoveCaptureHintJourney(false, true, true, false, false, 128U);
     CpuLastMoveCaptureHintJourney(true, false, false, true, true, 8U);
+    CpuLastMoveCaptureHintJourney(false, false, false, false, true, 64U);
     CpuLastMoveCaptureHintJourney(false, false, false, false, true, 128U, true);
     CpuOffTargetAndPendingUndoJourney();
     HumanCoachAlternateQuietMoveJourney("settle_2s", 2000U);

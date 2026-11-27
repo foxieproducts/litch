@@ -96,6 +96,105 @@ void TestPublishedCaptureHintOnLastMove() {
     }
 }
 
+void TestHintRemovalClockAcrossRefinements() {
+    constexpr uint64_t kings = (1ULL << 4U) | (1ULL << 60U);
+    constexpr uint64_t white = (1ULL << 27U) | (1ULL << 29U) | (1ULL << 60U);
+    constexpr uint64_t black = (1ULL << 4U) | (1ULL << 18U) | (1ULL << 20U);
+    constexpr uint64_t occupancy = white | black;
+    fxe::ManualMillis::SetNowMs(1000U);
+    runtime::GameStateMachine sm; sm.Reset();
+    sm.HandleInteractionPositionAcknowledged(occupancy, kings, 0ULL, white, black,
+        (1ULL << 27U) | (1ULL << 29U) | (1ULL << 18U) | (1ULL << 20U));
+    sm.ApplyPhysicalOccupancySnapshot(occupancy);
+    sm.SetHintDisplayRequested(true); sm.SetHintMoveSquares(27U, 20U);
+    modules::EngineDerivedState derived; derived.sideToMove = modules::SideToMove::White;
+    runtime::InteractionModelSnapshotBuildInputs inputs;
+    inputs.stateMachine = &sm; inputs.derived = &derived;
+    inputs.authoritativeFen = "4k3/8/2p1p3/3P1P2/8/8/8/4K3 w - - 0 1";
+    const auto Capture = [&]() { return runtime::CaptureInteractionModelPresentation(
+        sm, runtime::BuildInteractionModelSnapshot(inputs)); };
+    auto published = Capture();
+    Check(published.snapshot.render.hintRemovalSquare == 20U &&
+              published.snapshot.render.hintRemovalElapsedMs == 0U,
+          "first actual victim starts its own fresh clock");
+    fxe::ManualMillis::SetNowMs(1450U); sm.ReplayHintMove(); published = Capture();
+    Check(published.snapshot.render.hintRemovalSquare == 20U &&
+              published.snapshot.render.hintRemovalElapsedMs == 450U,
+          "replaying the same victim retains its physical clock");
+    fxe::ManualMillis::SetNowMs(1600U); sm.SetHintMoveSquares(29U, 20U); published = Capture();
+    Check(published.snapshot.render.hintRemovalSquare == 20U &&
+              published.snapshot.render.hintRemovalElapsedMs == 600U,
+          "a different attacker of the same victim retains the clock");
+    modules::SettingsStoreConfig config; config.path = "build/test_hint_removal_clock.json";
+    modules::SettingsStore settings(config); (void)settings.Load();
+    const auto Render = [&](const uint32_t now, const uint8_t square, const bool expectTap) {
+        const auto sampled = runtime::SampleInteractionModelPresentation(published, now);
+        modules::led_frame_composer::ComposeInputs compose;
+        compose.settings = &settings; compose.interactionSnapshot = &sampled;
+        modules::BoardLedFrame board{}; std::array<modules::Rgb, modules::EDGE_LED_COUNT> edge{};
+        std::array<modules::Rgb, 64> grid{}; uint64_t removal=0ULL, taps=0ULL;
+        modules::led_frame_composer::Compose(compose,board,edge,grid,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,
+            &removal,nullptr,nullptr,&taps);
+        Check((removal & (1ULL << square)) != 0ULL && ((taps & (1ULL << square)) != 0ULL) == expectTap,
+              "displayed victim keeps its own clock through the independent snapshot sampler");
+        Check(RgbEq(board[square].top,{}) && RgbEq(board[square].bottom,{}),
+              "displayed victim piece emitters stay dark");
+    };
+    Render(1720U,20U,false); // Same-victim midpoint remains visible at its existing rest phase.
+    fxe::ManualMillis::SetNowMs(1900U); sm.SetHintMoveSquares(27U,18U); published=Capture();
+    Check(published.snapshot.render.hintRemovalSquare==18U &&
+              published.snapshot.render.previousHintRemovalSquare==20U,
+          "different victim gets a new clock while outgoing victim retains its own");
+    Render(1960U,20U,false);
+    Render(2030U,18U,true);
+    fxe::ManualMillis::SetNowMs(1960U); sm.ReplayHintMove(); published=Capture();
+    Check(published.snapshot.render.hintRemovalSquare==20U &&
+              published.snapshot.render.hintRemovalElapsedMs==960U,
+          "rewinding an outgoing refinement retains the victim already shown");
+    sm.SetHintDisplayRequested(false); sm.SetHintDisplayRequested(true); published=Capture();
+    Check(published.snapshot.render.hintRemovalSquare==20U &&
+              published.snapshot.render.hintRemovalElapsedMs==0U,
+          "a genuinely new claim for the same victim restarts its cue");
+
+    // Three candidate captures can coalesce before the first handoff. Keep
+    // the outgoing A clock rather than the never-displayed intermediate B.
+    const uint64_t threeBlack=black | (1ULL<<22U);
+    const auto SeedThree = [&](uint32_t now) {
+        fxe::ManualMillis::SetNowMs(now); sm.Reset();
+        sm.HandleInteractionPositionAcknowledged(white|threeBlack,kings,0ULL,white,threeBlack,
+            (1ULL<<27U)|(1ULL<<29U)|(1ULL<<18U)|(1ULL<<20U)|(1ULL<<22U));
+        sm.ApplyPhysicalOccupancySnapshot(white|threeBlack);
+        inputs.authoritativeFen="4k3/8/2p1p1p1/3P1P2/8/8/8/4K3 w - - 0 1";
+        sm.SetHintDisplayRequested(true); sm.SetHintMoveSquares(27U,20U);
+    };
+    SeedThree(5000U);
+    fxe::ManualMillis::SetNowMs(5600U); sm.SetHintMoveSquares(27U,18U);
+    fxe::ManualMillis::SetNowMs(5700U); sm.SetHintMoveSquares(29U,22U); published=Capture();
+    Render(5701U,20U,false);
+    Render(5721U,22U,true);
+    SeedThree(8000U);
+    fxe::ManualMillis::SetNowMs(8600U); sm.SetHintMoveSquares(27U,18U);
+    fxe::ManualMillis::SetNowMs(8750U); sm.SetHintMoveSquares(29U,22U); published=Capture();
+    Render(8751U,18U,true);
+    fxe::ManualMillis::SetNowMs(8751U); sm.ReplayHintMove(); published=Capture();
+    Check(published.snapshot.render.hintRemovalSquare==18U &&
+              published.snapshot.render.hintRemovalElapsedMs==151U &&
+              published.snapshot.render.hintRemovalDelayMs==120U,
+          "replay during the second half retains the displayed B clock");
+
+    fxe::ManualMillis::SetNowMs(9000U); sm.Reset();
+    const uint64_t epWhite=(1ULL<<28U)|(1ULL<<60U), epBlack=(1ULL<<27U)|(1ULL<<4U);
+    sm.HandleInteractionPositionAcknowledged(epWhite|epBlack,kings,0ULL,epWhite,epBlack,
+        (1ULL<<28U)|(1ULL<<27U),19U,27U);
+    sm.ApplyPhysicalOccupancySnapshot(epWhite|epBlack);
+    inputs.authoritativeFen = "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1";
+    sm.SetHintDisplayRequested(true); sm.SetHintMoveSquares(28U,19U); published=Capture();
+    Check(published.snapshot.render.hintRemovalSquare==27U &&
+              published.snapshot.render.hintCaptureSquare==27U &&
+              published.snapshot.render.hintMoveToSquare==19U,
+          "en passant keys the cue to the physical victim, not the landing square");
+}
+
 void TestAllPiecesFlashUptimeWrap() {
     runtime::GameStateMachine sm;
     modules::EngineDerivedState derived;
@@ -198,6 +297,7 @@ int main() {
     fxe::ScopedMillisProviderOverride millisGuard(&fxe::ManualMillisProvider);
     TestAllPiecesFlashUptimeWrap();
     TestPublishedCaptureHintOnLastMove();
+    TestHintRemovalClockAcrossRefinements();
     fxe::ManualMillis::SetNowMs(0U);
 
     runtime::GameStateMachine sm;

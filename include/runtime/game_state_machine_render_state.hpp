@@ -179,6 +179,13 @@ struct GameStateMachineRenderState {
     bool thinkingControlsCpu = false;
     bool hintFeedbackPending = false;
     fxe::ElapsedTime hintFeedbackElapsed;
+    // Removal is owned by a physical victim, independently of Hint replays.
+    uint8_t hintRemovalSquare = 255U;
+    uint8_t previousHintRemovalSquare = 255U;
+    fxe::ElapsedTime hintRemovalElapsed;
+    fxe::ElapsedTime previousHintRemovalElapsed;
+    uint32_t hintRemovalDelayMs = 0U;
+    uint32_t previousHintRemovalDelayMs = 0U;
     bool hintCancelRequested = false;
     bool hintMoverSideKnown = false;
     bool hintMoverIsBlack = false;
@@ -231,6 +238,12 @@ inline void ResetGameStateMachineRenderState(GameStateMachineRenderState& state,
     state.thinkingControlsCpu = false;
     state.hintFeedbackPending = false;
     state.hintFeedbackElapsed = fxe::ElapsedTime{};
+    state.hintRemovalSquare = 255U;
+    state.previousHintRemovalSquare = 255U;
+    state.hintRemovalElapsed = {};
+    state.previousHintRemovalElapsed = {};
+    state.hintRemovalDelayMs = 0U;
+    state.previousHintRemovalDelayMs = 0U;
     state.hintCancelRequested = false;
     state.hintMoverSideKnown = false;
     state.hintMoverIsBlack = false;

@@ -584,6 +584,7 @@ class GameStateMachine {
     bool ConsumeCpuIdleTimeoutFired();
 
   private:
+    void SyncHintRemovalCue();
     static constexpr uint8_t INVALID_SQUARE = 255;
     class PromotionInputAdapter;
     friend class PromotionInputAdapter;

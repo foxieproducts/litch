@@ -264,27 +264,18 @@ InteractionModelSnapshot BuildInteractionModelSnapshot(const InteractionModelSna
     snapshot.render.hintFeedbackPending = renderState.hintFeedbackPending;
     snapshot.render.hintFeedbackTimingValid = renderState.hintFeedbackElapsed.Started();
     snapshot.render.hintFeedbackElapsedMs = renderState.hintFeedbackElapsed.ElapsedMs();
+    snapshot.render.hintRemovalSquare = renderState.hintRemovalSquare;
+    snapshot.render.previousHintRemovalSquare = renderState.previousHintRemovalSquare;
+    snapshot.render.hintRemovalElapsedMs = renderState.hintRemovalElapsed.ElapsedMs();
+    snapshot.render.previousHintRemovalElapsedMs = renderState.previousHintRemovalElapsed.ElapsedMs();
+    snapshot.render.hintRemovalDelayMs = renderState.hintRemovalDelayMs;
+    snapshot.render.previousHintRemovalDelayMs = renderState.previousHintRemovalDelayMs;
     snapshot.render.hintMoveValid = renderState.hintMoveValid;
     snapshot.render.hintMoveFromSquare = renderState.hintMoveFromSquare;
     snapshot.render.hintMoveToSquare = renderState.hintMoveToSquare;
-    const auto captureSquare = [&](const uint8_t from, const uint8_t to) {
-        const auto& position = chessInteraction.acknowledged;
-        if (from < 64U && to < 64U &&
-            (position.moverOccupiedMask & (1ULL << from)) != 0ULL) {
-            if ((position.opponentOccupiedMask & (1ULL << to)) != 0ULL) return to;
-            if ((position.pawnMask & (1ULL << from)) != 0ULL &&
-                to == position.enPassantTargetSquare &&
-                position.enPassantCaptureSquare < 64U &&
-                (position.opponentOccupiedMask &
-                 (1ULL << position.enPassantCaptureSquare)) != 0ULL) {
-                return position.enPassantCaptureSquare;
-            }
-        }
-        return CHESS_INTERACTION_INVALID_SQUARE;
-    };
     if (renderState.hintMoveValid) {
-        snapshot.render.hintCaptureSquare = captureSquare(
-            renderState.hintMoveFromSquare, renderState.hintMoveToSquare);
+        snapshot.render.hintCaptureSquare = HintCaptureSquare(
+            chessInteraction.acknowledged, renderState.hintMoveFromSquare, renderState.hintMoveToSquare);
     }
     const auto& refinement = renderState.hintRefinement;
     snapshot.render.hintRefinementActive = refinement.elapsed.Started() &&
@@ -292,13 +283,13 @@ InteractionModelSnapshot BuildInteractionModelSnapshot(const InteractionModelSna
     snapshot.render.hintRefinementElapsedMs = refinement.elapsed.ElapsedMs();
     snapshot.render.previousHintFromSquare = refinement.outgoing.fromSquare;
     snapshot.render.previousHintToSquare = refinement.outgoing.toSquare;
-    snapshot.render.previousHintCaptureSquare = captureSquare(refinement.outgoing.fromSquare, refinement.outgoing.toSquare);
+    snapshot.render.previousHintCaptureSquare = HintCaptureSquare(chessInteraction.acknowledged, refinement.outgoing.fromSquare, refinement.outgoing.toSquare);
     snapshot.render.previousHintDuckFromSquare = refinement.outgoing.duckFromSquare;
     snapshot.render.previousHintDuckToSquare = refinement.outgoing.duckToSquare;
     snapshot.render.hintRefinementDurationMs = refinement.durationMs;
     snapshot.render.incomingHintFromSquare = refinement.incoming.fromSquare;
     snapshot.render.incomingHintToSquare = refinement.incoming.toSquare;
-    snapshot.render.incomingHintCaptureSquare = captureSquare(refinement.incoming.fromSquare, refinement.incoming.toSquare);
+    snapshot.render.incomingHintCaptureSquare = HintCaptureSquare(chessInteraction.acknowledged, refinement.incoming.fromSquare, refinement.incoming.toSquare);
     snapshot.render.incomingHintDuckFromSquare = refinement.incoming.duckFromSquare;
     snapshot.render.incomingHintDuckToSquare = refinement.incoming.duckToSquare;
     snapshot.render.hintDuckMoveValid = renderState.hintDuckMoveValid;

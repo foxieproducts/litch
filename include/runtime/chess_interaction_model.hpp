@@ -91,6 +91,19 @@ struct ChessPositionState {
 static_assert(sizeof(ChessPositionState) <= 88U,
               "Projected positions carry only scalar chess facts, not capture rows");
 
+// Resolve a hinted capture to the physical victim, including en passant.
+inline uint8_t HintCaptureSquare(const ChessPositionState& position,
+                                 const uint8_t from, const uint8_t to) {
+    if (from >= 64U || to >= 64U || (position.moverOccupiedMask & (1ULL << from)) == 0ULL)
+        return CHESS_INTERACTION_INVALID_SQUARE;
+    if ((position.opponentOccupiedMask & (1ULL << to)) != 0ULL) return to;
+    if ((position.pawnMask & (1ULL << from)) != 0ULL &&
+        to == position.enPassantTargetSquare && position.enPassantCaptureSquare < 64U &&
+        (position.opponentOccupiedMask & (1ULL << position.enPassantCaptureSquare)) != 0ULL)
+        return position.enPassantCaptureSquare;
+    return CHESS_INTERACTION_INVALID_SQUARE;
+}
+
 struct AtomicBoardObservationState {
     bool valid = false;
     uint64_t changedMask = 0;

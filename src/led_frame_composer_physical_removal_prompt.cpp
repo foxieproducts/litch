@@ -33,7 +33,13 @@ uint8_t RemovalAlpha(const ComposeContext& ctx, const uint8_t square) {
         plan.removalRequired && !plan.progress.removalComplete && plan.removalSquare == square;
     const bool pendingEnPassant = ctx.pendingCaptureSquareValid && ctx.pendingCaptureSquare == square;
     if (directed || pendingEnPassant) return 255U;
-    return IsHintCaptureRemovalSquare(ctx, square) ? ctx.hintRefinementAlpha255 : 0U;
+    if (!IsHintCaptureRemovalSquare(ctx, square)) return 0U;
+    const auto& render = ctx.Snapshot().render;
+    // A different suggested attacker is not a different physical victim.
+    // Keep its cue continuous while the move endpoints crossfade.
+    if (render.hintRefinementActive && render.previousHintCaptureSquare == square &&
+        render.incomingHintCaptureSquare == square) return 255U;
+    return ctx.hintRefinementAlpha255;
 }
 
 bool RemovalTapIsBright(const ComposeContext& ctx, const uint8_t square) {
@@ -41,9 +47,18 @@ bool RemovalTapIsBright(const ComposeContext& ctx, const uint8_t square) {
     uint32_t elapsed = snapshot.interaction.lastInteractionElapsedMs;
     if (ctx.cpuTargetOccValid) {
         elapsed = snapshot.interaction.cpuMovePromptElapsedMs;
-    } else if (!(ctx.pendingCaptureSquareValid && ctx.pendingCaptureSquare == square) &&
-               snapshot.render.hintFeedbackTimingValid) {
-        elapsed = snapshot.render.hintFeedbackElapsedMs;
+    } else if (IsHintCaptureRemovalSquare(ctx, square)) {
+        const auto& render = snapshot.render;
+        if (render.hintRemovalSquare == square) {
+            elapsed = render.hintRemovalElapsedMs > render.hintRemovalDelayMs
+                ? render.hintRemovalElapsedMs - render.hintRemovalDelayMs : 0U;
+        } else if (render.previousHintRemovalSquare == square) {
+            elapsed = render.previousHintRemovalElapsedMs > render.previousHintRemovalDelayMs
+                ? render.previousHintRemovalElapsedMs - render.previousHintRemovalDelayMs : 0U;
+        } else if (!(ctx.pendingCaptureSquareValid && ctx.pendingCaptureSquare == square) &&
+                   render.hintFeedbackTimingValid) {
+            elapsed = render.hintFeedbackElapsedMs;
+        }
     }
     const uint32_t phase = elapsed % REMOVAL_CYCLE_MS;
     return phase < TAP_MS || (phase >= 2U * TAP_MS && phase < 3U * TAP_MS);

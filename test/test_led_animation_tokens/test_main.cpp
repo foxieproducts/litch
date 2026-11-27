@@ -6,12 +6,22 @@
 #include "firmware/led_animation_task.hpp"
 #include "foxie_embedded/millis.hpp"
 #include "hardware/neopixel_led_renderer.hpp"
+#include "modules/engine_derived_state.hpp"
+#include "modules/settings_store.hpp"
+#include "runtime/game_state_machine.hpp"
+#include "runtime/interaction_model_snapshot_builder.hpp"
 
 namespace firmware {
 struct LedAnimationTaskTestPeer {
     static bool Take(LedAnimationTask& task) { return task.TakePublication(); }
     static void Render(LedAnimationTask& task, LedAnimationFrameResult& result) {
         task.m_renderer.Render(task.m_current, result);
+    }
+    static modules::BoardSquareLeds Square(const LedAnimationTask& task, uint8_t square) {
+        return task.m_renderer.m_board[square];
+    }
+    static uint64_t CaptureTaps(const LedAnimationTask& task) {
+        return task.m_renderer.m_frameOwnership.captureTaps;
     }
     static uint64_t DuckReminder(const LedAnimationTask& task) {
         return task.m_renderer.m_frameOwnership.duckReminder;
@@ -172,6 +182,110 @@ int main() {
         Check(red(oppositeMenu.grid) != 0U &&
                   firmware::LedAnimationTaskTestPeer::MenuOwner(task) == modules::UiOwner::P2,
               "opposite-end menu ownership survives unchanged-source publication");
+    }
+
+    {
+        // Retain one real published position while the independent animation
+        // owner keeps sampling, as on a stationary physical board.
+        fxe::ScopedMillisProviderOverride clock(&fxe::ManualMillisProvider);
+        fxe::ManualMillis::SetNowMs(1000U);
+        constexpr uint8_t victim = 27U;
+        constexpr uint64_t victimBit = UINT64_C(1) << victim;
+        constexpr uint64_t occupancy = (UINT64_C(1) << 4U) | victimBit |
+            (UINT64_C(1) << 36U) | (UINT64_C(1) << 60U);
+        runtime::GameStateMachine sm; sm.Reset();
+        sm.HandleInteractionPositionAcknowledged(occupancy,
+            (UINT64_C(1) << 4U) | (UINT64_C(1) << 60U), 0ULL,
+            (UINT64_C(1) << 36U) | (UINT64_C(1) << 60U),
+            (UINT64_C(1) << 4U) | victimBit, victimBit | (UINT64_C(1) << 36U));
+        sm.ApplyPhysicalOccupancySnapshot(occupancy);
+        sm.SetLastMoveForSide(modules::PersistedSide::Black, 11U, victim);
+        sm.SetLastMoveMostRecentSide(modules::PersistedSide::Black);
+        sm.SetHintDisplayRequested(true); sm.SetHintMoveSquares(36U, victim);
+        modules::EngineDerivedState derived; derived.sideToMove = modules::SideToMove::White;
+        const auto snapshot = runtime::BuildInteractionModelSnapshot({
+            .stateMachine = &sm, .derived = &derived,
+            .authoritativeFen = "4k3/8/8/3p4/4P3/8/8/4K3 w - d6 0 2",
+        });
+        const auto profile = hardware::BoardHardwareProfileFor(hardware::BoardRevision::V3_3S3);
+        hardware::NeoPixelLedRenderer output(256U, 47U, 44U, 33U, true);
+        firmware::LedAnimationTask task; task.Bind(output, profile, {}); task.CancelBoot();
+        firmware::LedAnimationPresentation scene;
+        modules::SettingsStoreConfig config; config.path = "build/test_capture_task_stationary.json";
+        modules::SettingsStore settings(config); (void)settings.Load();
+        scene.settings = modules::led_frame_composer::CaptureComposeSettings(settings);
+        scene.physicalOccupiedMask = occupancy;
+        auto& game = scene.scene.emplace<firmware::GameLedPresentation>();
+        game.interaction = runtime::CaptureInteractionModelPresentation(sm, snapshot);
+        bool sawBright=false,sawDim=false;
+        for (uint32_t age = 0U; age < 2500U; age += 33U) {
+            fxe::ManualMillis::SetNowMs(1000U+age);
+            if (age==0U || age==990U) {
+                task.Publish(scene);
+                Check(firmware::LedAnimationTaskTestPeer::Take(task), "capture scene reaches independent owner");
+            }
+            firmware::LedAnimationFrameResult frame;
+            firmware::LedAnimationTaskTestPeer::Render(task, frame);
+            const auto pixel=firmware::LedAnimationTaskTestPeer::Square(task,victim);
+            const bool bright=(age%1200U)<120U || ((age%1200U)>=240U && (age%1200U)<360U);
+            const modules::Rgb expected=bright ? modules::Rgb{255U,101U,0U} : modules::Rgb{64U,25U,0U};
+            sawBright=sawBright || bright; sawDim=sawDim || !bright;
+            Check(RgbEq(pixel.left, expected) && RgbEq(pixel.right, expected) &&
+                RgbEq(pixel.top,{}) && RgbEq(pixel.bottom,{}),
+                "retained and republished CPU-last-move victim follows absolute double-tap timing");
+            Check(((firmware::LedAnimationTaskTestPeer::CaptureTaps(task)&victimBit)!=0ULL)==bright,
+                "tap accent follows the same independent-owner clock");
+        }
+        Check(sawBright && sawDim, "stationary animation samples both strike and rest");
+        for (uint32_t age=3000U; age<5400U; age+=100U) {
+            fxe::ManualMillis::SetNowMs(1000U+age);
+            sm.ReplayHintMove();
+            const auto refreshed=runtime::BuildInteractionModelSnapshot({
+                .stateMachine=&sm, .derived=&derived,
+                .authoritativeFen="4k3/8/8/3p4/4P3/8/8/4K3 w - d6 0 2",
+            });
+            game.interaction=runtime::CaptureInteractionModelPresentation(sm,refreshed);
+            scene.capturedAtMs=1000U+age;
+            task.Publish(scene);
+            Check(firmware::LedAnimationTaskTestPeer::Take(task), "replayed Hint publication reaches animation owner");
+            firmware::LedAnimationFrameResult frame;
+            firmware::LedAnimationTaskTestPeer::Render(task,frame);
+            const auto pixel=firmware::LedAnimationTaskTestPeer::Square(task,victim);
+            const bool bright=(age%1200U)<120U || ((age%1200U)>=240U && (age%1200U)<360U);
+            const modules::Rgb expected=bright ? modules::Rgb{255U,101U,0U} : modules::Rgb{64U,25U,0U};
+            Check(RgbEq(pixel.left,expected) && RgbEq(pixel.right,expected),
+                  "replayed fresh publications cannot restart the independent victim pulse");
+        }
+        // A capture already in progress denies a competing publisher. When
+        // the retained scene is admitted after a long scheduling gap, sample
+        // the real absolute age instead of replaying missed frames.
+        auto* inFlight = task.BeginCapture();
+        Check(inFlight != nullptr, "first publication owns the bounded mailbox");
+        if (inFlight != nullptr) {
+            *inFlight = scene;
+            Check(task.Publish(scene) == 0U, "competing capture is denied while the mailbox is held");
+            Check(task.FinishCapture() != 0U && firmware::LedAnimationTaskTestPeer::Take(task),
+                  "retained scene is admitted after capture backpressure");
+        }
+        fxe::ManualMillis::SetNowMs(10000U);
+        firmware::LedAnimationFrameResult delayed;
+        firmware::LedAnimationTaskTestPeer::Render(task, delayed);
+        auto square = firmware::LedAnimationTaskTestPeer::Square(task,victim);
+        Check(RgbEq(square.left, {64U,25U,0U}) && RgbEq(square.right, square.left),
+              "missed render slots resume directly at the current removal-rest phase");
+        modules::BleIdentifyPresentation identify;
+        identify.Start(7U, {0U,0U,255U}, false, 600U, 10000U);
+        scene.identify = identify.Capture(); scene.capturedAtMs=10000U;
+        task.Publish(scene); Check(firmware::LedAnimationTaskTestPeer::Take(task), "Identify scene is admitted");
+        firmware::LedAnimationFrameResult foreground;
+        firmware::LedAnimationTaskTestPeer::Render(task, foreground);
+        fxe::ManualMillis::SetNowMs(10600U);
+        firmware::LedAnimationFrameResult afterIdentify;
+        firmware::LedAnimationTaskTestPeer::Render(task, afterIdentify);
+        square = firmware::LedAnimationTaskTestPeer::Square(task,victim);
+        Check(RgbEq(square.left, {255U,101U,0U}) && RgbEq(square.right,square.left) &&
+                  RgbEq(square.top,{}) && RgbEq(square.bottom,{}),
+              "expired Identify restores the running removal cue from the retained scene");
     }
 
     {

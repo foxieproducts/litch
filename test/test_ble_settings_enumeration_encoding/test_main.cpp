@@ -183,9 +183,9 @@ void TestProductionHintStyleMetadata() {
                           std::strcmp(placement[2U] | "", "ripple") == 0 &&
                           std::strcmp(placement[3U] | "", "none") == 0 &&
                           std::strcmp(placement[4U] | "", "rainbow_orbit") == 0 &&
-                          std::strcmp(item["v"] | "", "mini_orbit") == 0 &&
-                          std::strcmp(item["df"] | "", "mini_orbit") == 0,
-                      "placement metadata retains ordinals0..3 and appends RainbowOrbit4");
+                          std::strcmp(item["v"] | "", "ripple") == 0 &&
+                          std::strcmp(item["df"] | "", "ripple") == 0,
+                      "placement metadata retains stable ordinals0..4 and advertises the fresh Ripple default");
             }
             if (std::strcmp(item["k"] | "", "HINT_THINKING_STYLE") != 0) continue;
             found = true;

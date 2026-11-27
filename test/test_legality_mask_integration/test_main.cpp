@@ -141,8 +141,9 @@ int main() {
         uint8_t pinner;
     };
     const PinCase pinCases[] = {
-        {"k7/8/8/8/7b/8/5B2/4K3 w - - 0 1",
-         (1ULL << 0) | (1ULL << 39) | (1ULL << 53) | (1ULL << 60), 53, 60, 39},
+        // The a7 pawn keeps this live; same-color bishops alone are a dead draw.
+        {"k7/p7/8/8/7b/8/5B2/4K3 w - - 0 1",
+         (1ULL << 0) | (1ULL << 8) | (1ULL << 39) | (1ULL << 53) | (1ULL << 60), 53, 60, 39},
         {"7k/8/8/8/q2R3K/8/8/8 w - - 0 1",
          (1ULL << 7) | (1ULL << 32) | (1ULL << 35) | (1ULL << 39), 35, 39, 32},
         // The checking bishop already attacks e1. Lifting e2 newly exposes
@@ -159,8 +160,14 @@ int main() {
         Check(coord.LoadExternalFen(position.fen), "load focused pin geometry");
         sm.ApplyPhysicalOccupancySnapshot(position.occupancy);
         sm.ExitPlacementMode();
+        Check(!coord.GetEngineDerivedState().inDraw,
+              "pin geometry is a live game rather than terminal material feedback");
         uint64_t legal = 0ULL;
         Check(engine.GetLegalDestinationsMask(position.source, legal), "reference real engine legality before pickup");
+        if (position.source == 53U) {
+            Check(legal == ((1ULL << 46U) | (1ULL << 39U)),
+                  "the pinned f2 bishop can still block on g3 or capture the h4 pinner");
+        }
         sm.HandleSensorChange(position.source, false);
         coord.UpdateLegalDestinationsMask();
         uint8_t king = 255U, pinner = 255U;

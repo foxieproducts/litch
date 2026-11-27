@@ -6,6 +6,7 @@
 #include "modules/game_persistence.hpp"
 #include "modules/orientation.hpp"
 #include "runtime/game_clock.hpp"
+#include "runtime/game_state_machine_render_state.hpp"
 #include "virtual_litch_session.hpp"
 
 namespace {
@@ -176,6 +177,13 @@ void Journey(const char* mode, const uint32_t duration, const bool confirm,
                   session.State().correction_mask == 0ULL,
               mode,
               "P2 pickup immediately confirms the Duck turn and owns ordinary move guidance");
+        Check((session.State().valid_destination_mask & (UINT64_C(1) << F5)) != 0ULL,
+              mode, "P2 F5 is legal immediately after the early pickup");
+        // F5 is two ranks from F7; the ordinary legal-destination wave
+        // reaches it after two steps and one fade, without blocking pickup.
+        Check(session.Advance(2U * runtime::LEGAL_DESTINATION_STEP_MS +
+                              runtime::LEGAL_DESTINATION_FADE_MS) == VIRTUAL_LITCH_OK,
+              mode, "P2 legal destination reveal completes");
         const bool rotate = modules::ComputeSquareRotate(
             session.BoardRotate(), session.FirstPlayerIsP2());
         const uint8_t physicalF5 = modules::MapSquareToPhysical(F5, rotate);

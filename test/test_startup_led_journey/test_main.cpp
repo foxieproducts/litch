@@ -18,6 +18,7 @@
 #include "modules/led_power_envelope.hpp"
 #include "modules/white_squares_setting.hpp"
 #include "runtime/chess_interaction_model.hpp"
+#include "runtime/game_state_machine_render_state.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -800,15 +801,27 @@ void HealthyJourney(const bool squaresOn, const uint8_t brightness,
     constexpr uint8_t E4 = 36U;
     const uint64_t lifted = OPENING & ~(UINT64_C(1) << E2);
     const bool liftAccepted = board.ObserveHallMask(lifted) == VIRTUAL_LITCH_OK;
-    const auto& pickup = board.State();
+    const auto pickup = board.State();
     const auto pickupHome = board.HomeStateLine();
-    const auto& e4Left = board.PhysicalFrame().pixels[
-        hardware::LedIndexForSquare(E4, hardware::SquareLedSlot::Square0)];
-    const auto& e4Right = board.PhysicalFrame().pixels[
-        hardware::LedIndexForSquare(E4, hardware::SquareLedSlot::Square2)];
-    const bool destinationBlue =
-        e4Left.b > e4Left.r && e4Left.b > e4Left.g && e4Left.w == 0U &&
-        e4Right.b > e4Right.r && e4Right.b > e4Right.g && e4Right.w == 0U;
+    Check(pickup.now_ms == serviceCompletedMs + 200U &&
+              board.PhysicalFrame().now_ms == pickup.now_ms && fxe::Millis() == pickup.now_ms,
+          "legal pickup is published immediately on the post-service clock");
+    const auto isBlue = [](const auto& pixel) {
+        return pixel.b > pixel.r && pixel.b > pixel.g && pixel.w == 0U;
+    };
+    const auto leftIndex = hardware::LedIndexForSquare(E4, hardware::SquareLedSlot::Square0);
+    const auto rightIndex = hardware::LedIndexForSquare(E4, hardware::SquareLedSlot::Square2);
+    const auto& liftFrame = board.PhysicalFrame();
+    const bool immediateDestination = isBlue(liftFrame.pixels[leftIndex]) && isBlue(liftFrame.pixels[rightIndex]);
+    Check(immediateDestination == (minimalAnimations || brightness == 0U),
+          "Minimal and minimum brightness show e4 immediately while the ordinary reveal travels from e2");
+    constexpr uint32_t e4RevealMs = 2U * runtime::LEGAL_DESTINATION_STEP_MS + runtime::LEGAL_DESTINATION_FADE_MS;
+    Check(board.Advance(e4RevealMs) == VIRTUAL_LITCH_OK &&
+              board.PhysicalFrame().now_ms == pickup.now_ms + e4RevealMs,
+          "the e4 cue arrives after its two-square reveal and fade on the post-service clock");
+    const auto& e4Left = board.PhysicalFrame().pixels[leftIndex];
+    const auto& e4Right = board.PhysicalFrame().pixels[rightIndex];
+    const bool destinationBlue = isBlue(e4Left) && isBlue(e4Right);
     const bool pickupActionable = liftAccepted &&
         pickup.interaction_phase == static_cast<uint8_t>(runtime::ChessInteractionPhase::PieceLifted) &&
         // A lifted selection has legal destinations but no committed relocation plan.
@@ -822,11 +835,8 @@ void HealthyJourney(const bool squaresOn, const uint8_t brightness,
         std::strstr(pickupHome.CStr(), "\"pm\":0") != nullptr;
     Check(pickupActionable,
           "physical e2 selection publishes Home lift with blue legal e4 placement guidance");
-    Check(pickup.now_ms == serviceCompletedMs + 200U &&
-              board.PhysicalFrame().now_ms == pickup.now_ms && fxe::Millis() == pickup.now_ms,
-          "legal pickup and its physical cue remain on the post-service clock");
-    std::printf("[STARTUP_PICKUP] t=%lu accepted=%u phase=%s action=%s legal=%016llx e4=%u/%u/%u/%u|%u/%u/%u/%u next=%s home=%s\n",
-        static_cast<unsigned long>(pickup.now_ms), liftAccepted ? 1U : 0U,
+    std::printf("[STARTUP_PICKUP] t=%lu cue_at=%lu accepted=%u phase=%s action=%s legal=%016llx e4=%u/%u/%u/%u|%u/%u/%u/%u next=%s home=%s\n",
+        static_cast<unsigned long>(pickup.now_ms), static_cast<unsigned long>(board.PhysicalFrame().now_ms), liftAccepted ? 1U : 0U,
         runtime::ChessInteractionPhaseToString(static_cast<runtime::ChessInteractionPhase>(pickup.interaction_phase)),
         runtime::RequiredPhysicalActionToString(static_cast<runtime::RequiredPhysicalAction>(pickup.required_action)),
         static_cast<unsigned long long>(pickup.valid_destination_mask),

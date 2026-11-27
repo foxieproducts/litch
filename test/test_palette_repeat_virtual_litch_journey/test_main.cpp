@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 
 #include "bounded_hint_engine.hpp"
 #include "hardware/board_led_output_mapping.hpp"
@@ -130,6 +131,12 @@ void CheckCoachingHintThroughPaletteHold() {
     const auto landing = hardware::MapSemanticSquareLedTargets(REVISION, to, PIECE, false);
     bool topLead = false;
     bool bottomLead = false;
+    bool centerPairTogether = true;
+    const int ranks = int(to / 8U) - from / 8U;
+    const int files = int(to % 8U) - from % 8U;
+    const bool knight = (std::abs(ranks) == 2 && std::abs(files) == 1) ||
+                        (std::abs(ranks) == 1 && std::abs(files) == 2);
+    const bool horizontalLanding = knight ? std::abs(ranks) == 2 : ranks == 0;
     bool uninterrupted = true;
     const auto sample = [&](const char* stage = nullptr) {
         const auto& state = session.State();
@@ -142,6 +149,10 @@ void CheckCoachingHintThroughPaletteHold() {
         const auto fromBottom = Peak(mapped.pixels[source.indices[1]]);
         const auto toTop = Peak(mapped.pixels[landing.indices[0]]);
         const auto toBottom = Peak(mapped.pixels[landing.indices[1]]);
+        const auto topColor = mapped.pixels[landing.indices[0]];
+        const auto bottomColor = mapped.pixels[landing.indices[1]];
+        centerPairTogether = centerPairTogether && topColor.r == bottomColor.r &&
+            topColor.g == bottomColor.g && topColor.b == bottomColor.b && topColor.w == bottomColor.w;
         const bool blinkOn = state.now_ms % 800U < 600U;
         const bool steady = state.physical_occupied_mask == OPENING &&
             state.interaction_phase == static_cast<uint8_t>(runtime::ChessInteractionPhase::Idle) &&
@@ -184,8 +195,9 @@ void CheckCoachingHintThroughPaletteHold() {
         }
     }
     const auto heldWheel = P1Wheel(session);
-    Check(heldWheel != 3U && topLead && bottomLead,
-          "the mapped Hint head advances through both landing emitters while the palette changes");
+    Check(heldWheel != 3U &&
+              (horizontalLanding ? centerPairTogether : topLead && bottomLead),
+          "the mapped Hint retains the final horizontal center pair or vertical emitter order while the palette changes");
     sample("end-of-hold");
     Check(session.SetButtonDown(VIRTUAL_LITCH_OWNER_P1, Button::Up, false) ==
               VIRTUAL_LITCH_OK &&

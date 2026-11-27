@@ -629,52 +629,49 @@ void CheckDeferredHintDuringCastle(fxe::test_support::TestResults& results,
             ? hardware::SquareLedSlot::Square0 : hardware::SquareLedSlot::Square2;
         const auto steady = squareRotate ? hardware::RotateSquareLedSlot180(logicalSteady) : logicalSteady;
         const auto travel = hardware::RotateSquareLedSlot180(steady);
-        // The unfinished human castle uses its physical interaction clock.
-        // Each horizontal cell has an incoming and outgoing rail. Untouched
-        // occupied-source rails retain full Active; only the selected head
-        // blends its floor toward the actual mover. The empty target also
-        // receives the shared half-strength head envelope.
-        const int fileDelta = int(fixture.rookTo % 8U) - int(fixture.rookFrom % 8U);
-        const uint32_t distance = static_cast<uint32_t>(fileDelta < 0 ? -fileDelta : fileDelta);
-        const uint32_t travelMs = 480U * distance < 900U ? 900U : 480U * distance;
-        const uint32_t phaseMs = snapshot.interaction.lastInteractionElapsedMs % (travelMs + 240U);
-        const uint32_t travelPhaseMs = phaseMs < travelMs ? phaseMs : travelMs;
-        const uint32_t progress = travelPhaseMs * (2U * distance + 1U) * 256U / travelMs;
-        const uint32_t head = progress / 256U;
-        const uint16_t fraction = static_cast<uint16_t>(progress % 256U);
-        const auto endpoint = [&](const uint8_t square) {
-            const bool source = square == fixture.rookFrom;
-            const auto role = modules::ui_color_wheel::WheelToRgb(
-                static_cast<uint8_t>(ownerWheel + (source ? 32U : 16U)));
-            const auto floor = modules::ScaleRgbSaturatingBy256(role, 96U);
-            const uint32_t incomingNode = source ? 0U : 2U * distance;
-            const auto weightAt = [&](const uint32_t node) -> uint16_t {
-                return node == head ? 256U - fraction : node == head + 1U ? fraction : 0U;
-            };
-            const uint16_t incomingWeight = weightAt(incomingNode);
-            const uint16_t outgoingWeight = weightAt(incomingNode + 1U);
-            const auto expectedRail = [&](const bool incoming) {
-                const uint16_t weight = incoming ? incomingWeight : outgoingWeight;
-                auto color = source && weight == 0U ? role : modules::AlphaBlendRgb(
-                    floor, moverPiece, static_cast<uint8_t>(weight * 255U / 256U));
-                if (!source) {
-                    const uint16_t strongest = incomingWeight > outgoingWeight ? incomingWeight : outgoingWeight;
-                    const uint16_t envelope = strongest * 127U / 256U;
-                    color = modules::AlphaBlendRgb(color, moverPiece, static_cast<uint8_t>(envelope));
-                }
+        // Background Hint work cannot change the physical castle's published
+        // cue at this same interaction time. Compare its complete board with
+        // the same immutable snapshot without the optional Hint presentation.
+        auto reference = snapshot;
+        reference.game.hintThinking = false;
+        reference.render.hintFeedbackPending = false;
+        reference.render.hintDisplayRequested = false;
+        reference.render.hintMoveValid = false;
+        auto referenceInputs = inputs;
+        referenceInputs.interactionSnapshot = &reference;
+        std::array<modules::Rgb, hardware::TOTAL_LED_COUNT> referenceFrame{};
+        std::array<modules::Rgb, modules::EDGE_LED_COUNT> referenceEdge{};
+        std::array<modules::Rgb, 64> referenceGrid{};
+        modules::led_frame_composer::Compose(
+            referenceInputs, referenceFrame, referenceEdge, referenceGrid);
+        bool hintParity = true;
+        for (uint16_t index = 0U; index < hardware::BOARD_LED_COUNT; ++index)
+            hintParity = hintParity && sameColor(frame[index], referenceFrame[index]);
+        if (std::strcmp(stage, "worker-running-king-placed") == 0) {
+            const auto boost = [](const modules::Rgb color) {
                 return modules::ScaleRgbSaturatingBy256(color, 320U);
             };
+            const auto active = modules::ui_color_wheel::WheelToRgb(
+                static_cast<uint8_t>(ownerWheel + 32U));
+            const auto available = modules::ui_color_wheel::WheelToRgb(
+                static_cast<uint8_t>(ownerWheel + 16U));
+            results.Check(sameColor(colorAt(fixture.rookFrom, steady), boost(active)) &&
+                              sameColor(colorAt(fixture.rookFrom, travel), boost(moverPiece)) &&
+                              sameColor(colorAt(fixture.rookTo, steady), boost(available)) &&
+                              sameColor(colorAt(fixture.rookTo, travel), boost(available)),
+                          "initial castle uses the exact mapped Active rail, mover head and full landing invitation");
+        }
+        const auto endpoint = [&](const uint8_t square) {
             return !sameColor(colorAt(square,steady),squareColor(referenceSquare(square))) &&
                 !sameColor(colorAt(square,travel),squareColor(referenceSquare(square))) &&
-                lit(square,steady) && lit(square,travel) &&
-                sameColor(colorAt(square,steady), expectedRail(false)) &&
-                sameColor(colorAt(square,travel), expectedRail(true));
+                lit(square,steady) && lit(square,travel);
         };
         const bool rookFrom = endpoint(fixture.rookFrom);
         const bool rookTo = endpoint(fixture.rookTo);
         results.Check(plan, "deferred hint preserves authoritative unfinished castle");
         results.Check(king && kingOwner, "background hint preserves the placed king and its player color");
-        results.Check(rookFrom && rookTo, "background hint preserves exact full-active source rails and selected mover-head endpoint roles");
+        results.Check(rookFrom && rookTo && hintParity,
+                      "background hint leaves the exact snapshot-owned castle frame and both required endpoints unchanged");
         results.Check(engine.starts == 1U, "physical castle never starts replacement hint work");
         std::printf("[DEFERRED_HINT_CASTLE] case=%s first=%u rotate=%u stage=%s hint=%u polls=%lu consumed=%lu "
                     "plan=%u king=%u owner=%u rook_from=%u rook_to=%u replay_parity=%u edge_energy=%lu accepted=%u\n",

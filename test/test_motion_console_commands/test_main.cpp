@@ -124,8 +124,9 @@ int main() {
                   "status reports V3 availability");
     results.Check(Contains(output.Str(), "pin=21 id=0x44"),
                   "status reports verified interrupt pin and device ID");
-    results.Check(Contains(output.Str(), "mode=motion"),
-                  "status reports requested wake mode");
+    results.Check(Contains(output.Str(), "motion: requested enabled=1 mode=tap ") &&
+                      Contains(output.Str(), "motion: applied enabled=1 mode=tap "),
+                  "fresh settings report Tap as both requested and applied default");
 
     output.Clear();
     bus.SetSample(1600, -800, 400);
@@ -147,12 +148,23 @@ int main() {
     platform.interruptHigh = true;
 
     output.Clear();
+    settings.Doc()["MOTION_WAKE_MODE"] = "motion";
+    fxe::test_support::RunCommand(console, transport, "motion status");
+    results.Check(Contains(output.Str(), "motion: requested enabled=1 mode=motion ") &&
+                      Contains(output.Str(), "motion: applied enabled=1 mode=tap "),
+                  "explicit Motion selection is requested before the sensor is reapplied");
+    output.Clear();
     const uint32_t writesBeforeApply = bus.writeCount;
     fxe::test_support::RunCommand(console, transport, "motion apply");
     results.Check(bus.writeCount > writesBeforeApply,
                   "apply forces current runtime settings into sensor");
     results.Check(Contains(output.Str(), "OK"),
                   "apply reports success");
+    output.Clear();
+    fxe::test_support::RunCommand(console, transport, "motion status");
+    results.Check(Contains(output.Str(), "motion: requested enabled=1 mode=motion ") &&
+                      Contains(output.Str(), "motion: applied enabled=1 mode=motion "),
+                  "apply installs the explicitly requested Motion configuration");
 
     output.Clear();
     bus.SetSample(0, 0, 0);

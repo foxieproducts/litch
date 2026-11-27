@@ -209,23 +209,30 @@ void QuietAndCapturePriorityJourney(){
         Set(s,"SETTLE_ANIM_STYLE","\"mini_orbit\"")&&SameBoard(capture,s.SemanticFrame())&&
         Set(s,"SETTLE_ANIM_STYLE","\"rainbow_orbit\"")&&SameBoard(capture,s.SemanticFrame())&&
         Set(s,"SETTLE_ANIM_STYLE","\"ripple\"")&&SameBoard(capture,s.SemanticFrame()),
-        "suggested white removal owns the board above checkmate and every non-None placement preview");
+        "suggested amber removal owns the board above checkmate and every non-None placement preview");
     const auto piece=hardware::MapSemanticSquareLedTargets(hardware::BoardRevision::V3_3S3,36U,hardware::SquareLedSlot::Piece,false);
-    unsigned zeroEndpoints[2]{}, fullEndpoints[2]{};
-    for(unsigned sample=0U;sample<30U;++sample){
-        Check(s.Advance(20U)==VIRTUAL_LITCH_OK,"required white removal keeps its independent 600ms cadence");
+    std::array<bool,60U> bright{};
+    for(unsigned sample=0U;sample<bright.size();++sample){
+        Check(s.Advance(20U)==VIRTUAL_LITCH_OK,"required amber removal keeps its independent1200ms cadence");
         for(uint8_t index=0U;index<piece.count;++index){const auto c=s.PhysicalFrame().pixels[piece.indices[index]];
             Check(c.r==0U&&c.g==0U&&c.b==0U&&c.w==0U,"both physical capture victim piece emitters remain black above previews");}
         const auto left=s.SemanticFrame().board[36U][0U],right=s.SemanticFrame().board[36U][2U];
-        Check(left.r==left.g&&left.g==left.b&&right.r==right.g&&right.g==right.b&&
-            left.w==0U&&right.w==0U&&left.r+right.r>=254U&&left.r+right.r<=257U,
-            "capture rails retain complementary neutral white above every optional preview");
-        for(uint8_t rail=0U;rail<2U;++rail){const auto c=rail==0U?left:right;
-            zeroEndpoints[rail]+=c.r==0U;fullEndpoints[rail]+=c.r==255U;}
+        const bool peak=left.r==255U&&left.g==101U&&left.b==0U&&left.w==0U;
+        const bool dim=left.r==64U&&left.g==25U&&left.b==0U&&left.w==0U;
+        Check(Same(left,right)&&(peak||dim),
+            "both capture rails retain the same exact bright or dim amber above every optional preview");
+        bright[sample]=peak;
     }
-    for(uint8_t rail=0U;rail<2U;++rail)
-        Check(zeroEndpoints[rail]>=3U&&fullEndpoints[rail]>=3U,
-              "both white rails preserve the centered60ms exact off/full dwells without preview replay");
+    bool cadence=false;
+    for(unsigned offset=0U;offset<bright.size();++offset){
+        bool matches=true;
+        for(unsigned sample=0U;sample<bright.size();++sample){
+            const auto phase=(sample+offset)%bright.size();
+            matches=matches&&(bright[sample]==(phase<6U||(phase>=12U&&phase<18U)));
+        }
+        cadence=cadence||matches;
+    }
+    Check(cadence,"both amber rails preserve120ms tap,120ms gap,120ms tap and840ms dim rest without preview replay");
     Checkpoint(s,"capture-beats-optional-preview",36U);
 }
 void HintAnchorJourney(){

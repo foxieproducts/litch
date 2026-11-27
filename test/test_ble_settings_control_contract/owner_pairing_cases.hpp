@@ -1069,11 +1069,27 @@ void TestIdentifyRatePolicyAndUnpairedOrderedPath() {
         const std::array<modules::Rgb, 64U> background{};
         presentation.Consume(fixture.service, 100U);
         Check(presentation.Update(100U, false, overlay, background), "Identify active before disconnect");
+        auto replacement = start; replacement[2U] = 8U;
+        Check(wire::Codec::Encode({{wire::Kind::Ordered, 28U, Peer::OrderedToken(fixture.service), 2U},
+            {replacement.data(), replacement.size()}}, {packet.data(), packet.size()}, size) == wire::Error::None,
+            "replacement Identify encodes a new Ordered Start");
+        fixture.service.OnConnectionSessionWrite(packet.data(), size); fixture.service.DrainEventQueue();
+        presentation.Consume(fixture.service, 1100U);
+        const auto replacementIntent = presentation.Capture();
+        Check(replacementIntent.active && replacementIntent.number == 8U && replacementIntent.deadlineMs == 4100U,
+              "accepted new Identify replaces the visible number and resets its own deadline");
+        Check(presentation.Update(1100U, false, overlay, background) && overlay.Test_GetLastText() == "8",
+              "replacement immediately selects the new number for rendering");
+        fixture.service.OnConnectionSessionWrite(packet.data(), size); fixture.service.DrainEventQueue();
+        presentation.Consume(fixture.service, 1200U);
+        Check(presentation.Capture().revision == replacementIntent.revision &&
+                  presentation.Capture().deadlineMs == 4100U,
+              "duplicate replacement receipt cannot restart its deadline");
         fixture.service.OnDisconnected(7U, 19); fixture.service.DrainEventQueue();
-        presentation.Consume(fixture.service, 101U);
-        Check(presentation.Update(3099U, false, overlay, background),
+        presentation.Consume(fixture.service, 1201U);
+        Check(presentation.Update(4099U, false, overlay, background),
               "disconnect alone leaves the original bounded Identify deadline");
-        Check(!presentation.Update(3100U, false, overlay, background) && !overlay.IsActive(),
+        Check(!presentation.Update(4100U, false, overlay, background) && !overlay.IsActive(),
               "disconnected Identify expires without another phone command");
     }
     std::puts("[BLE_IDENTIFY] typed-unpaired=pass three-starts=pass fourth-cooldown=pass dedupe=pass stop-free=pass fixed-peers=pass");

@@ -141,12 +141,15 @@ int main() {
          "k1r5/8/8/8/8/8/8/R3K3 w Q - 0 1",
          60U, 58U, "e1c1", false},
         {"white kingside wrong corner piece",
-         "4k3/8/8/8/8/8/8/4K2B w K - 0 1",
+         "4k3/8/8/8/8/8/8/4K2B w - - 0 1",
          60U, 62U, "e1g1", false},
     };
     for (const CastleRuleCase& rule : RULES) {
         CheckCastleRule(rule);
     }
+
+    Check(!engine.SetFen("4k3/8/8/8/8/8/8/4K2B w K - 0 1"),
+          "FEN claiming kingside castling with a bishop on h1 is rejected");
 
     engine.Reset();
     Check(engine.SetFen(

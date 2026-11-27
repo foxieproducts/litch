@@ -102,9 +102,14 @@ void RunJourney(const bool disabled) {
     constexpr uint8_t p1PawnSquare = 52U;
     constexpr uint8_t p2PawnSquare = 12U;
     constexpr std::array<uint8_t, 9> expectedOrdinaryCodes{
-        0U, 1U, 2U, 3U, 4U, 5U, 7U, 8U, 9U};
+        0U, 1U, 1U, 1U, 2U, 2U, 3U, 3U, 4U};
 
     if (!disabled) {
+        // No ambient sample is available in this journey. Explicitly select
+        // automatic brightness so the shipped dark-room fallback is tested.
+        Check(MutateSetting(session, 499U, "AUTO_BRIGHTNESS", "false") &&
+                  MutateSetting(session, 498U, "AUTO_BRIGHTNESS", "true"),
+              "automatic brightness is enabled for the sensor-unavailable journey");
         Check(MutateSetting(session, 500U, "P1_END_PIECE_WHEEL", "147") &&
                   MutateSetting(session, 501U, "P2_END_PIECE_WHEEL", "213") &&
                   MutateSetting(session, 502U, "BRIGHTNESS", "4") &&
@@ -113,15 +118,15 @@ void RunJourney(const bool disabled) {
         Check(session.PhysicalFrame().power_limited == 0U &&
                   IsColor(PhysicalSquareLed(session, p1PawnSquare,
                                             hardware::SquareLedSlot::Piece),
-                          0U, 35U, 48U, 0U) &&
+                          0U, 14U, 20U, 0U) &&
                   IsColor(PhysicalSquareLed(session, p2PawnSquare,
                                             hardware::SquareLedSlot::Piece),
-                          64U, 0U, 35U, 0U),
+                          27U, 0U, 15U, 0U),
               "unthrottled 147/213 piece hues retain their calibrated level-5 physical codes");
         Check(IsColor(PhysicalSquareLed(session, ordinaryLightSquare,
                                         hardware::SquareLedSlot::Square0),
-                      5U, 5U, 5U, 5U),
-              "ordinary level-5 light-square background is reduced to code 5");
+                      2U, 2U, 2U, 2U),
+              "automatic fallback reduces the level-5 light-square background to code 2");
 
         Check(MutateSetting(session, 504U, "P1_END_PIECE_WHEEL", "140") &&
                   MutateSetting(session, 505U, "P2_END_PIECE_WHEEL", "101"),
@@ -129,11 +134,25 @@ void RunJourney(const bool disabled) {
         Check(session.PhysicalFrame().power_limited == 0U &&
                   IsColor(PhysicalSquareLed(session, p1PawnSquare,
                                             hardware::SquareLedSlot::Piece),
-                          0U, 45U, 46U, 0U) &&
+                          0U, 19U, 19U, 0U) &&
                   IsColor(PhysicalSquareLed(session, p2PawnSquare,
                                             hardware::SquareLedSlot::Piece),
-                          0U, 86U, 14U, 0U),
+                          0U, 36U, 6U, 0U),
               "unthrottled 140/101 piece hues retain their calibrated level-5 physical codes");
+
+        Check(MutateSetting(session, 506U, "AUTO_BRIGHTNESS", "false") &&
+                  session.PhysicalFrame().power_limited == 0U &&
+                  IsColor(PhysicalSquareLed(session, p1PawnSquare,
+                                            hardware::SquareLedSlot::Piece),
+                          0U, 75U, 78U, 0U) &&
+                  IsColor(PhysicalSquareLed(session, p2PawnSquare,
+                                            hardware::SquareLedSlot::Piece),
+                          0U, 143U, 23U, 0U) &&
+                  IsColor(PhysicalSquareLed(session, ordinaryLightSquare,
+                                            hardware::SquareLedSlot::Square0),
+                          9U, 9U, 9U, 9U) &&
+                  MutateSetting(session, 507U, "AUTO_BRIGHTNESS", "true"),
+              "manual level-5 output and return to automatic fallback are distinct");
 
         for (uint8_t level = 0U; level <= 8U; ++level) {
             char levelJson[2] = {static_cast<char>('0' + level), '\0'};
@@ -204,15 +223,15 @@ void RunJourney(const bool disabled) {
                   session.State().correction_mask == 0ULL &&
                   (session.State().valid_destination_mask &
                    (UINT64_C(1) << 36U)) != 0ULL &&
-                  IsColor(destinationBackground, 5U, 5U, 5U, 5U) &&
+                  IsColor(destinationBackground, 2U, 2U, 2U, 2U) &&
                   matchesBackground(destination0) && matchesBackground(destination2),
               "level-5 pickup keeps the light-square background until the wave reaches e4");
         const bool revealComplete = session.Advance(220U) == VIRTUAL_LITCH_OK;
         const virtual_litch_color steadyDestination = PhysicalSquareLed(
             session, 36U, hardware::SquareLedSlot::Square0);
-        Check(revealComplete && IsColor(steadyDestination, 0U, 18U, 48U, 0U) &&
+        Check(revealComplete && IsColor(steadyDestination, 0U, 7U, 20U, 0U) &&
                   IsColor(PhysicalSquareLed(session, 36U, hardware::SquareLedSlot::Square2),
-                          0U, 18U, 48U, 0U),
+                          0U, 7U, 20U, 0U),
               "both mapped level-5 destination rails reach the calibrated P1 color after the reveal");
         const bool returnAccepted =
             session.ObserveHallMask(opening) == VIRTUAL_LITCH_OK;
@@ -224,18 +243,18 @@ void RunJourney(const bool disabled) {
                   session.State().physical_occupied_mask == opening &&
                   session.State().expected_occupied_mask == opening &&
                   session.State().correction_mask == 0ULL &&
-                  !IsColor(returnAcknowledgement, 5U, 5U, 5U, 5U),
+                  !IsColor(returnAcknowledgement, 2U, 2U, 2U, 2U),
               "returning e2 restores the authoritative opening with a local acknowledgement");
         Check(session.Advance(560U) == VIRTUAL_LITCH_OK &&
                   IsColor(PhysicalSquareLed(
                               session, p1PawnSquare,
                               hardware::SquareLedSlot::Square0),
-                          5U, 5U, 5U, 5U),
+                          2U, 2U, 2U, 2U),
               "returned-piece acknowledgement expires to the ordinary background at 560 ms");
         std::printf(
             "[ORDINARY_LIGHT_GUIDANCE] level=5 input=lift-e2/return-e2 "
             "lift=%s return=%s phase=%u physical=%016llX expected=%016llX "
-            "correction=%016llX prompt=%u/%u/%u/%u steady_prompt=%u/%u/%u/%u background=5/5/5/5 "
+            "correction=%016llX prompt=%u/%u/%u/%u steady_prompt=%u/%u/%u/%u background=2/2/2/2 "
             "expiry=560ms next=play\n",
             liftAccepted ? "Accepted" : "Rejected",
             returnAccepted ? "Accepted" : "Rejected",

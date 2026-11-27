@@ -25,6 +25,8 @@ def EmptyPeerStoreCorpus(*, false_ack=False):
     marker = 'static esp_err_t nvs_erase_key(nvs_handle_t h,const char *key) {'
     body = body.replace(marker, marker + '\n    if(erase_failure) { erase_failure=0; return ESP_FAIL; }', 1)
     config = hardening.HardenConfigSource((FIXTURE / 'ble_store_config.c').read_bytes()).decode()
+    nvs = hardening.HardenNvsSource((FIXTURE / 'ble_store_nvs.c').read_bytes()).decode()
+    body += '\n' + Function(nvs, 'ble_store_config_persist_rpa_recs')
     function = Function(config, 'LitchSdkReconcileEmptyPeerStore')
     if false_ack:
         # Controlled old admission mistake: successful clear/empty RAM is used
@@ -46,7 +48,7 @@ class EmptyPeerStoreTests(unittest.TestCase):
                                       '-fno-sanitize-recover=all','-I',str(SCRIPT.parent),
                                       str(source),'-o',str(binary)],capture_output=True,text=True)
                 self.assertEqual(build.returncode,0,build.stderr)
-                cases=(28,) if false_ack else range(35)
+                cases=(28, 42) if false_ack else range(44)
                 for case in cases:
                     with self.subTest(label=label,case=case):
                         run=subprocess.run([str(binary),str(case)],capture_output=True,text=True,timeout=5)

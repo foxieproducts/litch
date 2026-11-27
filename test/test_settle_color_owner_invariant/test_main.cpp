@@ -414,8 +414,7 @@ int main() {
         ApplyComposerGlobalBoostOnly(modules::ui_color_wheel::WheelToRgb(144U));
     const auto sourcePrompt = ApplyComposerGlobalBoostOnly(
         modules::ui_color_wheel::WheelToRgb(160U));
-    const auto targetFloor = ApplyComposerGlobalBoostOnly(ScaleRgbSaturating(
-        modules::ui_color_wheel::WheelToRgb(144U), 96U));
+    const auto targetInvitation = expectedSelectedEndAvailablePrompt;
 
     test_support::ComposeWithSnapshot(
         in, sm, derived, &engine, ledFrame, edgeFrame, gridFrame);
@@ -423,8 +422,8 @@ int main() {
                ApplyComposerGlobalBoostOnly(modules::ui_color_wheel::WheelToRgb(128U)),
                "cpu castle: king source travel uses the mover's actual physical-end piece palette");
     CheckRgbEq(ledFrame[hardware::LedIndexForSquare(WHITE_KING_TO, hardware::SquareLedSlot::Square2)],
-               targetFloor,
-               "cpu castle: waiting king target rail keeps the exact selected-end available floor");
+               targetInvitation,
+               "cpu castle: waiting king target rail keeps the exact full selected-end landing invitation");
     Check(!RgbEq(SquareLedAtSquare(ledFrame, WHITE_ROOK_TO),
                  expectedSelectedEndAvailablePrompt),
           "cpu castle: does not prompt the rook destination before the king");
@@ -437,8 +436,8 @@ int main() {
     test_support::ComposeWithSnapshot(
         in, sm, derived, &engine, ledFrame, edgeFrame, gridFrame);
     CheckRgbEq(ledFrame[hardware::LedIndexForSquare(WHITE_KING_TO, hardware::SquareLedSlot::Square2)],
-               targetFloor,
-               "cpu castle: held king target rail retains the exact available floor");
+               targetInvitation,
+               "cpu castle: held king target rail retains the exact full landing invitation");
     Check(!RgbEq(SquareLedAtSquare(ledFrame, WHITE_ROOK_TO),
                  expectedSelectedEndAvailablePrompt),
           "cpu castle: rook destination stays inactive while king is held");
@@ -462,8 +461,8 @@ int main() {
                sourcePrompt,
                "cpu castle: waiting unselected rook source rail uses the full active prompt after king placement");
     CheckRgbEq(SquareLedAtSquare(ledFrame, WHITE_ROOK_TO),
-               targetFloor,
-               "cpu castle: waiting rook destination rail uses the exact available-prompt floor after king placement");
+               targetInvitation,
+               "cpu castle: waiting rook destination rail uses the exact full landing invitation after king placement");
     CheckRgbEq(PieceLedAtSquare(ledFrame, WHITE_KING_TO),
                ApplyComposerPostScalesToPiece(
                    modules::ui_color_wheel::WheelToRgb(128U)),

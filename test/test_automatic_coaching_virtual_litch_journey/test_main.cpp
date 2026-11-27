@@ -198,10 +198,17 @@ void Checkpoint(const runtime::VirtualLitchSession& session, const char* run,
         const int files = int(target % 8U) - source % 8U;
         const int distance = std::max(std::abs(ranks), std::abs(files));
         for (int step = 0; step <= distance; ++step) {
-            const int rank = source / 8U + (distance == 0 ? 0 :
-                ((ranks > 0) - (ranks < 0)) * ((std::abs(ranks) * step + distance / 2) / distance));
-            const int file = source % 8U + (distance == 0 ? 0 :
-                ((files > 0) - (files < 0)) * ((std::abs(files) * step + distance / 2) / distance));
+            const int divisor = distance == 0 ? 1 : distance;
+            const int rankNumerator = int(source / 8U) * divisor + ranks * step;
+            const int fileNumerator = int(source % 8U) * divisor + files * step;
+            int rank = (2 * rankNumerator + divisor) / (2 * divisor);
+            int file = (2 * fileNumerator + divisor) / (2 * divisor);
+            // A half-cell Duck tie stays on the even checkerboard color,
+            // independent of travel direction or a 180-degree rotation.
+            if ((rank + file) % 2 != 0) {
+                if (2 * (rankNumerator % divisor) == divisor) --rank;
+                else if (2 * (fileNumerator % divisor) == divisor) --file;
+            }
             allowedLanding |= UINT64_C(1) << (rank * 8 + file);
         }
     };
@@ -917,7 +924,12 @@ void DirectedV33HintAndCpuDestinationJourney(const bool limited) {
             (OPENING & (UINT64_C(1)<<square))!=0ULL || (routeMask & (UINT64_C(1)<<square))!=0ULL) continue;
         nonroute=static_cast<uint8_t>(square); break;
     }
+    const bool horizontalLanding = knight ? std::abs(dr) == 2 : dr == 0;
+    const auto initialPiece = session.SemanticFrame().board[to][1U];
+    const auto initialTop = Energy(pixel(to,1U));
+    const auto initialBottom = Energy(pixel(to,3U));
     bool sourceOn=false,sourceOff=false,topBrighter=false,bottomBrighter=false;
+    bool centerPairTogether=true,centerPairBrightened=false;
     for (uint8_t sample=0U;sample<=24U;++sample) {
         const auto current=session.SemanticFrame().board[to][steady];
         sourceOn=sourceOn || Energy(session.SemanticFrame().board[from][1U])!=0U;
@@ -928,14 +940,22 @@ void DirectedV33HintAndCpuDestinationJourney(const bool limited) {
               run,"axis-appropriate landing rails and BOTH actual Piece emitters survive quantization and current limiting");
         topBrighter=topBrighter || Energy(pixel(to,1U))>Energy(pixel(to,3U));
         bottomBrighter=bottomBrighter || Energy(pixel(to,3U))>Energy(pixel(to,1U));
+        const auto top = pixel(to,1U), bottom = pixel(to,3U);
+        centerPairTogether = centerPairTogether && top.r == bottom.r &&
+            top.g == bottom.g && top.b == bottom.b && top.w == bottom.w;
+        centerPairBrightened = centerPairBrightened ||
+            (Energy(session.SemanticFrame().board[to][1U]) > Energy(initialPiece) &&
+             Energy(top) > initialTop && Energy(bottom) > initialBottom);
         if (nonroute<64U) Check(Energy(pixel(nonroute,0U))==0U && Energy(pixel(nonroute,2U))==0U &&
                   Energy(pixel(nonroute,1U))==0U && Energy(pixel(nonroute,3U))==0U,
               run,"nonroute neighbor remains ordinary without a false destination cross");
         if (sample%6U==0U) checkpoint("Coaching-visible",to,"lift-blinking-source");
-        if (sample!=24U) Check(session.Advance(50U)==VIRTUAL_LITCH_OK,run,"sample complete landing alternation and source blink");
+        if (sample!=24U) Check(session.Advance(50U)==VIRTUAL_LITCH_OK,run,"sample landing travel and source blink");
     }
-    Check(sourceOn && sourceOff && topBrighter && bottomBrighter,run,
-          "source independently blinks and each actual target emitter takes the brighter role above floor");
+    Check(sourceOn && sourceOff &&
+              (horizontalLanding ? centerPairTogether && centerPairBrightened
+                                 : topBrighter && bottomBrighter),run,
+          "source independently blinks while the final horizontal leg brightens both center emitters together or the vertical leg visits them in turn");
     Check(!limited || (session.PhysicalFrame().power_limited && session.PhysicalFrame().applied_led_current_ma<=80U),
           run,"active landing remains inside the actual constrained current budget");
     if (!limited) {

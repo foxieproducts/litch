@@ -425,7 +425,7 @@ int main() {
         const uint8_t activeWheel = (activeOwner == modules::UiOwner::P2) ? 128 : 0;
         const uint8_t availablePromptWheel = static_cast<uint8_t>(activeWheel + 16U);
         modules::Rgb expectedPrompt = modules::ScaleRgbSaturatingBy256(
-            modules::ui_color_wheel::WheelToRgb(availablePromptWheel), 96U);
+            modules::ui_color_wheel::WheelToRgb(availablePromptWheel), 256U);
         // led_frame_composer applies a global +25% boost across the entire grid.
         static constexpr uint16_t GLOBAL_BRIGHTNESS_BOOST_SCALE256 = 320; // 1.25 in Q8.8
         const auto scale_channel_saturating = [](const uint8_t v, const uint16_t scale256) -> uint8_t {
@@ -442,14 +442,14 @@ int main() {
             PrintRgb("grid f1", gridFrame[61]);
             PrintRgb("expected f1", expectedPrompt);
         }
-        Check(RgbEq(gridFrame[61], expectedPrompt), "rookTo f1 retains the exact available floor during partial castling");
+        Check(RgbEq(gridFrame[61], expectedPrompt), "rookTo f1 retains the exact full landing invitation during partial castling");
         Check(RgbEq(SquareLedAtSquare(ledFrame, 61U), expectedPrompt),
-              "physical f1 LEDs expose the precise waiting rook destination floor");
+              "physical f1 LEDs expose the precise full rook destination invitation");
         if (!RgbEq(gridFrame[60U], modules::RGB_BLACK)) {
             PrintRgb("grid e1 after king placement", gridFrame[60U]);
         }
-        Check(!RgbEq(gridFrame[60U], expectedPrompt) &&
-                  !RgbEq(SquareLedAtSquare(ledFrame, 60U), expectedPrompt),
+        Check(RgbEq(gridFrame[60U], modules::RGB_BLACK) &&
+                  RgbEq(SquareLedAtSquare(ledFrame, 60U), modules::RGB_BLACK),
               "king origin e1 has no castling prompt after king placement");
 
         // Ensure we are not spuriously highlighting the kingTo square, which is already occupied.
@@ -466,7 +466,7 @@ int main() {
         const uint8_t physicalG1 = runtime::MapSquareIndex(62U, true);
         const uint8_t physicalH1 = runtime::MapSquareIndex(63U, true);
         const modules::Rgb selectedEndPrompt = modules::ScaleRgbSaturatingBy256(
-            modules::ui_color_wheel::WheelToRgb(144U), 96U);
+            modules::ui_color_wheel::WheelToRgb(144U), 256U);
         const modules::Rgb expectedSelectedEndPrompt = modules::Rgb{
             scale_channel_saturating(selectedEndPrompt.r,
                                      GLOBAL_BRIGHTNESS_BOOST_SCALE256),
@@ -482,20 +482,20 @@ int main() {
             return oppositeEndPhysical[hardware::LedIndexForSquare(
                 square, hardware::SquareLedSlot::Square0)];
         };
-        // Both horizontal target rails wait on the exact available floor.
+        // Both target rails retain the full landing invitation during travel.
         // Rotation puts the source's incoming Right head on physical Left.
         const auto steadyTarget = oppositeEndPhysical[hardware::LedIndexForSquare(
             physicalF1, hardware::SquareLedSlot::Square2)];
         const auto travelingTarget = physicalSquare(physicalF1);
         Check(RgbEq(steadyTarget, expectedSelectedEndPrompt),
-              "opposite-end P1/White maps the waiting rook target rail with the exact physical-end available floor");
+              "opposite-end P1/White maps the rook target rail with its exact full physical-end invitation");
         Check(RgbEq(travelingTarget, expectedSelectedEndPrompt),
-              "both opposite-end rook target rails keep their exact waiting floor");
+              "both opposite-end rook target rails keep their exact full landing invitation");
         const auto selectedEndPiece = modules::ScaleRgbSaturatingBy256(
             modules::ui_color_wheel::WheelToRgb(128U),320U);
         Check(RgbEq(physicalSquare(physicalH1),selectedEndPiece),
               "opposite-end mapped incoming source head uses the mover's exact physical-end piece color");
-        Check(!RgbEq(physicalSquare(physicalE1), expectedSelectedEndPrompt),
+        Check(RgbEq(physicalSquare(physicalE1), modules::RGB_BLACK),
               "opposite-end P1/White board does not retain a king-origin prompt");
         Check(RgbEq(physicalPiece(physicalG1), physicalPiece(physicalH1)),
               "opposite-end P1/White king and rook use the same owner color");

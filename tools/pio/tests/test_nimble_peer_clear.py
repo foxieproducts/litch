@@ -41,7 +41,7 @@ def ClearCorpus():
     body = PairingCorpus(sm).split('int main(')[0]
     store = (FIXTURE / 'ble_store.c').read_text()
     config = hardening.HardenConfigSource((FIXTURE / 'ble_store_config.c').read_bytes()).decode()
-    # Use real public delete dispatch and all four peer table callbacks. Local
+    # Use real public delete dispatch and remote table callbacks. Local
     # IRK deletion is real too so the OLD public-clear control cannot hide it.
     stub = 'static int ble_store_delete(int type,const union ble_store_key *key) {'
     start = body.index(stub); end = body.index('\n}', start) + 2
@@ -54,7 +54,7 @@ def ClearCorpus():
                         'struct ble_store_key_local_irk local_irk;').replace(
         'struct { ble_addr_t peer_rpa_addr; uint8_t idx; } rpa_rec;',
         'struct ble_store_key_rpa_rec rpa_rec;')
-    nvs = (FIXTURE / 'ble_store_nvs.c').read_text()
+    nvs = hardening.HardenNvsSource((FIXTURE / 'ble_store_nvs.c').read_bytes()).decode()
     for kind, table in (('local_irk', 'local_irk'), ('rpa_rec', 'rpa_recs')):
         stub = f'static int ble_store_config_delete_{kind}(const void *k) {{ return BLE_HS_ENOTSUP; }}'
         actual = Function(nvs, 'ble_store_config_persist_' + table) + '\n' + '\n'.join(
@@ -69,7 +69,8 @@ def ClearCorpus():
         'ble_hs_pvcy_our_irk', 'ble_hs_pvcy_set_mode'))
     body = body.replace(stub, HCI + functions, 1)
     body += '\n' + '\n'.join(Function(store, name) for name in ('ble_store_delete', 'ble_store_clear'))
-    for name in ('LitchSdkClearPeerStore', 'LitchSdkReconcileEmptyPeerStore', 'LitchSdkResetPeerPrivacy'):
+    for name in ('LitchSdkClearPeerStore', 'LitchSdkReconcileEmptyPeerStore', 'LitchSdkResetPeerPrivacy',
+                 'LitchSdkReadPeerMetadata'):
         if name in config:
             body += '\n' + Function(config, name)
     return body + MAIN
@@ -233,8 +234,9 @@ static int claim(int marker) {
 }
 static int empty_peers(void) {
     for(int t=0;t<4;++t) for(int s=0;s<8;++s) if(disk[t][s].present) return 0;
+    for(int s=0;s<8;++s) if(disk[5][s].present) return 0;
     return ble_store_config_num_our_secs==0 && ble_store_config_num_peer_secs==0 &&
-        ble_store_config_num_cccds==0 && ble_store_config_num_csfcs==0;
+        ble_store_config_num_cccds==0 && ble_store_config_num_csfcs==0 && ble_store_config_num_rpa_recs==0;
 }
 int main(int argc,char **argv) {
     int which=argc>1?atoi(argv[1]):0;
@@ -259,8 +261,40 @@ int main(int argc,char **argv) {
         disk[t][0].size=t==4?sizeof ble_store_config_local_irks[0]:sizeof ble_store_config_rpa_recs[0];
         memcpy(disk[t][0].data,t==4?(void*)ble_store_config_local_irks:(void*)ble_store_config_rpa_recs,disk[t][0].size);
     }
-    struct blob retained[2][8]; memcpy(retained,&disk[4],sizeof retained);
-    if(which>=14) {
+    struct blob retained[8]; memcpy(retained,disk[4],sizeof retained);
+    if(which>=18) {
+        /* Legacy/factory-reset residue: no security keys, but a full cache.
+         * Restart after every failed leaf before retrying durable cleanup. */
+        ble_store_config_num_our_secs=ble_store_config_num_peer_secs=0;
+        ble_store_config_num_cccds=ble_store_config_num_csfcs=0;
+        CHECK(ble_store_config_persist_our_secs()==0 && ble_store_config_persist_peer_secs()==0 &&
+              ble_store_config_persist_cccds()==0 && ble_store_config_persist_csfcs()==0);
+        for(int i=0;i<3;++i) {
+            ble_store_config_rpa_recs[i].peer_addr=value(92+i,0).peer_addr;
+            ble_store_config_rpa_recs[i].peer_rpa_addr=value(95+i,0).peer_addr;
+        }
+        ble_store_config_num_rpa_recs=3; CHECK(ble_store_config_persist_rpa_recs()==0);
+        ble_store_config_init(); CHECK(litch_nimble_store_restore_status==0);
+        int metadata=0; CHECK(LitchSdkReadPeerMetadata(&metadata)==0 && metadata);
+        if(which==19) fault(BEFORE,6);
+        if(which==20) fault(AFTER,6);
+        if(which==21) read_fault_at=read_calls+1;
+        if(which==22) fail_call=hci_calls+5;
+        if(which==23) fault(DROP,6);
+        int cleared=adapter_clear();
+        CHECK(cleared==(which==18));
+        fail_call=0;read_fault_at=0;
+        ble_store_config_init(); CHECK(litch_nimble_store_restore_status==0);
+        CHECK(adapter_clear() && empty_peers());
+        ble_store_config_init(); CHECK(litch_nimble_store_restore_status==0);
+        CHECK(LitchSdkReadPeerMetadata(&metadata)==0 && !metadata && empty_peers());
+        CHECK(!memcmp(retained,disk[4],sizeof retained) && ble_store_config_num_local_irks==1);
+        CHECK(claim(34)==0 && enc_bonded);
+        CHECK(opened==closed && !host_locked && !preempted);
+        printf("clear metadata-only case%d reopened_empty1 local_identity1 fresh_claim1\n",which);
+        return 0;
+    }
+    if(which>=14 && which<=17) {
         CHECK(adapter_clear() && empty_peers());
         /* Failed actual publication leaves hidden durable data behind empty
          * restored RAM. A proof read fault must prevent the privacy/ACK seam. */
@@ -289,13 +323,13 @@ int main(int argc,char **argv) {
     } else CHECK(rc);
     CHECK(empty_peers());
     if(which!=0) CHECK(!memcmp(retained,&disk[4],sizeof retained));
-    if(which!=0) CHECK(ble_store_config_num_local_irks==1 && ble_store_config_num_rpa_recs==1);
+    if(which!=0) CHECK(ble_store_config_num_local_irks==1 && ble_store_config_num_rpa_recs==0);
     if(which!=0) for(int i=0;i<16;++i) CHECK(ble_hs_pvcy_irk[i]==73 && ble_store_config_local_irks[0].irk[i]==73);
     CHECK(enabled && claim(34)==0 && enc_bonded && pair_status==0 && duplicates==0);
     CHECK(ble_store_config_peer_secs[0].ltk[0]==34);
     ble_store_config_init();
     CHECK(ble_store_config_num_our_secs==1 && ble_store_config_num_peer_secs==1);
-    CHECK(ble_store_config_num_local_irks==1 && ble_store_config_num_rpa_recs==1);
+    CHECK(ble_store_config_num_local_irks==1 && ble_store_config_num_rpa_recs==0);
     CHECK(!memcmp(retained,&disk[4],sizeof retained));
     if(which==13) {
         CHECK(adapter_lifecycle_gate() && adapter_stop_gate());
@@ -354,7 +388,7 @@ class PeerClearTests(unittest.TestCase):
             build=subprocess.run([compiler+'++','-fsanitize=address,undefined',str(c.with_suffix('.o')),
                 str(cpp.with_suffix('.o')),'-o',str(binary)],capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
-            for case in range(18):
+            for case in range(24):
                 with self.subTest(case=case):
                     run=subprocess.run([str(binary),str(case)],capture_output=True,text=True,timeout=5)
                     print(run.stdout.strip(),run.stderr.strip())

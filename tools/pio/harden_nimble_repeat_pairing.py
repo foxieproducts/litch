@@ -352,7 +352,7 @@ ble_store_config_delete_sec(const struct ble_store_key_sec *key_sec,
 
 PRIVACY_ORIGINAL_SHA256 = "83ef670e15211ef7b96bed2574ffab746c3b13009903074a2044b45a5d057c38"
 
-CONFIG_RECONCILE_EMPTY = b"""/* Deliberate peer-only clear; preserve local identity and RPA records.
+CONFIG_RECONCILE_EMPTY = b"""/* Deliberate remote-peer clear; preserve only the board's local identity.
  * The caller owns quiescence and invokes outside the host lock. Public
  * ble_store_clear also deletes LOCAL_IRK and cannot implement this contract. */
 int
@@ -370,8 +370,40 @@ LitchSdkClearPeerStore(void)
         } while (rc == 0);
         if (rc != BLE_HS_ENOENT) goto done;
     }
-    rc = 0;
+    /* RPA mappings are remote metadata too, including unkeyed legacy entries.
+     * Use the checked table owner; raw SDK deletion can lose failed RAM state. */
+    if (ble_store_config_num_rpa_recs < 0 ||
+        ble_store_config_num_rpa_recs > MYNEWT_VAL(BLE_STORE_MAX_BONDS)) {
+        rc = BLE_HS_ESTORE_FAIL;
+        goto done;
+    }
+    {
+        const int previous_count = ble_store_config_num_rpa_recs;
+        ble_store_config_num_rpa_recs = 0;
+        rc = ble_store_config_persist_rpa_recs();
+        if (rc != 0) ble_store_config_num_rpa_recs = previous_count;
+    }
 done:
+    ble_hs_unlock();
+    return rc;
+}
+
+/* Metadata emptiness is part of boot custody, not the saved-phone count. */
+int
+LitchSdkReadPeerMetadata(int *present)
+{
+    extern int litch_nimble_store_restore_status;
+    int rc = BLE_HS_ESTORE_FAIL;
+    if (present == NULL) return BLE_HS_EINVAL;
+    ble_hs_lock();
+    if (litch_nimble_store_restore_status == 0 &&
+        ble_store_config_num_cccds >= 0 && ble_store_config_num_cccds <= MYNEWT_VAL(BLE_STORE_MAX_CCCDS) &&
+        ble_store_config_num_csfcs >= 0 && ble_store_config_num_csfcs <= MYNEWT_VAL(BLE_STORE_MAX_CSFCS) &&
+        ble_store_config_num_rpa_recs >= 0 && ble_store_config_num_rpa_recs <= MYNEWT_VAL(BLE_STORE_MAX_BONDS)) {
+        *present = ble_store_config_num_cccds != 0 || ble_store_config_num_csfcs != 0 ||
+            ble_store_config_num_rpa_recs != 0;
+        rc = 0;
+    }
     ble_hs_unlock();
     return rc;
 }
@@ -407,7 +439,8 @@ LitchSdkReconcileEmptyPeerStore(void)
     if (ble_store_config_num_our_secs != 0 ||
         ble_store_config_num_peer_secs != 0 ||
         ble_store_config_num_cccds != 0 ||
-        ble_store_config_num_csfcs != 0) {
+        ble_store_config_num_csfcs != 0 ||
+        ble_store_config_num_rpa_recs != 0) {
         rc = BLE_HS_EBUSY;
         goto done;
     }
@@ -415,6 +448,8 @@ LitchSdkReconcileEmptyPeerStore(void)
     rc = ble_store_config_persist_our_secs();
     if (rc != 0) goto done;
     rc = ble_store_config_persist_peer_secs();
+    if (rc != 0) goto done;
+    rc = ble_store_config_persist_rpa_recs();
     if (rc != 0) goto done;
 #endif
 #if MYNEWT_VAL(BLE_STORE_MAX_CCCDS)
@@ -426,7 +461,7 @@ LitchSdkReconcileEmptyPeerStore(void)
     if (rc != 0) goto done;
 #endif
     /* Each existing persistence owner just performed a fresh bounded NVS
-     * verification. Local IRK and RPA records are outside this contract. */
+     * verification. Only the board's local IRK is outside this contract. */
     rc = 0;
 done:
     ble_hs_unlock();

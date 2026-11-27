@@ -9,6 +9,8 @@
 
 #include "bounded_hint_engine.hpp"
 #include "firmware/cold_factory_reset.hpp"
+#include "firmware/factory_reset_settings.hpp"
+#include "modules/board_owner_persistence.hpp"
 #include "firmware/recovery_status.hpp"
 #include "foxie_embedded/millis.hpp"
 #include "hardware/board_hardware_profile.hpp"
@@ -158,7 +160,8 @@ class BoardAtBoot final : public firmware::ColdFactoryResetTarget {
     bool DeletePersistedState() override {
         ++deletes;
         deleteAt = fxe::Millis();
-        m_deleteVerified = m_settings.DeleteFile();
+        m_deleteVerified = firmware::ResetFactorySettings(m_settings,
+            m_profile.revision == BoardRevision::V3S3 || m_profile.revision == BoardRevision::V3_3S3);
         Checkpoint(m_deleteVerified ? "settings and game deleted" : "rejected: delete failed");
         return m_deleteVerified;
     }
@@ -285,7 +288,10 @@ void Trial(const char* name, const BoardRevision revision,
                       board.greenAt[1] - board.greenAt[0] == 500U &&
                       fxe::Millis() - board.greenAt[0] == 1000U,
                   "green begins after two seconds of debounced consent and finishes before restart");
-            Check(!std::filesystem::exists(path), "success removes the durable settings document");
+            modules::SettingsStore reset(storeConfig);
+            Check(reset.Load() && !reset.Doc().containsKey("GAME_FEN") &&
+                      !reset.Doc().containsKey("BRIGHTNESS"),
+                  "success durably removes personal settings and game before restart");
         } else {
             Check(ReadFile(path) == saved, "the cancelled or refused reset preserves the saved game");
         }

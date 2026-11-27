@@ -11,7 +11,7 @@ void BoardOwnerPairingController::Boot(BoardOwnerRecord record,
         if (!bonds.available ||
             (pending == Phase::SavingOwner && bonds.count !=
                 (m_adding ? m_addBaseline.saved.count + 1U : 1U)) ||
-            (pending == Phase::SavingAbsent && bonds.count != 0U)) {
+            (pending == Phase::SavingAbsent && (bonds.count != 0U || bonds.remoteMetadataPresent))) {
             // Release the accepted receipt exactly once, but do not turn its
             // success into live authority after custody evidence was lost.
             m_custodyRecheckRequired = true;
@@ -54,7 +54,7 @@ void BoardOwnerPairingController::Boot(BoardOwnerRecord record,
         FailRecovery(Reason::StorageFailed);
         return;
     }
-    if (record == BoardOwnerRecord::Absent && bonds.count == 0U) {
+    if (record == BoardOwnerRecord::Absent && bonds.count == 0U && !bonds.remoteMetadataPresent) {
         m_ownership = Ownership::Unpaired;
         return;
     }

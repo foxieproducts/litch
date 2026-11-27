@@ -56,6 +56,7 @@ class BoardOwnerPairingController final {
         bool available = false;
         uint8_t count = 0;
         BoardOwnerPeerSet identities{};
+        bool remoteMetadataPresent = false;
     };
 
     struct ConnectionSecurity {

@@ -41,7 +41,7 @@ Choose **Connected → Sleep** in the app. Wait for the board to save and go dar
 
 If the board starts with a repeating perimeter pattern and gameplay is unavailable, open **Setup** in the app to see the board health and recovery options. To retry a boot while keeping settings and saved games, hold Circle alone for about 1.5 seconds. If the problem returns, use **Contact Support** and include the pattern you saw.
 
-A recovery reset deletes settings and game data. To choose that reset while already in boot recovery, hold X and Circle together at the same end for five seconds and keep holding through the final two-second confirmation. Release either button before completion to cancel. For firmware installation, see [USB installation and recovery](release/ci_foundation.md#usb-installation-and-recovery).
+A recovery reset deletes personal settings, game data and phone pairings. It retains readable board identity, validated hardware-test evidence, calibration and power-protection state. To choose that reset while already in boot recovery, hold X and Circle together at the same end for five seconds and keep holding through the final two-second confirmation. Release either button before completion to cancel. Bluetooth cleanup resumes after a power interruption before a new phone can pair. For firmware installation, see [USB installation and recovery](release/ci_foundation.md#usb-installation-and-recovery).
 
 ## Hardware test mode
 

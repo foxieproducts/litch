@@ -239,6 +239,32 @@ void TestBootReconciliation() {
     Check(c.Pairable(),
           "orphan cleanup acknowledgement permits pairing");
 
+    c.Boot(modules::BoardOwnerRecord::Absent, {true, 0U, {}, true});
+    Check(c.GetOperation() == Controller::Operation::OrphanCleanup && !c.Pairable(),
+          "zero-key legacy remote metadata must be cleared before first pairing");
+    CompleteCleanup(p, c);
+    Check(c.Pairable(), "metadata-only cleanup reaches first-phone admission after durable absence");
+
+    // A power cut after factory reset or between native table writes leaves
+    // Clearing authoritative even if no security key survives that cut.
+    c.Boot(modules::BoardOwnerRecord::Clearing, {true, 0U, {}, true});
+    Check(c.PendingEffect().type == Effect::QuiesceAndRejectWork && !c.Pairable(),
+          "interrupted zero-key factory cleanup resumes from Clearing");
+    Check(AckQuiesce(c, true) && AckDelete(c, true), "resumed remote cleanup verifies deletion");
+    Save(p, c); AckSuccess(c);
+    Check(c.Pairable(), "resumed factory cleanup permits first phone only after final save");
+
+    {
+        Persistence pending; Controller finishing(pending);
+        finishing.Boot(modules::BoardOwnerRecord::Clearing, {true, 0U, {}, true});
+        AckQuiesce(finishing, true); AckDelete(finishing, true);
+        finishing.Boot(modules::BoardOwnerRecord::Absent, {true, 0U, {}, true});
+        Save(pending, finishing);
+        Check(!finishing.Pairable() && finishing.GetOwnership() == Ownership::RecoveryRequired &&
+                  finishing.PendingEffect().type == Effect::None,
+              "metadata observed during final absence receipt prevents stale success from admitting phones");
+    }
+
     c.Boot(modules::BoardOwnerRecord::Clearing, {true, 1});
     Check(c.PendingEffect().type == Effect::QuiesceAndRejectWork,
           "clearing boot resumes quiesce before bond deletion");

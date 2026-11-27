@@ -707,6 +707,18 @@ bool SettingsStore::SaveImpl() {
         }
     }
 
+    if (preservePending && m_recoveryResetReplacement) {
+        // Destructive recovery must replace the loader's preferred pending
+        // document before publishing primary. Atomic rename preserves either
+        // the old complete pending identity or the verified reset snapshot.
+        if (!RenameLittleFsPath(tmpPath, retainedTmpPath, storage)) {
+            SetError(SettingsStoreError::WriteFailed, "reset pending replacement failed");
+            return false;
+        }
+        tmpPath = retainedTmpPath;
+        storage.staging = SettingsSavePathRole::Pending;
+    }
+
     if (LittleFsPathExists(
             m_path, storage)) {
         if (LittleFsPathExists(
@@ -880,6 +892,15 @@ bool SettingsStore::SaveImpl() {
                      verificationEvidence);
             return false;
         }
+    }
+
+    if (preservePending && m_recoveryResetReplacement) {
+        if (!RenameStdioPath(tmpPath, retainedTmpPath, storage)) {
+            SetError(SettingsStoreError::WriteFailed, "reset pending replacement failed");
+            return false;
+        }
+        tmpPath = retainedTmpPath;
+        storage.staging = SettingsSavePathRole::Pending;
     }
 
     if (StdioPathExists(

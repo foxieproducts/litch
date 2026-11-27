@@ -11,6 +11,8 @@
 #include "firmware/firmware_internal.hpp"
 #include "firmware/firmware_app_internal.hpp"
 #include "firmware/cold_factory_reset.hpp"
+#include "firmware/factory_reset_settings.hpp"
+#include "modules/board_owner_pairing_feature.hpp"
 #include "firmware/recovery_led_frame.hpp"
 #include "firmware/recovery_status.hpp"
 #include "foxie_embedded/millis.hpp"
@@ -156,7 +158,7 @@ class FirmwareRecoveryActionTarget final
         m_sys.safeModeActive = true;
         logger::Error(
             "recovery: destructive consent complete; deleting persisted state once");
-        return m_sys.settings.DeleteFile();
+        return firmware::ResetFactorySettings(m_sys.settings, modules::OWNER_PAIRING_ENABLED);
     }
 
     void ClearBootGuard() override { m_sys.bootGuard.Clear(); }

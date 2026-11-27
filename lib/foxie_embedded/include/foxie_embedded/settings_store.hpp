@@ -442,6 +442,10 @@ class SettingsStore final {
 
     // Test/recovery helpers.
     bool DeleteFile();
+    // Explicit recovery reset only. Prepare a minimal replacement from a raw
+    // durable snapshot, even when the live store is disabled for this boot.
+    // Two verified publications replace both primary and pre-reset backup.
+    bool ResetFileForRecovery(bool (*prepare)(JsonDocument&));
     bool CorruptFileForTest();
 
 // Recovery owner only: erase the complete board filesystem, remount, then
@@ -471,6 +475,7 @@ class SettingsStore final {
     }
 
     SettingsStoreConfig m_cfg;
+    bool m_recoveryResetReplacement = false;
     BeforePersistenceCallback m_beforePersistenceCb = nullptr;
     AsyncSaveRequestCallback m_asyncSaveRequestCb = nullptr;
     AsyncSaveAdmissionCallback m_asyncSaveAdmissionCb = nullptr;

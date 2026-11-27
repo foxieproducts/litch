@@ -18,6 +18,7 @@ extern "C" int LitchSdkReconcileEmptyPeerStore(void);
 extern "C" int LitchSdkClearPeerStore(void);
 extern "C" int LitchSdkResetPeerPrivacy(void);
 extern "C" int LitchSdkReadAddRpaSnapshot(ble_store_value_rpa_rec*, int*, int);
+extern "C" int LitchSdkReadPeerMetadata(int*);
 extern "C" int LitchSdkRollbackAddedPeers(const ble_addr_t*, int, const ble_store_value_rpa_rec*, int);
 extern "C" int LitchSdkRestoreRetainedPeerPrivacy(void);
 // These pinned native leaves use the host lock and fixed SDK connection list.
@@ -89,6 +90,9 @@ BoardOwnerPairingController::BondInventory ReadInventory(ble_addr_t* peers, int&
         2 * MYNEWT_VAL(BLE_STORE_MAX_BONDS));
     if (rc != 0 || count < 0 || count > 2 * MYNEWT_VAL(BLE_STORE_MAX_BONDS)) return {};
     BoardOwnerPairingController::BondInventory result{true, static_cast<uint8_t>(count)};
+    int metadata = 0;
+    if (LitchSdkReadPeerMetadata(&metadata) != 0) return {};
+    result.remoteMetadataPresent = metadata != 0;
     if (count <= MAX_SAVED_PHONES) {
         result.identities.count = static_cast<uint8_t>(count);
         for (int i = 0; i < count; ++i) {

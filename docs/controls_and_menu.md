@@ -13,13 +13,17 @@ Each end of a V3.3 or V3.31 board has four direction buttons, X and Circle. Cont
 | Start a new game | Hold X and Circle together at the same end for about two seconds during play. |
 | Adjust your player color | Press Up or Down at your end when no menu is open. |
 
-During setup the board can mark the two starting king squares. Place the pieces in their starting positions. An unexpected occupied square gets its own correction cue. During Undo, a pulsing square shows where to put the piece back. If the move captured a piece, return the mover first, then replace the captured piece where indicated.
+During setup the board can mark the two starting king squares. Place the pieces in their starting positions. An unexpected occupied square gets its own correction cue. During Undo, the board dims and highlights the piece to move back. Follow the return-square lights. If the move captured a piece, return the mover first, then replace the captured piece where indicated.
 
 For a suggested capture, lift the opposing piece whose two outer lights flash bright amber twice, pause, and repeat. Minimal Animations marks it with steady orange. If you lift the opposing piece first, follow the moving lights from a friendly piece that can capture it. Returning the opposing piece cancels the choice. When your piece lands, its lights show it settling.
 
 In Duck chess, follow the hint for your chess piece first. Once the board accepts that move, yellow lights show where to move the Duck.
 
 Quick Setup lets you adjust the computer opponent, player ends, brightness, light-square lighting, board rotation and game clock. The clock pauses while the menu is open. See the [clock presets](spec/timer_semantics.md).
+
+When the board prompts for pairing, press **X and Circle** together at the same end within ten seconds. After the board accepts the press, app 1.0.4 allows up to forty seconds for the phone's pairing prompt and the board to save the pairing.
+
+In the board list, **Identify** briefly lights a number on one board. **Identify All** shows the listed numbers on supported boards in turn. Each number clears after about three seconds. For paired boards running firmware 1.0.4, the four-character board ID matches across Android and iOS.
 
 If your phone cannot connect, open **Connection help** while finding a board or from the Connecting screen. First disconnect any other phone or tablet using that board. If trouble persists, forget the correct Foxie Litch board in your phone’s Bluetooth settings: on iPhone or iPad, choose **Settings → Bluetooth → ⓘ → Forget This Device**; on Samsung, choose **Settings → Connections → Bluetooth → gear → Unpair**. On other Android phones, look under **Connected devices** or **Bluetooth** and choose **Forget** or **Unpair** for your board. If the board is not listed, continue with its physical steps.
 

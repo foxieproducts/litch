@@ -1,7 +1,7 @@
 ## 1.0.5
 
-- Stored artwork plays once at startup and returns to Play or Litchcraft.
-- Adjust light squares from a faint glow to a brighter maximum, with the familiar brightness in the middle.
+- With Stored artwork selected, an empty board now plays your saved animation once at startup, then returns to Play or Litchcraft automatically.
+- Light-square brightness now ranges from a faint glow at 1 to a brighter maximum at 8. Level 4 matches the previous default. The steps are easier to see in both White and Color, even with automatic brightness on.
 
 ## 1.0.4
 

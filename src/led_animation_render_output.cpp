@@ -83,7 +83,7 @@ void LedAnimationRenderer::OutputGameFrame(LedAnimationPresentation& presentatio
         capture ? modules::led_render_policy::CaptureTapScale(ownership.captureTaps) :
         duck ? modules::led_render_policy::DUCK_REMINDER_ACCENT_SCALE256 :
         m_startupPieceScale256, capture || duck ? uint16_t{256U} : uint16_t{0U}};
-    const auto* artworkInput = std::get_if<modules::litchcraft_presentation::Inputs>(&presentation.scene);
+    auto* artworkInput = std::get_if<modules::litchcraft_presentation::Inputs>(&presentation.scene);
     const bool urgent = degraded || countdown.active || ownership.menuActive ||
         presentation.entryHold.active || (artworkInput != nullptr && artworkInput->exitHoldActive) ||
         presentation.edgeCue.kind == modules::EdgeLedCueKind::OccupiedBoardBlocked;
@@ -92,15 +92,16 @@ void LedAnimationRenderer::OutputGameFrame(LedAnimationPresentation& presentatio
     m_boot.UpdatePriority(urgent || ownership.foreground.IsVisible(),
         {presentation.artworkModeGeneration, presentation.artworkCanvasGeneration});
     if (m_boot.WasCancelled()) m_crossfade.Reset();
-    if (auto* artwork = std::get_if<modules::litchcraft_presentation::Inputs>(&presentation.scene);
-        artwork != nullptr && !artwork->active && m_boot.UsesArtwork()) {
-        result.receipt.artwork = m_artwork.Compose(*artwork, m_artworkPort, m_board, m_status);
-        const auto transition = result.receipt.artwork.bootTransition;
-        const bool playing = (result.receipt.artwork.playback.bootFlags & 1U) != 0U;
-        m_boot.ObserveArtwork(false,
-            transition == modules::litchcraft_presentation::BootTransition::Finished,
-            playing, presentation.artworkUnavailable);
-    }
+    // Craft already composed its canvas. In Play, draw the same temporary
+    // artwork over the chess position, which is the target of the final fade.
+    const bool bootPlayback = artworkInput && (artworkInput->playback.bootFlags & 1U) != 0U;
+    if (bootPlayback && !artworkInput->active && (m_boot.NeedsArtwork() || m_boot.UsesArtwork()))
+        result.receipt.artwork = m_artwork.Compose(*artworkInput, m_artworkPort, m_board, m_status);
+    const auto transition = result.receipt.artwork.bootTransition;
+    using modules::litchcraft_presentation::BootTransition;
+    // Recovery and the final fade also progress on ordinary game frames.
+    m_boot.ObserveArtwork(bootPlayback, transition == BootTransition::Finished,
+        bootPlayback && transition != BootTransition::Cancelled, presentation.artworkUnavailable);
     if (m_boot.NeedsCrossfadeStart()) m_crossfade.TransitionFromPresented(canvas, nowMs);
     if (!m_boot.IsActive() || m_boot.IsArtworkCrossfading())
         m_crossfade.Apply(physical, canvas, nowMs, urgent);

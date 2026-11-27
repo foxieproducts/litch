@@ -1,8 +1,10 @@
 namespace {
-void SeedBootPages(store::FrameStore& frames, stream::FrameStream& pager) {
+void SeedBootPages(store::FrameStore& frames, stream::FrameStream& pager, bool craft = false,
+                   bool preload = true) {
     Check(frames.Recover() == store::Status::NoArtwork, "delivery witness starts with a fresh Store");
     store::Manifest manifest{};
     manifest.frameCount = 3U;
+    manifest.active = craft;
     store::TransactionToken token{};
     Check(frames.Begin(manifest, 0U, 81U, token) == store::Status::Ok,
           "delivery witness starts ordinary durable artwork transaction");
@@ -17,6 +19,7 @@ void SeedBootPages(store::FrameStore& frames, stream::FrameStream& pager) {
     Check(frames.Commit(token) == store::Status::Ok &&
               pager.Configure(frames.CurrentManifest(), frames.Generation()),
           "delivery witness adopts the saved root through existing pager");
+    if (!preload) return;
     bool firstReady = false;
     for (unsigned i = 0U; i < 32U; ++i) {
         if (pager.Service(frames, false) == stream::FrameStream::ServiceResult::LoadedRequested) {

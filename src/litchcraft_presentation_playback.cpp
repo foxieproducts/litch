@@ -57,6 +57,10 @@ BootTransition AdvanceStreamed(Playback& playback, const Context& context,
         token->frameIndex = stream.DisplayedIndex();
         if (token->frameIndex == UINT16_MAX) token->frameIndex = stream.RequestedIndex();
         if (!stream.PreparePresentation(*workspace, presentationEpoch, *token)) {
+            // A bad first page has no previously displayed frame to lease.
+            // Let the boot display release the board on the next confirmed output.
+            if ((playback.bootFlags & 1U) != 0U && stream.RequestedFrameFailed())
+                return BootTransition::Cancelled;
             wake();
             return BootTransition::None;
         }

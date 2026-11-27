@@ -403,6 +403,8 @@ void NeoPixelLedRenderer::Show() {
 
 #else
 
+#include "foxie_embedded/millis.hpp"
+
 namespace hardware {
 
 NeoPixelLedRenderer::NeoPixelLedRenderer(const uint16_t ledCount, const uint8_t pin)
@@ -423,9 +425,14 @@ NeoPixelLedRenderer::NeoPixelLedRenderer(const uint16_t boardLedCount,
 
 void NeoPixelLedRenderer::Begin() {}
 
-void NeoPixelLedRenderer::Clear() {}
+void NeoPixelLedRenderer::Clear() {
+    if (m_nativeOutput) m_nativeOutput->Clear();
+}
 
-void NeoPixelLedRenderer::SetLedRgb(const uint16_t, const uint8_t, const uint8_t, const uint8_t) {}
+void NeoPixelLedRenderer::SetLedRgb(const uint16_t index, const uint8_t r,
+                                   const uint8_t g, const uint8_t b) {
+    if (m_nativeOutput) m_nativeOutput->SetLedRgb(index, r, g, b);
+}
 
 void NeoPixelLedRenderer::SetRgbwCoolToWarmThreshold(const uint8_t) {}
 
@@ -435,7 +442,12 @@ void NeoPixelLedRenderer::SetLedRgbwRaw(const uint16_t,
                                         const uint8_t,
                                         const uint8_t) {}
 
-void NeoPixelLedRenderer::Show() {}
+void NeoPixelLedRenderer::Show() {
+    if (!m_nativeOutput || !IsOutputEnabled()) return;
+    m_nativeOutput->Show();
+    m_lastShowCompleted = true;
+    m_deliveryTelemetry.OnOutcome(LedDeliveryOutcome::Confirmed, fxe::Millis());
+}
 
 } // namespace hardware
 

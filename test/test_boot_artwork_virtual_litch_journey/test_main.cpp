@@ -189,9 +189,16 @@ void SettingContract() {
 }
 } // namespace
 #include "boot_artwork_delivery_journeys.hpp"
+#include "independent_boot_renderer.hpp"
 
 int main() {
     SettingContract();
+    for (bool delayed : {false, true}) {
+        IndependentBootRenderer(true, true, delayed);
+        IndependentBootRenderer(false, true, delayed);
+        IndependentBootRenderer(false, false, delayed);
+    }
+    IndependentBootRenderer(false, true, true, true);
     if (std::getenv("LITCH_BOOT_REPRO_OLD") == nullptr) {
         StoredArtworkComposeClockBoundary();
         StoredArtworkDelayedAndDenied();

@@ -63,6 +63,9 @@ class NeoPixelLedRenderer final : public modules::ILedRenderer {
                         bool rgbOnly = false);
 
     void Begin();
+#ifndef ARDUINO
+    void SetNativeRgbOutput(modules::ILedRenderer& output) { m_nativeOutput = &output; }
+#endif
 
     void SetRmtFlashArbiter(RmtFlashArbiter* arbiter) {
         m_rmtFlashArbiter = arbiter;
@@ -128,6 +131,9 @@ class NeoPixelLedRenderer final : public modules::ILedRenderer {
     RmtFlashArbiter* m_rmtFlashArbiter = nullptr;
     const std::atomic<bool>* m_powerEnabled = nullptr;
     bool m_lastShowCompleted = false;
+#ifndef ARDUINO
+    modules::ILedRenderer* m_nativeOutput = nullptr;
+#endif
     LedDeliveryTelemetry m_deliveryTelemetry;
     bool m_failureLogged = false;
     uint32_t m_lastFailureLogMs = 0U;

@@ -184,10 +184,6 @@ void LedAnimationRenderer::RenderArtwork(LedAnimationPresentation& presentation,
     modules::litchcraft_presentation::Inputs& artwork, LedAnimationFrameResult& result) {
     if (!m_haveGameBackground || !ArtworkCurrent(artwork)) return;
     m_artworkSceneActive = true;
-    if (!artwork.active) {
-        const bool playing = (artwork.playback.bootFlags & 1U) != 0U;
-        m_boot.ObserveArtwork(playing, false, playing, presentation.artworkUnavailable);
-    }
     RenderGame(presentation, m_gameBackground, result);
 }
 } // namespace firmware

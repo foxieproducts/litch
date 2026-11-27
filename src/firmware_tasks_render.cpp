@@ -108,12 +108,15 @@ firmware::LedRenderAttemptResult RenderLeds(const bool waitForCompletion) {
         modules::BootArtworkUnavailableAfterRecovery(
             static_cast<modules::litchcraft_frame_store::Status>(
                 sys.settingsPersistence.GetDiagnostics().frameStoreRecovery));
-    if ((sys.bootDisplay.NeedsArtwork() || sys.bootDisplay.UsesArtwork() ||
-         bootArtwork.IsBootArtworkPlaying()) &&
+    const bool startArtwork = sys.bootDisplay.NeedsArtwork() && !unavailable &&
+        !bootArtwork.IsBootArtworkPlaying();
+    const bool stopArtwork = sys.bootDisplay.IsComplete() && bootArtwork.IsBootArtworkPlaying();
+    if ((startArtwork || stopArtwork) &&
         sys.gamePersistence.TryBeginLitchcraftPresentation(
             modules::LitchcraftSession::PresentationAccess::Control)) {
         modules::GamePersistenceCoordinator::LitchcraftPresentationGuard admission(sys.gamePersistence);
-        sys.bootDisplay.UpdateArtwork(bootArtwork, unavailable);
+        if (startArtwork) bootArtwork.BeginBootArtworkOnce();
+        else bootArtwork.CancelBootArtwork();
     }
     auto* capture = sys.ledAnimation.BeginCapture();
     if (capture == nullptr) return firmware::LedRenderAttemptResult::NotAttempted;
@@ -322,7 +325,7 @@ firmware::LedRenderAttemptResult RenderLeds(const bool waitForCompletion) {
     else presentation.waterRiderSquare = UpdateWaterSlosh(sys, inputs);
     presentation.water = sys.waterSlosh;
     if (!sys.ledAnimation.StartAttempted()) InitializeAnimation(sys, &game);
-    if (art.IsCanvasVisible() || sys.bootDisplay.UsesArtwork()) {
+    if (art.IsCanvasVisible() || art.IsBootArtworkPlaying()) {
         auto& artwork = presentation.scene.emplace<modules::litchcraft_presentation::Inputs>();
         art.CapturePresentation(artwork);
     }

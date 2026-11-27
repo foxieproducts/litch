@@ -1517,7 +1517,7 @@ void main() {
             board.identifyCommands.map((packet) => packet.body[1]),
             firstUnsupported ? [0, 0, 1] : [0, 1, 0, 1],
           );
-          if (!firstUnsupported)
+          if (!firstUnsupported) {
             expect(board.identifyCommands[1].body, [
               1,
               1,
@@ -1528,6 +1528,7 @@ void main() {
               184,
               11,
             ]);
+          }
           expect(board.identifyCommands.last.body, [
             1,
             1,

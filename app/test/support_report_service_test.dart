@@ -118,9 +118,12 @@ class _ReportBle implements LitchBleService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-SupportReportService _collector(_ReportBle ble) => SupportReportService(
+SupportReportService _collector(
+  _ReportBle ble, {
+  String boardId = 'private-board-A',
+}) => SupportReportService(
   bleService: ble,
-  boardId: 'private-board-A',
+  boardId: boardId,
   loadAppInfo: () async => const SupportAppInfo(
     version: 'audit-fixture',
     buildNumber: '1',
@@ -313,7 +316,10 @@ void main() {
         _expectBoundedPrivateDraft(draft);
 
         // A separately requested report may collect the new session normally.
-        final SupportReportDraft recovered = await collector.createDraft();
+        final SupportReportDraft recovered = await _collector(
+          ble,
+          boardId: ble.currentId!,
+        ).createDraft();
         expect(recovered.body, contains('board_connection: connected'));
         expect(recovered.body, contains('board_firmware: audit-fixture-build'));
         _expectBoundedPrivateDraft(recovered);

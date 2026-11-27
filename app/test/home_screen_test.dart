@@ -2194,7 +2194,9 @@ void main() {
       await tester.pumpAndSettle();
       final String suffix =
           '${width.toInt()}-${scale.toInt()}-${dark ? 'dark' : 'light'}';
-      expect(find.text('Hint: e2 to e4, then duck a5 to d4.'), findsOneWidget);
+      expect(find.text('Hint: e2 to e4.'), findsOneWidget);
+      expect(find.textContaining('Duck hint:'), findsNothing);
+      expect(find.byKey(const ValueKey('duck-assistance-to-d4')), findsNothing);
       expect(
         tester
             .widget<Text>(find.byKey(const ValueKey('home-hint-status')))
@@ -2212,12 +2214,14 @@ void main() {
             '"co":0,"cl":[0,0,0,"w",0,0,0,"n"],"as":"3be2e3a5e4"}',
       ]);
       await tester.pumpAndSettle();
-      expect(find.text('Hint: e2 to e3, then duck a5 to e4.'), findsOneWidget);
+      expect(find.text('Hint: e2 to e3.'), findsOneWidget);
+      expect(find.textContaining('Duck hint:'), findsNothing);
+      expect(find.byKey(const ValueKey('duck-assistance-to-e4')), findsNothing);
       expect(
         tester
             .widget<Text>(find.byKey(const ValueKey('home-hint-status')))
             .data,
-        'Hint updated. Previously: e2 to e4; duck a5 to d4. Now: e2 to e3; duck a5 to e4.',
+        'Hint updated. Previously: e2 to e4. Now: e2 to e3.',
       );
       expect(tester.getRect(find.byType(HomeChessboard)), boardBeforeUpdate);
       expect(tester.takeException(), isNull);

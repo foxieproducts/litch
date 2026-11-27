@@ -883,6 +883,12 @@ class _ConnectionGateBleService extends LitchBleService {
 class _RecoveryNavigationBle extends _ConnectionGateBleService {
   _RecoveryNavigationBle() : super(scriptCapabilities: true);
 
+  bool reportConnectedAsReady = false;
+
+  @override
+  bool get productReady =>
+      reportConnectedAsReady ? isConnected : super.productReady;
+
   static const recovery = LitchDeviceCapabilities(
     contractVersion: 3,
     hardwareRevision: LitchHardwareRevision.v3_3,
@@ -3272,6 +3278,11 @@ void main() {
           service.completeNextConnect(false);
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 200));
+          expect(progress, findsOneWidget);
+          expect(label, findsOneWidget);
+          await tester.tap(cancel);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
           expect(progress, findsNothing);
           expect(label, findsNothing);
           await captureHealthReview(
@@ -4274,6 +4285,9 @@ void main() {
         await capture('connecting');
         service.completeNextConnect(false);
         await capture('error');
+        expect(find.byKey(const ValueKey('chosen-board-phase')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('chosen-board-cancel')));
+        await tester.pump();
         expect(tester.widget<FilledButton>(connect).onPressed, isNotNull);
         await tester.ensureVisible(connect);
         await tester.pumpAndSettle();
@@ -14847,6 +14861,9 @@ void main() {
       await captureHealthReview(tester, 'connecting-$language-320-200');
       service.completeNextConnect(false);
       await tester.pump();
+      expect(badge, findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('chosen-board-cancel')));
+      await tester.pump();
       expect(badge, findsNothing);
       final double disconnectedBrandImageHeight = tester
           .getRect(
@@ -15707,6 +15724,11 @@ void main() {
           await tester.pump(const Duration(milliseconds: 900));
           service.completeNextConnect(false);
           await tester.pump();
+          if (destination == 'play') {
+            expect(find.byKey(const ValueKey('chosen-board-phase')), findsOneWidget);
+            await tester.tap(find.byKey(const ValueKey('chosen-board-cancel')));
+            await tester.pump();
+          }
           service.emitBoards(const [second]);
           await tester.pump();
           if (destination != 'play') {
@@ -15760,6 +15782,11 @@ void main() {
             }
             await tester.tap(action);
             await tester.pump();
+            final cancel = find.byKey(const ValueKey('chosen-board-cancel'));
+            if (cancel.evaluate().isNotEmpty) {
+              await tester.tap(cancel);
+              await tester.pump();
+            }
           }
           expect(
             find.byKey(const ValueKey('connection-gate-content')),
@@ -18774,6 +18801,7 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final oldCapabilities = Completer<LitchDeviceCapabilities>();
       final service = _RecoveryNavigationBle()
+        ..reportConnectedAsReady = true
         ..capabilityGate = oldCapabilities;
       final craft = _NavigationCraftController(service);
       final library = LitchcraftLibrary(craft);

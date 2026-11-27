@@ -1,4 +1,5 @@
 name: Official firmware candidate
+run-name: Firmware ${{ inputs.operation }} (${{ inputs.channel == 'stable' && 'Release' || 'Beta' }})
 
 on:
   workflow_dispatch:

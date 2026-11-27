@@ -1390,6 +1390,30 @@ class CliTests(unittest.TestCase):
         self.assertGreater(deadlines[0], 2 * 120)
         self.assertTrue(all(child.poll() is not None for child in children))
 
+    def test_firmware_release_check_packages_the_captured_build_from_this_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = FakeWorkspace(root)
+            workspace.head = "b" * 40
+            runner = FakeRunner()
+            with (
+                mock.patch.object(cli.Workspace, "discover", return_value=workspace),
+                mock.patch.object(cli, "LockManager", FakeLockManager),
+                mock.patch.dict(os.environ, {"PLATFORMIO_BUILD_DIR": str(root / "pio-build")}),
+            ):
+                args = cli._parser().parse_args(["release", "check", "--firmware"])
+                self.assertEqual(cli.run(args, runner=runner), 0)
+            commands = [call["argv"] for call in runner.calls]
+            self.assertIn("tools/release/verify_release_artifacts.py", commands[0])
+            self.assertIn(("pio", "run", "-e", "litch-esp32s3"), commands)
+            self.assertEqual(commands[-2], ("pio", "run", "-e", "litch-esp32s3", "-t", "relink-info"))
+            self.assertEqual(commands[-1][:-1], (
+                cli.sys.executable, "tools/release/firmware_compliance.py", "prepare",
+                "--root", str(root), "--build-dir", str(root / "pio-build/litch-esp32s3"),
+                "--source-sha", workspace.head, "--output",
+            ))
+            self.assertFalse(Path(commands[-1][-1]).exists())
+
     def test_lock_timeout_must_be_finite(self) -> None:
         for value in ("nan", "inf", "-1"):
             with self.subTest(value=value):

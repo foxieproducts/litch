@@ -78,6 +78,11 @@ def check_source(root: Path, expected_sha: str) -> None:
         fail("candidate requires a clean checkout, including untracked source")
 
 
+def validate_evidence_ref(ref: str) -> None:
+    if not ref.strip() or len(ref.encode()) > 2048 or any(ord(ch) < 32 or ord(ch) == 127 for ch in ref):
+        fail("invalid local validation reference")
+
+
 def history_version_key(version: str) -> tuple[int, int, int, int]:
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9]+)?", version):
         fail("invalid firmware notes version")
@@ -382,9 +387,7 @@ def prepare(root: Path, firmware: Path, channel: str,
                 fail("GitHub build requires a positive run ID and attempt together")
             receipt["build_execution"] = execution
         if local_validation_ref is not None:
-            if (not local_validation_ref.strip() or len(local_validation_ref.encode()) > 2048
-                    or any(ord(ch) < 32 or ord(ch) == 127 for ch in local_validation_ref)):
-                fail("invalid local validation reference")
+            validate_evidence_ref(local_validation_ref)
             receipt["local_validation"] = {
                 "status": "attested_by_dispatcher", "source_sha": expected_sha,
                 "evidence_ref": local_validation_ref.strip(),

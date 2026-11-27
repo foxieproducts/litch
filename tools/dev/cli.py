@@ -10,6 +10,7 @@ import os
 import shlex
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
 
@@ -310,6 +311,8 @@ def _parser() -> argparse.ArgumentParser:
 
     release = subparsers.add_parser("release", help="run non-publishing release tooling")
     release.add_argument("action", choices=("check",))
+    release.add_argument("--firmware", action="store_true",
+                         help="also build the shipping S3 image and verify its source and relinking bundle")
 
     code_health = subparsers.add_parser(
         "code-health",
@@ -796,15 +799,32 @@ def _flutter(workspace: Workspace, args: argparse.Namespace, runner: Runner, loc
         )
 
 
-def _release_check(workspace: Workspace, runner: Runner, lock_timeout: float) -> None:
+def _release_check(workspace: Workspace, runner: Runner, lock_timeout: float, *, firmware: bool = False) -> None:
     from tools.release.verify_release_artifacts import VERIFICATION_TIMEOUT_SECONDS
 
-    with LockManager(workspace, argv=sys.argv).lane("release", timeout=lock_timeout):
+    locks = LockManager(workspace, argv=sys.argv)
+    with locks.lane("release", timeout=lock_timeout):
         runner.run(
             [sys.executable, "tools/release/verify_release_artifacts.py"],
             cwd=workspace.root,
             timeout_seconds=VERIFICATION_TIMEOUT_SECONDS,
         )
+        if firmware:
+            environment = PIO_ENVIRONMENTS["s3"]
+            with locks.lane("platformio", timeout=lock_timeout), tempfile.TemporaryDirectory() as output:
+                _build_one(workspace.root, "s3", runner, compile_only=True)
+                runner.run(
+                    ["pio", "run", "-e", environment, "-t", "relink-info"],
+                    cwd=workspace.root, timeout_seconds=COMMAND_TIMEOUT_SECONDS["build"],
+                    extra_env=_pio_environment(),
+                )
+                runner.run(
+                    [sys.executable, "tools/release/firmware_compliance.py", "prepare",
+                     "--root", workspace.root, "--build-dir", platformio_build_directory(workspace.root, environment),
+                     "--source-sha", workspace.head, "--output", output],
+                    cwd=workspace.root, timeout_seconds=COMMAND_TIMEOUT_SECONDS["build"], capture=True,
+                )
+                print("Verified the shipping S3 firmware and its corresponding source and relinking bundle.")
 
 
 def _platformio_core_dir(root: Path, runner: Runner) -> Path:
@@ -1016,7 +1036,7 @@ def run(args: argparse.Namespace, *, runner: Runner | None = None) -> int:
     elif args.command in {"app", "flutter"}:
         _flutter(workspace, args, command_runner, args.lock_timeout)
     elif args.command == "release":
-        _release_check(workspace, command_runner, args.lock_timeout)
+        _release_check(workspace, command_runner, args.lock_timeout, firmware=args.firmware)
     elif args.command == "code-health":
         code_health_args = (
             ["--help"] if args.code_health_help else []

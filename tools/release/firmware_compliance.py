@@ -539,10 +539,20 @@ class BundleInputs:
                    for item in self.metadata["application_rebuild"]}
         delivered_sources = {Path(item["source"]).relative_to(self.root).as_posix()
                              for item in delivery}
-        if (policy.get("schema_version") != 1 or policy.get("target") != "litch-esp32s3"
-                or actual != expected or sources != set(policy["translation_units"])
-                or delivered_sources != set(policy["source_translation_units"])):
-            raise ValueError("application source closure differs from the reviewed allowlist")
+        if policy.get("schema_version") != 1 or policy.get("target") != "litch-esp32s3":
+            raise ValueError("invalid shipping S3 source allowlist")
+        differences = []
+        for group, observed, reviewed in (
+            ("files", actual, expected),
+            ("translation_units", sources, set(policy["translation_units"])),
+            ("source_translation_units", delivered_sources, set(policy["source_translation_units"])),
+        ):
+            for label, paths in (("absent from allowlist", observed - reviewed),
+                                 ("absent from build", reviewed - observed)):
+                if paths:
+                    differences.append(f"{group} {label}: {', '.join(sorted(paths))}")
+        if differences:
+            raise ValueError("application source closure differs from the reviewed allowlist\n" + "\n".join(differences))
         for relative in sorted(expected):
             original = source_bytes(self.root, source_sha, relative)
             if self.checked(self.root / relative) != original:

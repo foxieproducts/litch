@@ -135,6 +135,14 @@ class FirmwareComplianceTests(unittest.TestCase):
             with mock.patch.object(compliance, "SOURCE_POLICY_PATH", policy):
                 inputs.validate_project_sources(source_sha)
                 self.assertEqual(inputs.project_sources, set(files))
+                added = ["src/factory_reset.cpp", "include/factory_reset.hpp"]
+                delivery.append({"source": str(root / added[0]),
+                                 "dependencies": [str(root / name) for name in added]})
+                with self.assertRaisesRegex(ValueError, "source closure") as failure:
+                    inputs.validate_project_sources(source_sha)
+                for name in added:
+                    self.assertIn(name, str(failure.exception))
+                delivery.pop()
                 delivered_history = compliance.opening_book_inputs(root, source_sha)
                 self.assertEqual(delivered_history["source/opening_book_baseline/src/search.cpp"],
                                  historical.read_bytes())

@@ -73,12 +73,16 @@ headings use the exact firmware version. The builder still adds the leading
 `Version:` line for older apps, and historical candidates
 retain their original notes and verification behavior.
 
-1. Commit the intended version and build inputs. Verify the source locally,
-   including `./litch release check`. For a new version, check the live catalogs
-   as well as the repository's release history.
-2. In **Actions → Official firmware candidate → Run workflow**, select `main`,
-   `build`, the channel, the full source commit and a reference to the local
-   checks for that commit. The run builds the S3 image and its corresponding
+1. Commit and merge the intended version and build inputs into `main`. For a
+   new version, check the live catalogs and the repository's release history.
+2. From that checkout, run
+   `python3 tools/release/firmware_workflow.py build beta --validation-ref "<public reference to local checks>"`.
+   The command runs `./litch release check --firmware` locally. It builds the S3
+   image, captures the compiler inputs and packages the corresponding source
+   in a temporary directory using the CI packager. A missing source or header
+   stops the command locally. Once the check passes and the commit matches
+   GitHub's `main`, the command dispatches the official build and prints its run
+   URL. The GitHub run builds and retains the S3 image and its corresponding
    source and relinking bundle. Save the run ID, attempt and receipt SHA-256
    from the summary. GitHub retains this candidate artifact for 14 days. Complete
    any planned channel promotions that use it within that window. Building a
@@ -89,12 +93,24 @@ retain their original notes and verification behavior.
    Run the [firmware host check](../../.github/workflows/firmware_host_check.yml)
    to verify authenticated access to both catalogs and obtain their current
    digests.
-4. For an authorized rollout, run `promote` with the candidate identifiers,
-   the approved notes digest and the selected channel's current manifest digest.
+4. For an authorized rollout, run
+   `python3 tools/release/firmware_workflow.py promote <inputs.json>`. Supply a
+   temporary JSON object with the following string fields.
+
+   | Field | Value |
+   | --- | --- |
+   | `operation`, `channel` | `promote` and the selected channel, `beta` or `stable` |
+   | `source_sha`, `candidate_run_id`, `candidate_run_attempt`, `receipt_sha256` | Identifiers from the successful build |
+   | `notes_sha256`, `previous_manifest_sha256` | Approved draft digest and the selected channel's current manifest digest |
+
+   The command reserves the publishing window, checks for active firmware runs,
+   and supervises one dispatch. It follows the run ID returned by GitHub, retries
+   temporary read failures, and restores the previous publishing setting.
    Promotion checks the retained files, publishes the immutable assets before
    replacing the manifest, and verifies what the companion app can download.
-5. Use `verify` to check that this release is still the active channel delivery,
-   including its catalog and compatibility aliases. After a later channel
+5. Run `python3 tools/release/firmware_workflow.py verify <inputs.json>` with
+   the same inputs to check the active channel delivery, including its catalog
+   and compatibility aliases. After a later channel
    promotion, use `verify-archive` to check only the older release's immutable
    firmware, notes and compliance URLs; it does not check current channel health.
    Both operations are read-only. Supply the original source commit, channel,
@@ -110,6 +126,13 @@ retain their original notes and verification behavior.
    remove finished release and feature branches locally and on GitHub. Check
    each branch tip against `main`, its open pull requests and any active
    worktrees before deleting it.
+
+If a connection drops during dispatch, inspect Actions for the existing run
+before starting another. Use `python3 tools/release/firmware_workflow.py wait <run-id>`
+to read its status. If the operator machine loses power, the temporary
+`FIRMWARE_PROMOTION_OWNER` variable records the channel, candidate build and
+prior switch setting. Check the existing run and its delivery, restore that
+setting, then remove the abandoned reservation from `firmware-publishing`.
 
 Restrict the environment to the `main` branch and configure required reviewers
 where supported. Set the AWS role, bucket and lock key as masked environment

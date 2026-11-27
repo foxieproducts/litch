@@ -46,7 +46,7 @@ catalog and `stable` serves Release. Contributors can build the same source
 locally. Publishing requires access to the repository's `firmware-publishing`
 environment.
 
-The first releases in the 1.0.2 and 1.0.3 series use the bare version in app
+The first releases in the 1.0.2, 1.0.3 and 1.0.4 series use the bare version in app
 and firmware source, native packages, release tags and manifests. Each occupies
 sequence zero. For example, `1.0.3` and `1.0.3-0` identify the same slot and
 the next Beta in that series is `1.0.3-1`. Earlier series keep their existing

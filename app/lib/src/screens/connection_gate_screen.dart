@@ -298,6 +298,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
   Future<void>? _otaBenchmarkEntry;
   String? _dismissedOwnerRefusalDeviceId;
   int _connectionChoiceGeneration = 0;
+  int _connectionEventGeneration = 0;
 
   bool _noticeStartupReady = false;
   bool _isConnecting = false;
@@ -691,6 +692,10 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
   void _onConnectionChanged(ConnectionStateUpdate update) {
     if (!mounted || _bleService.identifyConnectionActive) {
       return;
+    }
+    if (update.connectionState == DeviceConnectionState.connected ||
+        update.connectionState == DeviceConnectionState.disconnected) {
+      ++_connectionEventGeneration;
     }
 
     if (update.connectionState == DeviceConnectionState.connected) {
@@ -1404,6 +1409,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
 
     setState(() => _bleAvailability = availability);
     if (_discoveryBlocked) {
+      ++_connectionEventGeneration;
       _discoveryRefreshCanceled = true;
       _autoConnectTimer?.cancel();
       _autoConnectTargetId = null;
@@ -1604,13 +1610,16 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     final List<LitchBoard> boardsSnapshot = List<LitchBoard>.from(_boards);
     final choiceGeneration = _connectionChoiceGeneration;
     final lifecycleGeneration = _lifecycleGeneration;
+    final connectionEventGeneration = _connectionEventGeneration;
     bool current() =>
         mounted &&
         _isAppForeground &&
         !_idleForLock &&
+        !_discoveryBlocked &&
         !_isConnecting &&
         choiceGeneration == _connectionChoiceGeneration &&
-        lifecycleGeneration == _lifecycleGeneration;
+        lifecycleGeneration == _lifecycleGeneration &&
+        connectionEventGeneration == _connectionEventGeneration;
     int successCount = 0;
     for (int index = 0; index < boardsSnapshot.length; ++index) {
       // A queued Connect owns the next action once the in-flight Identify
@@ -1683,6 +1692,9 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
       return;
     }
 
+    final choiceGeneration = _connectionChoiceGeneration;
+    final lifecycleGeneration = _lifecycleGeneration;
+    final connectionEventGeneration = _connectionEventGeneration;
     _manualChoiceRequired = true;
     _suppressAutoConnect = true;
     _autoConnectTimer?.cancel();
@@ -1714,7 +1726,14 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
       }
     }
 
-    if (!mounted || _isConnecting) {
+    if (!mounted ||
+        !_isAppForeground ||
+        _idleForLock ||
+        _discoveryBlocked ||
+        _isConnecting ||
+        choiceGeneration != _connectionChoiceGeneration ||
+        lifecycleGeneration != _lifecycleGeneration ||
+        connectionEventGeneration != _connectionEventGeneration) {
       return;
     }
 

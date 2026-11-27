@@ -4991,7 +4991,12 @@ class LitchBleService {
     int durationMs = 10000,
     bool untilConnected = true,
   }) async {
-    final body = ConnectionIdentifyCodec.start(number, durationMs);
+    final Uint8List body;
+    try {
+      body = ConnectionIdentifyCodec.start(number, durationMs);
+    } on FormatException {
+      return false;
+    }
     if (isConnected) {
       if (connectedId != deviceId) return false;
       try {

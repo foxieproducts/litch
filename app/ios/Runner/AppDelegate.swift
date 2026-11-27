@@ -27,7 +27,9 @@ enum AppUpgradeIdentityBootstrap {
     let identityExists = manager.fileExists(atPath: identity.path)
     let modern = manager.fileExists(atPath: generation.path)
     let evidence = !identityExists && !modern ? stockEvidence(home: home) : nil
-    let migrate = evidence != nil && version == "1.0.3" && (Int(build) ?? 0) > 51
+    // Stock build 51 predates this marker. Native build codes advance across
+    // marketing versions, including users who skip an intermediate update.
+    let migrate = evidence != nil && (Int(build) ?? 0) > 51
     if !identityExists {
       let observed: [String: Any] = [
         "schema": 1, "platform": "iOS", "package": package,

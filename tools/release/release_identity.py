@@ -12,8 +12,8 @@ from pathlib import Path
 import re
 import sys
 
-SERIES = "1.0.3"
-BARE_INITIAL_SERIES = ("1.0.2", SERIES)
+SERIES = "1.0.4"
+BARE_INITIAL_SERIES = ("1.0.2", "1.0.3", SERIES)
 ZERO_START_SERIES = ("0.9.7", "0.9.8", "0.9.9", "1.0.0", "1.0.1", *BARE_INITIAL_SERIES)
 SUPPORTED_SERIES = ("0.9.0", "0.9.5", *ZERO_START_SERIES)
 RESERVED_BETA_VERSIONS = frozenset((

@@ -398,9 +398,16 @@ class ReleaseIdentityTests(unittest.TestCase):
             ("1.0.1", 49, "1.0.0-1"),
             ("1.0.2", 50, "1.0.1-0"),
             ("1.0.3", 52, "1.0.2"),
+            ("1.0.4", 55, "1.0.3"),
         ):
             with self.subTest(series=series):
                 history = [published(prior)]
+                if series == "1.0.4":
+                    history = [[published("0.8"), published("1.0.2"),
+                                published("1.0.2", channel="stable")],
+                               [published(prior, date="2026-11-23T12:00:00Z"),
+                                published(prior, channel="stable", date="2026-11-23T13:00:00Z"),
+                                published(series, draft=True)]]
                 before_history = json.dumps(history)
                 version = identity.canonical_version(f"{series}-0")
                 prepared = self.prepare(version=version, code=code, previous=code-1,
@@ -416,8 +423,14 @@ class ReleaseIdentityTests(unittest.TestCase):
                                  releases=history, current=manifest(prior))
                     writes.assert_not_called()
                 self.assertEqual(identity.read_sources(self.root), before)
-        self.assertEqual(identity.next_beta_version(history), "1.0.3")
-        for series, prior in (("1.0.2", "1.0.1-0"), ("1.0.3", "1.0.2")):
+                if series == "1.0.4":
+                    with self.assertRaisesRegex(ValueError, "disagree|receipt"):
+                        self.prepare(version=version, code=code, previous=code-1,
+                                     releases=history, current=manifest("1.0.2"))
+                    self.assertEqual(identity.read_sources(self.root), before)
+        self.assertEqual(identity.next_beta_version(history), "1.0.4")
+        for series, prior in (("1.0.2", "1.0.1-0"), ("1.0.3", "1.0.2"),
+                              ("1.0.4", "1.0.3")):
             history = [published(prior)]
             spellings = (series, f"{series}-0")
             for spelling in spellings:
@@ -430,6 +443,9 @@ class ReleaseIdentityTests(unittest.TestCase):
                             identity.check_next_beta(reused, records)
             with self.assertRaisesRegex(ValueError, "next unpublished beta"):
                 identity.check_next_beta(f"{series}-0", history)
+            for live in spellings:
+                with self.assertRaisesRegex(ValueError, "deployed|superseded"):
+                    identity.check_next_beta(series, history, published_beta=live)
 
     def test_097_published_zero_advances_numerically_and_cannot_be_rebuilt(self):
         history = [published("0.9.5-11"), published("0.9.7-99", draft=True),
@@ -461,7 +477,8 @@ class ReleaseIdentityTests(unittest.TestCase):
 
     def test_098_zero_retains_legacy_syntax_native_floor_and_public_baseline_guards(self):
         for version in ("0.9.0-0", "0.9.5-0", "0.9.8-00", "0.9.8-01",
-                        "0.9.8--1", "0.9.8-0-beta", "0.9.9-00", "0.9.9-01", "0.9.6-0"):
+                        "0.9.8--1", "0.9.8-0-beta", "0.9.9-00", "0.9.9-01", "0.9.6-0",
+                        "1.0.4-00", "1.0.4-01", "1.0.4--1", "1.0.4-0-beta"):
             with self.subTest(version=version), self.assertRaises(ValueError):
                 identity.sequence(version)
         history = [published("0.9.7-6")]

@@ -13899,6 +13899,140 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Identify All reports partial failure and continues through the snapshot',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final service = _ConnectionGateBleService()..deferIdentify = true;
+      addTearDown(service.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ConnectionGateScreen(bleService: service)),
+      );
+      await tester.pump();
+      service.emitBoards(const <LitchBoard>[
+        LitchBoard(id: 'board-a', name: 'A', rssi: -40),
+        LitchBoard(id: 'board-b', name: 'B', rssi: -50),
+        LitchBoard(id: 'board-c', name: 'C', rssi: -60),
+      ]);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Identify all'));
+      await tester.pump();
+      for (var index = 0; index < 3; ++index) {
+        expect(
+          service.identifyCalls.single.deviceId,
+          ['board-a', 'board-b', 'board-c'][index],
+        );
+        expect(service.identifyCalls.single.number, index + 1);
+        service.completeNextIdentify(index != 1);
+        await tester.pump();
+      }
+      expect(find.text('Identify sent to 2/3 boards.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('individual Identify still reports a current failure', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final service = _ConnectionGateBleService()..deferIdentify = true;
+    addTearDown(service.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: ConnectionGateScreen(bleService: service)),
+    );
+    await tester.pump();
+    service.emitBoards(const <LitchBoard>[
+      LitchBoard(id: 'board-a', name: 'First Litch', rssi: -40),
+      LitchBoard(id: 'board-b', name: 'Second Litch', rssi: -50),
+    ]);
+    await tester.pump();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('discovered-board-board-a')),
+        matching: find.widgetWithText(OutlinedButton, 'Identify'),
+      ),
+    );
+    await tester.pump();
+    service.completeNextIdentify(false);
+    await tester.pump();
+    expect(
+      find.text('Couldn’t identify this Litch. Try again later.'),
+      findsOneWidget,
+    );
+  });
+
+  for (final interruption in [
+    'background',
+    'connection replaced',
+    'choice cancelled',
+    'Bluetooth cycle',
+    'dispose',
+  ]) {
+    for (final identified in [true, false]) {
+      testWidgets(
+        'individual Identify ignores $interruption after result=$identified',
+        (tester) async {
+          SharedPreferences.setMockInitialValues(<String, Object>{});
+          final service = _ConnectionGateBleService(scriptCapabilities: true)
+            ..deferIdentify = true;
+          addTearDown(service.dispose);
+          await tester.pumpWidget(
+            MaterialApp(home: ConnectionGateScreen(bleService: service)),
+          );
+          await tester.pump();
+          service.emitBoards(const <LitchBoard>[
+            LitchBoard(id: 'board-a', name: 'First Litch', rssi: -40),
+            LitchBoard(id: 'board-b', name: 'Second Litch', rssi: -50),
+          ]);
+          await tester.pump();
+          final card = find.byKey(const ValueKey('discovered-board-board-a'));
+          await tester.tap(
+            find.descendant(
+              of: card,
+              matching: find.widgetWithText(OutlinedButton, 'Identify'),
+            ),
+          );
+          await tester.pump();
+          expect(service.identifyCalls.single.deviceId, 'board-a');
+          switch (interruption) {
+            case 'background':
+              _sendAppToBackground(tester);
+              await tester.pump();
+              _sendAppToForeground(tester);
+            case 'connection replaced':
+              service.emitConnection(
+                'board-b',
+                DeviceConnectionState.connected,
+              );
+              await tester.pump();
+              service.emitConnection(
+                'board-b',
+                DeviceConnectionState.disconnected,
+              );
+            case 'choice cancelled':
+              await tester.tap(find.descendant(
+                of: find.byKey(const ValueKey('discovered-board-board-b')),
+                matching: find.widgetWithText(FilledButton, 'Connect'),
+              ));
+              await tester.pump();
+              await tester.tap(find.byKey(const ValueKey('chosen-board-cancel')));
+            case 'Bluetooth cycle':
+              service.emitAvailability(BleAvailability.poweredOff);
+              await tester.pump();
+              service.emitAvailability(BleAvailability.ready);
+            case 'dispose':
+              await tester.pumpWidget(const SizedBox.shrink());
+          }
+          await tester.pump();
+          service.completeNextIdentify(identified);
+          await tester.pump();
+          expect(find.textContaining('Sent identify'), findsNothing);
+          expect(find.textContaining('Couldn’t identify'), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   for (final interruption in <String>[
     'new board choice',
     'new connection',

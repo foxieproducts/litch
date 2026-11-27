@@ -28,8 +28,8 @@ class AppUpgradeNotice {
 /// update, including migration from versions without this marker. iOS reports
 /// Documents/bundle file dates instead; those are not update evidence. Its
 /// marker lives in Application Support with backup exclusion. Before Flutter
-/// starts, iOS adopts a validated stock 1.0.2 startup footprint for the 1.0.3
-/// migration, and marks this app generation in backed-up storage. Clean installs
+/// starts, iOS adopts a validated stock 1.0.2 startup footprint on a newer native
+/// build, and marks this app generation in backed-up storage. Clean installs
 /// and modern restores without an observed identity establish a silent baseline.
 /// Neither Apple purchase history nor file dates establish a previous run.
 class AppUpgradeNoticeService {

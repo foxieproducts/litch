@@ -119,6 +119,7 @@ void main() {
         reason: 'Store packaging requires exact prepared app release notes',
       );
       expect(preparedNotes.single['notes'], isNot(isEmpty));
+      expect(releases.first, preparedNotes.single);
       final installed = DateTime.utc(2026, 11, 20);
       String? observed;
       PackageInfo metadata = package(
@@ -183,6 +184,37 @@ void main() {
       expect(await service().pendingNotice(), isNull);
       expect(jsonDecode(observed!)['build'], '51');
       metadata = package(version: '1.0.3', build: '52');
+      expect(await service().pendingNotice(), isNull);
+
+      observed = jsonEncode({
+        'schema': 1,
+        'platform': 'android',
+        'package': metadata.packageName,
+        'version': '1.0.3',
+        'build': '52',
+        'installed': fresh.millisecondsSinceEpoch,
+      });
+      metadata = package(
+        version: '1.0.4',
+        build: '55',
+        installed: fresh,
+        updated: fresh.add(const Duration(days: 1)),
+      );
+      final currentUpgrade = service();
+      final currentNotes = await currentUpgrade.pendingNotice();
+      expect(currentNotes?.version, '1.0.4');
+      expect(currentNotes?.buildNumber, '55');
+      expect(currentNotes?.notes, preparedNotes.single['notes']);
+      expect(jsonDecode(observed!)['build'], '52');
+      expect(await currentUpgrade.acknowledge(currentNotes!), isTrue);
+      expect(await service().pendingNotice(), isNull);
+      final cleanInstall = fresh.add(const Duration(days: 2));
+      metadata = package(
+        version: '1.0.4',
+        build: '55',
+        installed: cleanInstall,
+        updated: cleanInstall,
+      );
       expect(await service().pendingNotice(), isNull);
     },
   );
@@ -297,13 +329,15 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, null);
       });
+      var nativeVersion = '1.0.3';
+      var nativeBuild = '52';
       AppUpgradeNoticeService nativeService() => AppUpgradeNoticeService(
         platform: TargetPlatform.iOS,
         loadPackageInfo: () async => PackageInfo(
           appName: 'Foxie Litch',
           packageName: 'com.foxieproducts.litchMobile',
-          version: '1.0.3',
-          buildNumber: '52',
+          version: nativeVersion,
+          buildNumber: nativeBuild,
         ),
       );
       final migrated = nativeService();
@@ -345,6 +379,38 @@ void main() {
       expect(await nativeService().pendingNotice(), isNull);
       expect(jsonDecode(nativeIdentity!)['build'], '52');
       expect(await nativeService().pendingNotice(), isNull);
+
+      nativeVersion = '1.0.4';
+      nativeBuild = '55';
+      final currentRelease = (storeCatalog['releases'] as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .singleWhere(
+            (release) =>
+                release['version'] == nativeVersion &&
+                release['build_number'] == nativeBuild,
+          );
+      for (final priorBuild in ['51', '52']) {
+        nativeIdentity = jsonEncode({
+          'schema': 1,
+          'platform': 'iOS',
+          'package': 'com.foxieproducts.litchMobile',
+          'version': priorBuild == '51' ? '1.0.2' : '1.0.3',
+          'build': priorBuild,
+          'installed': null,
+        });
+        final nextUpgrade = nativeService();
+        final nextNotice = await nextUpgrade.pendingNotice();
+        expect(nextNotice?.version, nativeVersion);
+        expect(nextNotice?.buildNumber, nativeBuild);
+        expect(nextNotice?.notes, currentRelease['notes']);
+        expect(jsonDecode(nativeIdentity!)['build'], priorBuild);
+        expect(await nextUpgrade.acknowledge(nextNotice!), isTrue);
+        expect(await nativeService().pendingNotice(), isNull);
+        expect(jsonDecode(nativeIdentity!)['build'], nativeBuild);
+      }
+      nativeIdentity = null;
+      expect(await nativeService().pendingNotice(), isNull);
+      expect(jsonDecode(nativeIdentity!)['build'], nativeBuild);
     },
   );
 }

@@ -1434,6 +1434,129 @@ void main() {
     },
   );
 
+  test(
+    'out-of-range Identify returns unavailable without opening BLE',
+    () async {
+      final board = OwnerPairingBoard();
+      final service = LitchBleService(
+        ble: board,
+        pendingOtaStore: MemoryOtaTargetStore(),
+      );
+      addTearDown(() => disposeBoard(service, board));
+      expect(
+        await service.sendIdentify('board-1', 100, durationMs: 3000),
+        isFalse,
+      );
+      expect(board.connections, isEmpty);
+      expect(board.identifyCommands, isEmpty);
+    },
+  );
+
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final firstUnsupported in [false, true]) {
+      testWidgets(
+        'Identify All uses real temporary service sessions for both boards on $platform unsupported=$firstUnsupported',
+        (tester) async {
+          tester.view.physicalSize = const Size(390, 844);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final board = OwnerPairingBoard()
+            ..state = 6
+            ..flags = 5
+            ..reason = 8;
+          final service = _IdentifyUiService(board);
+          await tester.pumpWidget(
+            MaterialApp(home: ConnectionGateScreen(bleService: service)),
+          );
+          await tester.runAsync(() => turns());
+          await tester.pump();
+          await tester.tap(find.widgetWithText(OutlinedButton, 'Identify all'));
+          await tester.pump();
+          for (var index = 0; index < 2; ++index) {
+            for (
+              var pass = 0;
+              pass < 100 && board.connections.length <= index;
+              ++pass
+            ) {
+              await tester.runAsync(() => turns(1));
+              await tester.pump(const Duration(milliseconds: 10));
+            }
+            expect(board.connections.length, index + 1);
+            board.typedIdentifySupported = !(firstUnsupported && index == 0);
+            await tester.runAsync(() async {
+              board.connections[index].add(
+                ConnectionStateUpdate(
+                  deviceId: 'board-${index + 1}',
+                  connectionState: DeviceConnectionState.connected,
+                  failure: null,
+                ),
+              );
+            });
+            final expectedCommands =
+                (index + 1) * 2 - (firstUnsupported ? 1 : 0);
+            for (
+              var pass = 0;
+              pass < 100 && board.identifyCommands.length < expectedCommands;
+              ++pass
+            ) {
+              await tester.runAsync(() => turns(1));
+              await tester.pump(const Duration(milliseconds: 10));
+            }
+            expect(board.identifyCommands.length, expectedCommands);
+          }
+          var finished = false;
+          unawaited(service.identification!.then((_) => finished = true));
+          for (var pass = 0; pass < 100 && !finished; ++pass) {
+            await tester.runAsync(() => turns(1));
+            await tester.pump(const Duration(milliseconds: 10));
+          }
+          expect(finished, isTrue);
+          await tester.pump();
+          expect(
+            board.identifyCommands.map((packet) => packet.body[1]),
+            firstUnsupported ? [0, 0, 1] : [0, 1, 0, 1],
+          );
+          if (!firstUnsupported)
+            expect(board.identifyCommands[1].body, [
+              1,
+              1,
+              1,
+              0,
+              0,
+              255,
+              184,
+              11,
+            ]);
+          expect(board.identifyCommands.last.body, [
+            1,
+            1,
+            2,
+            0,
+            0,
+            255,
+            184,
+            11,
+          ]);
+          expect(board.pairingCommands, isEmpty);
+          expect(board.productQueries, isEmpty);
+          expect(service.isConnected, isFalse);
+          expect(
+            find.text(
+              firstUnsupported
+                  ? 'Identify sent to 1/2 boards.'
+                  : 'Identify sent to all boards.',
+            ),
+            findsOneWidget,
+          );
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.runAsync(() => disposeBoard(service, board));
+        },
+        variant: TargetPlatformVariant.only(platform),
+      );
+    }
+  }
+
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
     test(
       'temporary typed Identify uses the real session owner without a claim on $platform',

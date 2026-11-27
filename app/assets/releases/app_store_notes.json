@@ -2,6 +2,16 @@
   "schema_version": 1,
   "releases": [
     {
+      "version": "1.0.4",
+      "build_number": "55",
+      "locale": "en-US",
+      "notes": "Paired boards show their advertised name and the same four-character ID on Android and iOS when used with firmware 1.0.4. Bluetooth pairing gives you more time after button confirmation, and Android gives clearer help when a saved pairing needs to be renewed.",
+      "source": {
+        "kind": "prepared_app_release_text",
+        "intended_stores": ["app_store", "google_play"]
+      }
+    },
+    {
       "version": "1.0.3",
       "build_number": "52",
       "locale": "en-US",

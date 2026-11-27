@@ -102,6 +102,27 @@ void main() {
         );
         expect(controls, contains('X'));
         expect(start, contains('Bluetooth'));
+        // Getting started is the rendered connection article; the legacy
+        // manualConnectionBody is not a topic in the current reader.
+        expect(start, contains(strings.identifyAction));
+        expect(start, contains(strings.identifyAllAction));
+        for (final token in ['40', '1.0.4', 'Android', 'iOS']) {
+          expect(start, contains(token), reason: '$locale: $token');
+        }
+        final pairingAndIdentifyTimings = switch (locale.languageCode) {
+          'de' => ['zehn Sekunden', 'drei Sekunden'],
+          'es' => ['diez segundos', 'tres segundos'],
+          'fr' => ['dix secondes', 'trois secondes'],
+          'it' => ['dieci secondi', 'tre secondi'],
+          _ => ['ten seconds', 'three seconds'],
+        };
+        for (final timing in pairingAndIdentifyTimings) {
+          expect(start, contains(timing), reason: '$locale: $timing');
+        }
+        expect(strings.connectionHelpBasics, contains('Bluetooth'));
+        expect(strings.manualFactoryResetBody, contains('Bluetooth'));
+        expect(strings.manualRecoveryBody, contains('Bluetooth'));
+        expect(strings.manualMovesBody, contains(strings.minimalAnimations));
         // Number words and prose directions are localized; the shared recovery
         // paragraph, gesture order and capacity are the maintained contract.
         final timings = switch (locale.languageCode) {

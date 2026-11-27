@@ -132,6 +132,7 @@ void CheckCoachingHintThroughPaletteHold() {
     bool topLead = false;
     bool bottomLead = false;
     bool centerPairTogether = true;
+    bool centerPulseObserved = false;
     const int ranks = int(to / 8U) - from / 8U;
     const int files = int(to % 8U) - from % 8U;
     const bool knight = (std::abs(ranks) == 2 && std::abs(files) == 1) ||
@@ -190,14 +191,35 @@ void CheckCoachingHintThroughPaletteHold() {
         topLead = topLead || lead > 0;
         bottomLead = bottomLead || lead < 0;
         if (repeat != 90U) {
-            Check(session.Advance(DPAD_VALUE_REPEAT_RATE_MS) == VIRTUAL_LITCH_OK,
+            const auto wheelBefore = P1Wheel(session);
+            const auto semanticBefore = Peak(session.SemanticFrame().board[to][static_cast<uint8_t>(PIECE)]);
+            const auto topBefore = Peak(session.PhysicalFrame().pixels[landing.indices[0]]);
+            const auto bottomBefore = Peak(session.PhysicalFrame().pixels[landing.indices[1]]);
+            const auto scaleBefore = session.PhysicalFrame().applied_brightness_scale_65535;
+            constexpr auto midRepeat = DPAD_VALUE_REPEAT_RATE_MS / 2U;
+            Check(session.Advance(midRepeat) == VIRTUAL_LITCH_OK,
+                  "sample movement within one unchanged palette repeat interval");
+            sample();
+            const auto semanticAfter = Peak(session.SemanticFrame().board[to][static_cast<uint8_t>(PIECE)]);
+            const auto topAfter = Peak(session.PhysicalFrame().pixels[landing.indices[0]]);
+            const auto bottomAfter = Peak(session.PhysicalFrame().pixels[landing.indices[1]]);
+            const bool pulse = P1Wheel(session) == wheelBefore &&
+                session.PhysicalFrame().applied_brightness_scale_65535 == scaleBefore &&
+                semanticAfter > semanticBefore && topAfter > topBefore && bottomAfter > bottomBefore;
+            if (pulse && !centerPulseObserved) {
+                std::printf("[PALETTE_HINT_PULSE] t=%u wheel=%u scale=%u semantic=%u>%u top=%u>%u bottom=%u>%u\n",
+                    session.State().now_ms, wheelBefore, scaleBefore,
+                    semanticBefore, semanticAfter, topBefore, topAfter, bottomBefore, bottomAfter);
+            }
+            centerPulseObserved = centerPulseObserved || pulse;
+            Check(session.Advance(DPAD_VALUE_REPEAT_RATE_MS - midRepeat) == VIRTUAL_LITCH_OK,
                   "V3.3 samples the board on the actual repeat cadence");
         }
     }
     const auto heldWheel = P1Wheel(session);
     Check(heldWheel != 3U &&
-              (horizontalLanding ? centerPairTogether : topLead && bottomLead),
-          "the mapped Hint retains the final horizontal center pair or vertical emitter order while the palette changes");
+              (horizontalLanding ? centerPairTogether && centerPulseObserved : topLead && bottomLead),
+          "the mapped Hint pulses its horizontal center pair at fixed palette and brightness or preserves vertical emitter order while the palette changes");
     sample("end-of-hold");
     Check(session.SetButtonDown(VIRTUAL_LITCH_OWNER_P1, Button::Up, false) ==
               VIRTUAL_LITCH_OK &&

@@ -740,8 +740,20 @@ void main() {
         await finish(service.disconnect());
         await finish(service.connect(_boardId));
         await until(() => controller.inspectedBoardActive == false);
-        await tester.tap(find.byKey(const ValueKey('main-destination-setup')));
+        // Native mode proof can follow the tick's Flutter frame. Present its
+        // current-link gate before tapping, with the old prerequisites held.
+        final setup = find.byKey(const ValueKey('main-destination-setup'));
+        await until(() => setup.hitTestable().evaluate().isNotEmpty);
+        expect(orientation.isCompleted, isFalse);
+        expect(draftGate.isCompleted, active);
+        await tester.tap(setup.hitTestable());
         await tester.pump();
+        expect(
+          tester
+              .widget<NavigationBar>(find.byType(NavigationBar))
+              .selectedIndex,
+          2,
+        );
         if (!draftGate.isCompleted) draftGate.complete(store);
         orientation.complete();
         await finish(library.ready);

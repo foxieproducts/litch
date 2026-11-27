@@ -31,6 +31,7 @@ class LitchOtaControlChannel {
   int _maxRxBytes = 0;
   bool _directPacketsRetired = false;
   bool _disposed = false;
+  final Set<void Function()> _retryWaiters = {};
 
   // Closure is a setup-lifetime signal for capability waiters. Public OTA
   // consumers retain the existing no-reply/explicit-renewal semantics.
@@ -94,6 +95,25 @@ class LitchOtaControlChannel {
     final StreamSubscription<List<int>>? subscription = _packetSubscription;
     _packetSubscription = null;
     await subscription?.cancel();
+  }
+
+  /// Keep retry backoff within this notification owner's lifetime. Retiring
+  /// the channel or canceling a support request wakes the caller immediately;
+  /// the caller still checks its connection/channel before sending again.
+  Future<void> waitToRetry(Duration delay, {Future<void>? cancelled}) async {
+    if (_disposed) return;
+    final done = Completer<void>();
+    Timer? timer;
+    void finish() {
+      timer?.cancel();
+      _retryWaiters.remove(finish);
+      if (!done.isCompleted) done.complete();
+    }
+
+    _retryWaiters.add(finish);
+    timer = Timer(delay, finish);
+    cancelled?.then((_) => finish());
+    await done.future;
   }
 
   Future<OtaStatusEvent?> waitFor(
@@ -194,6 +214,9 @@ class LitchOtaControlChannel {
       return;
     }
     _disposed = true;
+    for (final finish in _retryWaiters.toList()) {
+      finish();
+    }
     ++_packetGeneration;
     _notificationFailure = null;
     await _packetSubscription?.cancel();

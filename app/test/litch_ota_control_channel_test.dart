@@ -6,6 +6,89 @@ import 'package:litch_mobile/src/services/ota/litch_ota_control_channel.dart';
 import 'package:litch_mobile/src/services/ota/ota_status_event.dart';
 
 void main() {
+  testWidgets('retry pause keeps its live delay and cancels with its owner', (
+    tester,
+  ) async {
+    final packets = StreamController<List<int>>.broadcast(sync: true);
+    final channel = LitchOtaControlChannel(
+      deviceId: 'board',
+      connectionToken: 1,
+      generation: 1,
+      subscribe: () => packets.stream,
+    );
+    var finished = false;
+    unawaited(
+      channel
+          .waitToRetry(const Duration(milliseconds: 250))
+          .then((_) => finished = true),
+    );
+    await tester.pump(const Duration(milliseconds: 249));
+    expect(finished, isFalse);
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(finished, isTrue);
+
+    finished = false;
+    unawaited(
+      channel
+          .waitToRetry(const Duration(milliseconds: 350))
+          .then((_) => finished = true),
+    );
+    final replacement = LitchOtaControlChannel(
+      deviceId: 'board',
+      connectionToken: 2,
+      generation: 2,
+      subscribe: () => packets.stream,
+    );
+    var replacementFinished = false;
+    unawaited(
+      replacement
+          .waitToRetry(const Duration(milliseconds: 350))
+          .then((_) => replacementFinished = true),
+    );
+    await channel.dispose();
+    await tester.pump();
+    expect(finished, isTrue);
+    expect(replacementFinished, isFalse);
+    // An already retired owner cannot create another retry timer.
+    await channel.waitToRetry(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(replacementFinished, isTrue);
+    await replacement.dispose();
+    await packets.close();
+  });
+
+  testWidgets('support cancellation cancels only its retry pause', (
+    tester,
+  ) async {
+    final packets = StreamController<List<int>>.broadcast(sync: true);
+    final channel = LitchOtaControlChannel(
+      deviceId: 'board',
+      connectionToken: 1,
+      generation: 1,
+      subscribe: () => packets.stream,
+    );
+    final stopped = Completer<void>();
+    var canceledDone = false, liveDone = false;
+    unawaited(
+      channel
+          .waitToRetry(const Duration(seconds: 1), cancelled: stopped.future)
+          .then((_) => canceledDone = true),
+    );
+    unawaited(
+      channel
+          .waitToRetry(const Duration(milliseconds: 250))
+          .then((_) => liveDone = true),
+    );
+    stopped.complete();
+    await tester.pump();
+    expect(canceledDone, isTrue);
+    expect(liveDone, isFalse);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(liveDone, isTrue);
+    await channel.dispose();
+    await packets.close();
+  });
+
   test(
     'active capability waiter observes closure while ordinary OTA consumers keep existing semantics',
     () async {

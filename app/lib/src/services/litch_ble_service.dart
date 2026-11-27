@@ -6531,8 +6531,10 @@ class LitchBleService {
       }
       if (attempt < 3) {
         _pushAppLog('fw_version retrying (attempt $attempt/3).');
-        final pause = Future<void>.delayed(const Duration(milliseconds: 350));
-        await (supportScope?.wait(pause) ?? pause);
+        await channel.waitToRetry(
+          const Duration(milliseconds: 350),
+          cancelled: supportScope?.stopped,
+        );
       }
     }
 
@@ -7660,8 +7662,7 @@ class LitchBleService {
       }
       if (!current()) return false;
       if (attempt + 1 < attempts) {
-        final pause = Future<void>.delayed(delay);
-        await (supportScope?.wait(pause) ?? pause);
+        await channel.waitToRetry(delay, cancelled: supportScope?.stopped);
       }
     }
     return false;

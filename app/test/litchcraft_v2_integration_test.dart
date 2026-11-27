@@ -28,6 +28,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fixtures/litchcraft_v2_functional_peer.dart';
 
+// Keep the Craft transport real while observing the facade's unavailable OTA
+// session, so teardown always meets a live firmware-version retry.
+class _VersionRetryService extends LitchcraftV2FunctionalService {
+  _VersionRetryService(super.peer);
+  int versionSessionAttempts = 0;
+
+  @override
+  Future<ConnectionSession?> openConnectionSession(String deviceId) async {
+    versionSessionAttempts++;
+    return super.openConnectionSession(deviceId);
+  }
+}
+
 class _InterruptedPeer extends LitchcraftV2FunctionalPeer {
   bool failChunk = false, loseCommitAck = false;
   int commits = 0;
@@ -1989,7 +2002,7 @@ void main() {
       peer.physicalPaint(2, 0xabcdef);
       peer.revision = 19;
       final before = encodeLitchcraftAnimationDocument(peer.document);
-      final ble = LitchcraftV2FunctionalService(peer);
+      final ble = _VersionRetryService(peer);
       final store = LitchcraftArtworkStore(
         await SharedPreferences.getInstance(),
       );
@@ -2044,11 +2057,56 @@ void main() {
         ),
         isEmpty,
       );
+      // Make the background Firmware page's unavailable-version path explicit;
+      // its asynchronous startup otherwise reaches this retry nondeterministically.
+      final attemptsBeforeRead = ble.versionSessionAttempts;
+      var versionReadFinished = false;
+      final versionRead = ble.fetchBoardFirmwareVersion(deviceId: 'board').then(
+        (value) {
+          versionReadFinished = true;
+          return value;
+        },
+      );
+      for (
+        var i = 0;
+        i < 1000 && ble.versionSessionAttempts == attemptsBeforeRead;
+        i++
+      ) {
+        await tester.pump(const Duration(milliseconds: 1));
+        if (i % 100 == 0) {
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        }
+      }
+      expect(ble.versionSessionAttempts, greaterThan(attemptsBeforeRead));
+      await tester.pump();
+      expect(versionReadFinished, isFalse);
+      final firstAttempt = ble.versionSessionAttempts;
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        ble.versionSessionAttempts,
+        greaterThan(firstAttempt),
+        reason: 'An active channel still performs its bounded retry.',
+      );
+      expect(versionReadFinished, isFalse);
+      final attemptsAtDispose = ble.versionSessionAttempts;
       await tester.pumpWidget(const SizedBox());
       library.dispose();
       controller.dispose();
       final disposing = ble.dispose();
       await finish(tester, disposing);
+      expect(
+        versionReadFinished,
+        isTrue,
+        reason:
+            'Disposal retires the live version retry without waiting for its delay.',
+      );
+      expect(await versionRead, isNull);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(ble.versionSessionAttempts, attemptsAtDispose);
+      expect(
+        encodeLitchcraftAnimationDocument(peer.document).bytes,
+        before.bytes,
+      );
       await peer.close();
       debugDefaultTargetPlatformOverride = null;
     },

@@ -25,7 +25,8 @@ class CandidateFixture:
         self.base = Path(directory)
         self.root = self.base / "source"
         self.root.mkdir()
-        for name in candidate.BUILD_INPUTS:
+        for name in (*candidate.BUILD_INPUTS, candidate.release_identity.PUBSPEC,
+                     candidate.release_identity.APP_IDENTITY):
             if name in ("lib/litch-max/LICENSE", "lib/litch-max.snapshot.json"):
                 continue
             path = self.root / name
@@ -71,6 +72,7 @@ class CandidateFixture:
         """Reconstruct the old receipt format without granting new publication."""
         receipt = json.loads((self.output / "candidate.json").read_text())
         receipt["schema_version"] = 1
+        receipt["app_identity"] = candidate.release_identity.check(self.root, "app")
         receipt.pop("compliance_bundle")
         receipt.pop("notes_presentation", None)
         receipt.pop("build_execution", None)
@@ -88,6 +90,20 @@ class OfficialCandidateTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.fixture = CandidateFixture(self.temporary.name)
 
+    def test_105_candidate_uses_firmware_version_with_an_older_app(self):
+        f = self.fixture
+        (f.root / candidate.VERSION_HEADER).write_text('const char* FIRMWARE_VERSION = "1.0.5";\n')
+        launch = (f.root / candidate.INITIAL_NOTES).read_bytes()
+        (f.root / candidate.HISTORY_NOTES).write_bytes(b"## 1.0.5\n\nStored artwork.\n\n## 1.0.2\n\n" + launch)
+        f.git("add", ".")
+        f.git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "Firmware only")
+        f.source_sha = f.git("rev-parse", "HEAD").decode().strip()
+        digest = f.prepare("beta")
+        receipt = candidate.verify(f.output, f.source_sha, digest)
+        self.assertEqual(receipt["version"], "1.0.5")
+        self.assertNotIn("app_identity", receipt)
+        self.assertFalse(any(path.startswith("app/") for path in receipt["input_sha256"]))
+
     def test_curated_history_is_newest_first_and_keeps_original_launch(self):
         f = self.fixture
         launch = b"Initial release\n\nOriginal customer notes.\n"
@@ -98,8 +114,7 @@ class OfficialCandidateTests(unittest.TestCase):
         f.git("-c", "user.name=Test", "-c", "user.email=test@example.invalid",
               "commit", "--quiet", "-m", "Add release notes")
         source = f.git("rev-parse", "HEAD").decode().strip()
-        with patch.object(candidate.release_identity, "source_identity", return_value={
-                "version": "1.0.3", "native_version": "1.0.3"}):
+        with patch.object(candidate, "source_firmware_version", return_value="1.0.3"):
             self.assertEqual(candidate.draft_notes(f.root, source, f.source_sha), history)
         newer = b"## 1.0.3-1\n\nNewer beta.\n\n" + history
         self.assertEqual(len(candidate.history_sections(newer, "1.0.3-1")), 3)
@@ -128,9 +143,7 @@ class OfficialCandidateTests(unittest.TestCase):
         f.git("-c", "user.name=Test", "-c", "user.email=test@example.invalid",
               "commit", "--quiet", "-m", "Prepare customer history")
         f.source_sha = f.git("rev-parse", "HEAD").decode().strip()
-        identity = {"version": "1.0.3", "native_version": "1.0.3", "package_code": 52}
-        with patch.object(candidate.release_identity, "source_identity", return_value=identity), \
-             patch.object(candidate.release_identity, "release_series", return_value="1.0.3"):
+        with patch.object(candidate, "source_firmware_version", return_value="1.0.3"):
             digest = f.prepare("beta")
             beta_manifest = json.loads((f.output / "catalog/manifest_beta.json").read_text())
             review = f.base / "stable-review"
@@ -207,7 +220,7 @@ class OfficialCandidateTests(unittest.TestCase):
         f = self.fixture
         digest = f.prepare()
         receipt = candidate.verify(f.output, f.source_sha, digest)
-        self.assertEqual(receipt["schema_version"], 2)
+        self.assertEqual(receipt["schema_version"], 3)
         original = (f.output / "candidate.json").read_bytes()
         descriptor = receipt["compliance_bundle"]
         for changes in ({"source_sha": "0" * 40}, {"firmware_sha256": "0" * 64},
@@ -250,6 +263,22 @@ class OfficialCandidateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "historical candidates are read-only"):
             candidate.prepare_notes(f.root, f.output, f.source_sha, digest,
                                     "stable", f.base_sha, f.base / "review")
+
+    def test_schema_two_retains_its_original_paired_identity_check(self):
+        f = self.fixture
+        digest = f.prepare()
+        receipt = candidate.verify(f.output, f.source_sha, digest)
+        receipt["schema_version"] = 2
+        receipt["app_identity"] = candidate.release_identity.check(f.root, "app")
+        path = f.output / "candidate.json"
+        data = candidate.artifact.render_manifest_json(receipt).encode()
+        path.write_bytes(data)
+        self.assertEqual(candidate.verify(f.output, f.source_sha, candidate.sha256(data)), receipt)
+        receipt["app_identity"]["version"] = "1.0.4"
+        data = candidate.artifact.render_manifest_json(receipt).encode()
+        path.write_bytes(data)
+        with self.assertRaisesRegex(ValueError, "app identity"):
+            candidate.verify(f.output, f.source_sha, candidate.sha256(data))
 
     def test_source_bound_notes_for_both_channels_precede_build_and_preserve_one_image(self):
         f = self.fixture

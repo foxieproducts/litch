@@ -14,6 +14,7 @@ RELEASE_TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RELEASE_TOOLS))
 
 import release_identity as identity
+from tag_published_app import tag_published_app
 
 
 def published(version, *, channel="beta", draft=False, date="2026-09-07T12:00:00Z"):
@@ -51,10 +52,46 @@ class ReleaseIdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "0.9.0-N"):
             identity.check(self.root)
 
+    def test_products_can_advance_independently(self):
+        self.prepare()
+        before = identity.read_sources(self.root)
+        identity.prepare(self.root, "1.0.5", None, None, [published("1.0.4")],
+                         manifest("1.0.4"), product="firmware")
+        self.assertEqual(identity.check(self.root, "firmware"), {"version": "1.0.5"})
+        for path in (identity.PUBSPEC, identity.APP_IDENTITY):
+            self.assertEqual((self.root / path).read_text(), before[path])
+        identity.prepare(self.root, "2.0.0", 55, 54, None, None, product="app")
+        self.assertEqual(identity.check(self.root), {
+            "firmware": {"version": "1.0.5"},
+            "app": {"version": "2.0.0", "native_version": "2.0.0", "package_code": 55}})
+
+    def test_published_store_tags_verify_exact_build_and_never_move(self):
+        self.prepare()
+        def git(*args):
+            return subprocess.check_output(["git", "-C", str(self.root), *args], text=True).strip()
+        git("init", "-q")
+        git("add", ".")
+        git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "package")
+        built = git("rev-parse", "HEAD")
+        git("-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+            "commit", "--allow-empty", "-qm", "after submission")
+        git("init", "-q", "--bare", "origin.git")
+        git("remote", "add", "origin", str(self.root / "origin.git"))
+        for platform in ("android", "ios"):
+            with self.assertRaisesRegex(ValueError, "store version or build"):
+                tag_published_app(self.root, platform, "0.9.0", 4, built)
+            for _ in range(2):
+                tag = tag_published_app(self.root, platform, "0.9.0", 3, built)
+                self.assertEqual(tag, f"app-{platform}-0.9.0-build-3")
+                self.assertEqual(git("ls-remote", "origin", "refs/tags/" + tag).split()[0], built)
+            with self.assertRaisesRegex(ValueError, "does not point"):
+                tag_published_app(self.root, platform, "0.9.0", 3, git("rev-parse", "HEAD"))
+        self.assertEqual(len(git("ls-remote", "--tags", "origin").splitlines()), 2)
+
     def test_preparation_sets_all_sources_and_native_code_is_independent_of_n(self):
         prepared = self.prepare()
         self.assertEqual(prepared, {"version": "0.9.0-2", "native_version": "0.9.0", "package_code": 3})
-        self.assertEqual(identity.check(self.root), prepared)
+        self.assertEqual(identity.check(self.root, "app"), prepared)
         self.assertIn("version: 0.9.0+3\n", (self.root / identity.PUBSPEC).read_text())
         self.assertIn("version: '0.9.0-2'", (self.root / identity.APP_IDENTITY).read_text())
 
@@ -283,7 +320,7 @@ class ReleaseIdentityTests(unittest.TestCase):
         prepared = self.prepare(version="0.9.5-10", code=14, previous=13,
                                 releases=history, current=manifest("0.9.0-5"))
         self.assertEqual(prepared, {"version": "0.9.5-10", "native_version": "0.9.5", "package_code": 14})
-        self.assertEqual(identity.check(self.root), prepared)
+        self.assertEqual(identity.check(self.root, "app"), prepared)
         self.assertEqual(json.dumps(history), before_history)
         before = identity.read_sources(self.root)
         self.prepare(version="0.9.5-10", code=14, previous=13,
@@ -359,7 +396,7 @@ class ReleaseIdentityTests(unittest.TestCase):
         prepared = self.prepare(version="0.9.5-10", code=21, previous=20,
                                 releases=history, current=manifest("0.9.5-11"))
         self.assertEqual(prepared, {"version": "0.9.5-10", "native_version": "0.9.5", "package_code": 21})
-        self.assertEqual(identity.check(self.root), prepared)
+        self.assertEqual(identity.check(self.root, "app"), prepared)
         self.assertEqual(json.dumps(history), before_history)
         with self.assertRaisesRegex(ValueError, "next unpublished beta is 0.9.5-12"):
             identity.check_next_beta("0.9.5-10", history)
@@ -413,7 +450,7 @@ class ReleaseIdentityTests(unittest.TestCase):
                 prepared = self.prepare(version=version, code=code, previous=code-1,
                                         releases=history, current=manifest(prior))
                 self.assertEqual(prepared, {"version": version, "native_version": series, "package_code": code})
-                self.assertEqual(identity.check(self.root), prepared)
+                self.assertEqual(identity.check(self.root, "app"), prepared)
                 self.assertIn(f"version: {series}+{code}\n", (self.root / identity.PUBSPEC).read_text())
                 self.assertEqual(identity.next_beta_version(history, series=series), version)
                 self.assertEqual(json.dumps(history), before_history)
@@ -428,7 +465,7 @@ class ReleaseIdentityTests(unittest.TestCase):
                         self.prepare(version=version, code=code, previous=code-1,
                                      releases=history, current=manifest("1.0.2"))
                     self.assertEqual(identity.read_sources(self.root), before)
-        self.assertEqual(identity.next_beta_version(history), "1.0.4")
+        self.assertEqual(identity.next_beta_version(history), "1.0.5")
         for series, prior in (("1.0.2", "1.0.1-0"), ("1.0.3", "1.0.2"),
                               ("1.0.4", "1.0.3")):
             history = [published(prior)]
@@ -460,7 +497,7 @@ class ReleaseIdentityTests(unittest.TestCase):
             prepared = self.prepare(version=version, code=code, previous=code-1,
                                     releases=[published("0.9.7-0")], current=manifest("0.9.7-0"))
             self.assertEqual(prepared, {"version": version, "native_version": "0.9.7", "package_code": code})
-            self.assertEqual(identity.check(self.root), prepared)
+            self.assertEqual(identity.check(self.root, "app"), prepared)
             self.assertEqual(identity.next_beta_version(after_zero, series="0.9.7"), "0.9.7-1")
             with self.assertRaisesRegex(ValueError, "next unpublished beta"):
                 identity.check_next_beta(version, after_zero + [published(later)])
@@ -564,7 +601,7 @@ class ReleaseIdentityTests(unittest.TestCase):
                      releases=history, current=manifest("0.9.0-7"))
         history.append(published("0.9.5-11", date="2026-10-24T12:00:00Z"))
         before = identity.read_sources(self.root)
-        self.assertEqual(identity.check(self.root),
+        self.assertEqual(identity.check(self.root, "app"),
                          {"version": "0.9.5-11", "native_version": "0.9.5", "package_code": 15})
         # Intercept every source mutation so even the rejected old behavior
         # cannot actually replace the coherent fixture's three version files.

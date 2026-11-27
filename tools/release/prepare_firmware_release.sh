@@ -114,7 +114,7 @@ if [[ -z "$release_version" ]]; then
     release_version="$(sed -n 's/.*FIRMWARE_VERSION = "\([^"]*\)".*/\1/p' "$version_header" | head -n 1)"
   fi
   if [[ -z "$release_version" ]]; then
-    release_version="$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)"
+    release_version="$(git describe --tags --match 'fw-*' --always --dirty 2>/dev/null || git rev-parse --short HEAD)"
   fi
 fi
 

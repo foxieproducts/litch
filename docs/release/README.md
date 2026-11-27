@@ -7,6 +7,8 @@
 
 ## Companion app source
 
+Published iOS and Android builds use separate Git tags, `app-ios-<version>-build-<number>` and `app-android-<version>-build-<number>`. Each tag identifies the commit used to build that store package. See the [app publication instructions](../../app/README.md#publishing-the-companion-app).
+
 For app version 1.0.2 (build 51), download the
 [companion app source and licenses](https://github.com/foxieproducts/litch/archive/refs/tags/fw-stable-1.0.2.zip).
 The [app directory](../../app/) contains the Flutter, iOS and Android projects,

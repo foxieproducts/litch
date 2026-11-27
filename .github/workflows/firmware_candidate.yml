@@ -76,7 +76,7 @@ jobs:
           if not ref.strip() or len(ref.encode()) > 2048 or any(ord(c) < 32 or ord(c) == 127 for c in ref):
               raise SystemExit('Supply a public, single-line reference to local validation.')
           PY
-          python3 tools/release/release_identity.py check
+          python3 tools/release/release_identity.py check --product firmware
           python3 tools/release/verify_release_artifacts.py
           python3 - <<'PY'
           from pathlib import Path

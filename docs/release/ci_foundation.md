@@ -46,15 +46,15 @@ catalog and `stable` serves Release. Contributors can build the same source
 locally. Publishing requires access to the repository's `firmware-publishing`
 environment.
 
-The first releases in the 1.0.2, 1.0.3 and 1.0.4 series use the bare version in app
-and firmware source, native packages, release tags and manifests. Each occupies
+Starting with firmware 1.0.2, the first release in each series uses the bare version in firmware source, release tags and manifests. Each occupies
 sequence zero. For example, `1.0.3` and `1.0.3-0` identify the same slot and
 the next Beta in that series is `1.0.3-1`. Earlier series keep their existing
-spellings. Local retries and stable promotions
-do not advance the sequence; native package codes remain independently checked
-against prior store uploads. Prepare all source identities together with
-`tools/release/release_identity.py` after reconciling complete release history
-and the live Beta catalog.
+spellings. Local retries and stable promotions reuse the candidate's version.
+Prepare firmware independently with `tools/release/release_identity.py prepare-firmware`
+after reconciling complete release history and the live Beta catalog. On publication,
+promotion creates and verifies `fw-beta-<firmware-version>` or `fw-stable-<firmware-version>`
+at the firmware build commit. The [app publication instructions](../../app/README.md#publishing-the-companion-app)
+cover store versions, build numbers and their separate tags.
 
 The initial 1.0.2 build reads the [launch notes](initial_1.0.2.txt) from its
 root commit for both channels. GitHub and the app show the same customer text.

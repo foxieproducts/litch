@@ -33,10 +33,7 @@ BUILD_INPUTS = (
     VERSION_HEADER,
     INITIAL_NOTES,
     "boards/litch_esp32s3.json",
-    "app/pubspec.yaml",
-    release_identity.APP_IDENTITY,
     "tools/release/release_identity.py",
-    "app/pubspec.lock",
     ".github/workflows/firmware_candidate.yml",
     "tools/release/official_candidate.py",
     "tools/release/github_promotion.py",
@@ -121,27 +118,32 @@ def validate_reviewed_history(data: bytes, original: bytes, version: str) -> Non
         fail("reviewed notes must preserve earlier release sections")
 
 
+def source_firmware_version(root: Path, commit: str) -> str:
+    return release_identity.firmware_version(git(root, "show", f"{commit}:{VERSION_HEADER}").decode())
+
+
+def series_tuple(version: str) -> tuple[int, ...]:
+    return tuple(map(int, release_identity.release_series(version).split(".")))
+
+
 def draft_notes(root: Path, source_sha: str, base_sha: str) -> bytes:
     if not SOURCE_PATTERN.fullmatch(base_sha):
         fail("notes base must be the full source SHA of the last official release")
     # The reviewed public launch is one new root, not a changelog range over
     # the retained old release tags. Subsequent commits keep normal ancestry.
-    identity = release_identity.source_identity({
-        name: git(root, "show", f"{source_sha}:{name}").decode("utf-8")
-        for name in release_identity.SOURCE_PATHS
-    })
-    if tuple(map(int, identity["native_version"].split("."))) >= (1, 0, 3):
+    version = source_firmware_version(root, source_sha)
+    if series_tuple(version) >= (1, 0, 3):
         if base_sha == source_sha:
             fail("no commits since the selected release; choose a newer candidate")
         git(root, "merge-base", "--is-ancestor", base_sha, source_sha)
         notes = git(root, "show", f"{source_sha}:{HISTORY_NOTES}")
-        sections = history_sections(notes, identity["version"])
+        sections = history_sections(notes, version)
         initial = git(root, "show", f"{source_sha}:{INITIAL_NOTES}")
         if sections[-1] != b"## 1.0.2\n\n" + initial:
             fail("firmware notes must retain the complete original 1.0.2 text")
         return notes
     parents = git(root, "rev-list", "--parents", "-n", "1", source_sha).decode().split()
-    if identity["version"] == "1.0.2" and len(parents) == 1:
+    if version == "1.0.2" and len(parents) == 1:
         git(root, "rev-parse", "--verify", base_sha + "^{commit}")
         notes = git(root, "show", f"{source_sha}:{INITIAL_NOTES}")
         notes.decode("utf-8")
@@ -206,14 +208,11 @@ def prepare_source_notes(root: Path, expected_sha: str, channel: str,
                          base_sha: str, output: Path) -> None:
     """Prepare editable notes bound to reviewed source before compilation."""
     check_source(root, expected_sha)
-    identity = release_identity.source_identity({
-        name: git(root, "show", f"HEAD:{name}").decode("utf-8")
-        for name in release_identity.SOURCE_PATHS
-    })
-    artifact.release_names(channel, identity["version"], "0" * 64, "0" * 64)
+    version = source_firmware_version(root, expected_sha)
+    artifact.release_names(channel, version, "0" * 64, "0" * 64)
     _write_notes_draft(root, expected_sha, base_sha, output, {
         "schema_version": 2, "source_sha": expected_sha, "channel": channel,
-        "notes_base_sha": base_sha, "version": identity["version"],
+        "notes_base_sha": base_sha, "version": version,
     })
 
 
@@ -240,7 +239,7 @@ def compliance_notice(descriptor: dict) -> bytes:
 
 def require_compliance(receipt: dict) -> dict:
     descriptor = receipt.get("compliance_bundle")
-    if receipt.get("schema_version") != 2 or not isinstance(descriptor, dict):
+    if receipt.get("schema_version") not in (2, 3) or not isinstance(descriptor, dict):
         fail("publication requires a firmware compliance bundle; historical candidates are read-only")
     return descriptor
 
@@ -329,11 +328,8 @@ def prepare(root: Path, firmware: Path, channel: str,
     license_bytes = firmware_compliance.source_license(root, expected_sha)
     litch_max_license = firmware_compliance.source_license(root, expected_sha, "lib/litch-max/LICENSE")
     litch_max_snapshot = firmware_compliance.source_snapshot(root, expected_sha)
-    identity = release_identity.source_identity({
-        name: git(root, "show", f"HEAD:{name}").decode("utf-8")
-        for name in release_identity.SOURCE_PATHS
-    })
-    version = identity["version"]
+    version = source_firmware_version(root, expected_sha)
+    series = series_tuple(version)
     firmware_info = artifact.inspect_firmware(firmware)
     firmware_bytes = firmware.read_bytes()
     if sha256(firmware_bytes) != firmware_info.sha256:
@@ -346,7 +342,7 @@ def prepare(root: Path, firmware: Path, channel: str,
         expected_litch_max_license_sha256=sha256(litch_max_license),
         expected_litch_max_snapshot_sha256=sha256(litch_max_snapshot))
     notes_bytes = draft_notes(root, expected_sha, base_sha)
-    manifest_source = tuple(map(int, identity["native_version"].split("."))) >= (1, 0, 2)
+    manifest_source = series >= (1, 0, 2)
     if output.exists() or output.is_symlink():
         fail("candidate output already exists; use a new run directory")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -357,15 +353,14 @@ def prepare(root: Path, firmware: Path, channel: str,
                        compliance, compliance_bundle, separate_notice=True,
                        manifest_source=manifest_source)
         inputs = BUILD_INPUTS
-        if tuple(map(int, identity["native_version"].split("."))) >= (1, 0, 3):
+        if series >= (1, 0, 3):
             inputs = (*inputs, HISTORY_NOTES)
         receipt = {
-            "schema_version": 2,
+            "schema_version": 3,
             "repository": REPOSITORY,
             "source_sha": expected_sha,
             "channel": channel,
             "version": version,
-            "app_identity": identity,
             "target": "esp32s3",
             "notes_base_sha": base_sha,
             "notes_status": "draft",
@@ -504,7 +499,7 @@ def verify(candidate: Path, expected_sha: str, receipt_sha: str, *,
     if sha256(receipt_bytes) != receipt_sha:
         fail("candidate receipt does not match the approved digest")
     receipt = json.loads(receipt_bytes)
-    if (not isinstance(receipt, dict) or receipt.get("schema_version") not in (1, 2)
+    if (not isinstance(receipt, dict) or receipt.get("schema_version") not in (1, 2, 3)
             or receipt.get("repository") != expected_repository
             or receipt.get("source_sha") != expected_sha
             or receipt.get("target") != "esp32s3"
@@ -517,8 +512,10 @@ def verify(candidate: Path, expected_sha: str, receipt_sha: str, *,
                    for value in execution.values())):
         fail("candidate receipt has an invalid GitHub build execution")
     # Retained pre-policy receipts remain readable, but cannot be newly published.
-    if any(receipt.get("version", "").startswith(series)
-           for series in release_identity.SUPPORTED_SERIES):
+    if receipt["schema_version"] == 3:
+        release_identity.release_series(receipt["version"])
+    elif any(receipt.get("version", "").startswith(series)
+             for series in release_identity.SUPPORTED_SERIES):
         series = release_identity.release_series(receipt["version"])
         app_identity = receipt.get("app_identity", {})
         if (app_identity.get("version") != receipt["version"]
@@ -542,13 +539,13 @@ def verify(candidate: Path, expected_sha: str, receipt_sha: str, *,
     ))
     compliance = receipt.get("compliance_bundle")
     separate_notice = separate_source_notice(receipt)
-    if separate_notice and receipt["schema_version"] != 2:
+    if separate_notice and receipt["schema_version"] == 1:
         fail("separate source notices require a bound compliance bundle")
     bundle_relative = None
     license_sha = None
     litch_max_license_sha = None
     litch_max_snapshot_sha = None
-    if receipt["schema_version"] == 2:
+    if receipt["schema_version"] >= 2:
         require_compliance(receipt)
         inputs = receipt.get("input_sha256")
         if (not isinstance(inputs, dict) or not isinstance(inputs.get("LICENSE"), str)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare/check the shared source identity; never build, allocate remotely or publish."""
+"""Prepare and check release source versions before packaging."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from pathlib import Path
 import re
 import sys
 
-SERIES = "1.0.4"
-BARE_INITIAL_SERIES = ("1.0.2", "1.0.3", SERIES)
+SERIES = "1.0.5"
+BARE_INITIAL_SERIES = ("1.0.2", "1.0.3", "1.0.4", SERIES)
 ZERO_START_SERIES = ("0.9.7", "0.9.8", "0.9.9", "1.0.0", "1.0.1", *BARE_INITIAL_SERIES)
 SUPPORTED_SERIES = ("0.9.0", "0.9.5", *ZERO_START_SERIES)
 RESERVED_BETA_VERSIONS = frozenset((
@@ -236,44 +236,50 @@ def valid_package_code(value: int) -> bool:
     return type(value) is int and 1 <= value <= MAX_PACKAGE_CODE
 
 
-def source_identity(texts: dict[str, str]) -> dict:
-    firmware = single(HEADER_VERSION, texts[HEADER], "firmware version")[2]
+def firmware_version(header: str) -> str:
+    version = single(HEADER_VERSION, header, "firmware version")[2]
+    release_series(version)
+    return version
+
+
+def app_source_identity(texts: dict[str, str]) -> dict:
     pubspec = single(PUBSPEC_VERSION, texts[PUBSPEC], "native app version/build")
     app = single(APP_VERSION, texts[APP_IDENTITY], "app release identity")
-    series = release_series(firmware)
-    if (app[2] != firmware or app[3] != series or pubspec[2] != series
-            or app[4] != pubspec[3]):
-        raise ValueError("app and firmware release identities/native package inputs disagree")
+    if (not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-(?:0|[1-9][0-9]*))?", app[2])
+            or app[2].split("-")[0] != app[3] or pubspec[2] != app[3] or app[4] != pubspec[3]):
+        raise ValueError("app release identity and native package inputs disagree")
     code = int(app[4])
     if not valid_package_code(code):
         raise ValueError("native package code must be an integer in 1..9999")
-    return {"version": firmware, "native_version": series, "package_code": code}
+    return {"version": app[2], "native_version": app[3], "package_code": code}
+
+
+def source_identity(texts: dict[str, str]) -> dict:
+    """Compatibility check for explicit preparation of a paired release."""
+    firmware = firmware_version(texts[HEADER])
+    app = app_source_identity(texts)
+    if firmware != app["version"]:
+        raise ValueError("paired app and firmware identities disagree")
+    return app
 
 
 def read_sources(root: Path) -> dict[str, str]:
     return {name: (root / name).read_text() for name in SOURCE_PATHS}
 
 
-def check(root: Path) -> dict:
-    return source_identity(read_sources(root))
+def check(root: Path, product: str = "both") -> dict:
+    if product == "firmware":
+        return {"version": firmware_version((root / HEADER).read_text())}
+    if product == "app":
+        return app_source_identity({path: (root / path).read_text() for path in (PUBSPEC, APP_IDENTITY)})
+    return {"firmware": check(root, "firmware"), "app": check(root, "app")}
 
 
-def prepare(root: Path, version: str, package_code: int, previous_package_code: int,
-            releases: list, manifest: dict, recovered_receipt: Path | None = None,
-            recovered_sha256: str | None = None) -> dict:
-    """Set release versions using the supplied publication history and package-code floor.
-
-    Reconcile incomplete publication receipts with the release history before calling.
-    Reusing the same inputs does not consume a version number.
-    """
-    texts = read_sources(root)
-    header = single(HEADER_VERSION, texts[HEADER], "firmware version")
-    pubspec = single(PUBSPEC_VERSION, texts[PUBSPEC], "native app version/build")
-    single(APP_VERSION, texts[APP_IDENTITY], "app release identity")
+def firmware_update(header: str, version: str, releases: list, manifest: dict,
+                    recovered_receipt: Path | None, recovered_sha256: str | None) -> str:
+    current = single(HEADER_VERSION, header, "firmware version")[2]
     series = release_series(version)
-    current = (source_identity(texts)
-               if any(header[2].startswith(known) for known in SUPPORTED_SERIES) else None)
-    if current is not None and current["version"] == version and version in RESERVED_BETA_VERSIONS:
+    if current == version and version in RESERVED_BETA_VERSIONS:
         # Recheck a reserved, unused version against later publications.
         _unpublished_beta_expectation(version, releases)
     else:
@@ -286,58 +292,93 @@ def prepare(root: Path, version: str, package_code: int, previous_package_code: 
         receipt = json.loads(recovered_receipt.read_bytes())
         if canonical_version(receipt.get("version")) == canonical_version(version):
             raise ValueError("version already used by the recovered publication")
-    if (current is not None
-            and tuple(map(int, series.split("."))) < tuple(map(int, current["native_version"].split(".")))):
+    if (VERSION.fullmatch(current)
+            and tuple(map(int, series.split("."))) < tuple(map(int, release_series(current).split(".")))):
         raise ValueError("release series cannot go backwards from coherent current source")
+    return HEADER_VERSION.sub(lambda m: m[1] + version + m[3], header)
+
+
+def app_update(texts: dict[str, str], version: str, package_code: int,
+               previous_package_code: int) -> dict[str, str]:
+    pubspec = single(PUBSPEC_VERSION, texts[PUBSPEC], "native app version/build")
+    app = single(APP_VERSION, texts[APP_IDENTITY], "app release identity")
+    series = version.split("-", 1)[0]
+    if app[2]:
+        current = app_source_identity(texts)
+        if tuple(map(int, series.split("."))) < tuple(map(int, current["native_version"].split("."))):
+            raise ValueError("app version cannot go backwards")
     current_code = int(pubspec[3])
     if type(package_code) is not int or type(previous_package_code) is not int:
         raise ValueError("native package codes must be integers")
     if (not valid_package_code(package_code) or previous_package_code < 0
             or package_code <= previous_package_code
             or package_code < current_code
-            or (canonical_version(header[2]) != canonical_version(version) and package_code == current_code)):
+            or (canonical_version(app[2]) != canonical_version(version) and package_code == current_code)):
         raise ValueError("native package code must be 1..9999 and advance past prior uploaded packages; never derive it from N")
-    updates = dict(texts)
-    updates[HEADER] = HEADER_VERSION.sub(lambda m: m[1] + version + m[3], texts[HEADER])
+    updates = {}
     updates[PUBSPEC] = PUBSPEC_VERSION.sub(
         lambda m: f"{m[1]}{series}+{package_code}{m[4]}", texts[PUBSPEC])
     updates[APP_IDENTITY] = APP_VERSION.sub(
         lambda m: (f"{m[1]}  version: '{version}',\n  nativeVersion: '{series}',\n"
                    f"  buildNumber: '{package_code}',\n{m[5]}"), texts[APP_IDENTITY])
-    identity = source_identity(updates)
-    # Validate everything before writing; admission rejects an interrupted partial update.
+    app_source_identity(updates)
+    return updates
+
+
+def prepare(root: Path, version: str, package_code: int | None, previous_package_code: int | None,
+            releases: list | None, manifest: dict | None, recovered_receipt: Path | None = None,
+            recovered_sha256: str | None = None, *, product: str = "both") -> dict:
+    paths = {"both": SOURCE_PATHS, "app": (PUBSPEC, APP_IDENTITY), "firmware": (HEADER,)}[product]
+    texts = {name: (root / name).read_text() for name in paths}
+    updates = {}
+    if HEADER in paths:
+        updates[HEADER] = firmware_update(texts[HEADER], version, releases, manifest,
+                                          recovered_receipt, recovered_sha256)
+    if PUBSPEC in paths:
+        updates.update(app_update(texts, version, package_code, previous_package_code))
+    if product == "both":
+        result = source_identity(updates)
+    elif product == "firmware":
+        result = {"version": version}
+    else:
+        result = app_source_identity(updates)
     for name, data in updates.items():
         if data != texts[name]:
             (root / name).write_text(data)
-    return identity
+    return result
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("check", "prepare"):
+    for name in ("check", "prepare", "prepare-firmware", "prepare-app"):
         command = commands.add_parser(name)
         command.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
-    prepare_parser = commands.choices["prepare"]
-    prepare_parser.add_argument("--version", required=True)
-    prepare_parser.add_argument("--package-code", type=int, required=True)
-    prepare_parser.add_argument("--previous-package-code", type=int, required=True,
-                                help="verified maximum code previously uploaded/distributed on either app platform")
-    prepare_parser.add_argument("--public-beta-manifest", type=Path, required=True)
-    prepare_parser.add_argument("--recovered-publication-receipt", type=Path)
-    prepare_parser.add_argument("--recovered-receipt-sha256",
-                                help="independently retained digest of the exact recovered manual receipt")
+    commands.choices["check"].add_argument("--product", choices=("firmware", "app", "both"), default="both")
+    for name in ("prepare", "prepare-app", "prepare-firmware"):
+        commands.choices[name].add_argument("--version", required=True)
+    for name in ("prepare", "prepare-app"):
+        commands.choices[name].add_argument("--package-code", type=int, required=True)
+        commands.choices[name].add_argument("--previous-package-code", type=int, required=True,
+            help="highest build previously uploaded to either store")
+    for name in ("prepare", "prepare-firmware"):
+        commands.choices[name].add_argument("--public-beta-manifest", type=Path, required=True)
+        commands.choices[name].add_argument("--recovered-publication-receipt", type=Path)
+        commands.choices[name].add_argument("--recovered-receipt-sha256")
     next_parser = commands.add_parser("check-next-beta")
     next_parser.add_argument("--version", required=True)
     next_parser.add_argument("--public-beta-manifest", type=Path,
                              help="fresh live catalog; required before this repository has a published Beta")
-    for command in (prepare_parser, next_parser):
+    for command in (commands.choices["prepare"], commands.choices["prepare-firmware"], next_parser):
         command.add_argument("--releases", type=Path, required=True,
                              help="fresh complete GitHub releases JSON, including all pages")
     args = parser.parse_args()
     try:
         if args.command == "check":
-            print(json.dumps(check(args.root), sort_keys=True))
+            print(json.dumps(check(args.root, args.product), sort_keys=True))
+        elif args.command == "prepare-app":
+            print(json.dumps(prepare(args.root, args.version, args.package_code, args.previous_package_code,
+                                     None, None, product="app"), sort_keys=True))
         else:
             releases = json.loads(args.releases.read_text())
             if args.command == "check-next-beta":
@@ -358,9 +399,11 @@ def main() -> int:
                     raise ValueError("recovered receipt and independently retained digest are required together")
                 if args.recovered_publication_receipt and args.public_beta_manifest.read_bytes() != artifact.render_manifest_json(manifest).encode():
                     raise ValueError("public beta manifest bytes differ from the recovered canonical catalog")
-                print(json.dumps(prepare(args.root, args.version, args.package_code,
-                                         args.previous_package_code, releases, manifest,
-                                         args.recovered_publication_receipt, args.recovered_receipt_sha256), sort_keys=True))
+                result = prepare(args.root, args.version, getattr(args, "package_code", None),
+                                 getattr(args, "previous_package_code", None), releases, manifest,
+                                 args.recovered_publication_receipt, args.recovered_receipt_sha256,
+                                 product="firmware" if args.command == "prepare-firmware" else "both")
+                print(json.dumps(result, sort_keys=True))
     except (ValueError, OSError, KeyError, TypeError) as error:
         print(f"release identity rejected: {error}", file=sys.stderr)
         return 2

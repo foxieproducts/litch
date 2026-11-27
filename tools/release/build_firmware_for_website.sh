@@ -18,10 +18,9 @@ if [[ ! -f "$PREP_SCRIPT" ]]; then
 fi
 
 # Identity is reserved before QA, never bumped by a local build or retry.
-identity="$(python3 "$SCRIPT_DIR/release_identity.py" check --root "$REPO_ROOT")"
+identity="$(python3 "$SCRIPT_DIR/release_identity.py" check --product firmware --root "$REPO_ROOT")"
 current_version="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])' <<< "$identity")"
-echo "Prepared shared app/firmware version: $current_version"
-echo "Use release_identity.py prepare before QA to change the reserved beta."
+echo "Prepared firmware version: $current_version"
 echo
 echo "Build target channel?"
 echo "  1) release (stable)"

@@ -1,3 +1,8 @@
+## 1.0.5
+
+- Stored artwork plays once at startup and returns to Play or Litchcraft.
+- Adjust light-square brightness in finer steps.
+
 ## 1.0.4
 
 - Pair another phone even when old Bluetooth addresses have filled the board’s memory. Clear Pairings and Factory Reset remove saved phone keys and addresses.

@@ -33,12 +33,21 @@ Build both store packages from the same clean release checkout of [foxieproducts
 ```sh
 git status --short
 git rev-parse HEAD
-python3 tools/release/release_identity.py check
+python3 tools/release/release_identity.py check --product app
 cd app
 flutter pub get --enforce-lockfile
 ```
 
 The native version and build number come from [pubspec.yaml](pubspec.yaml). The app also records them in [AppReleaseIdentity](lib/src/models/app_release_identity.dart). To release a build you have already uploaded, select it in the store. For a changed binary, check the highest uploaded number in **both** stores, choose an unused higher number and commit the matching source values before packaging. Keep the source version and build number throughout export.
+
+Use `release_identity.py prepare-app` to set the app version and build independently. Record the full Git commit from the packaging step with each submission. When a store confirms its production release or rollout has started, tag that platform using the version and build displayed by the store. Each store can go live on its own date.
+
+```sh
+python3 tools/release/tag_published_app.py ios --version "$store_version" --build "$store_build" --source "$build_commit"
+python3 tools/release/tag_published_app.py android --version "$store_version" --build "$store_build" --source "$build_commit"
+```
+
+Run the matching command from the repository root for each published platform. It checks the package identity at the build commit, creates `app-ios-<version>-build-<number>` or `app-android-<version>-build-<number>` on origin and verifies the remote tag. A retry accepts the same commit. An existing tag at a different commit requires reconciliation with the shipped package.
 
 Before packaging, enter the native version, build number and concise release notes in [the app release catalog](assets/releases/app_store_notes.json). Use that text for both store submissions. The English notes for 1.0.2 (51) match both App Store Connect and Play Console. If the stores use different copy, record each difference in `platform_notes`. Run `test/app_release_identity_test.dart` to check that the prepared build has notes. The app can then show the exact release text offline.
 

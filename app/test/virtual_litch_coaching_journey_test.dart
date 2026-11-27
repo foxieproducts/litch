@@ -197,23 +197,25 @@ Future<void> followCoachedDuckHint(
   await until(
     () =>
         shown().visibleAssistance?.presentation ==
-        HomeAssistancePresentation.compoundDuck,
-    'Coaching reveals one compound Hint from the real Duck search.',
+        HomeAssistancePresentation.ready,
+    'Coaching reveals the current chess step from the real Duck search.',
   );
-  final compound = shown().visibleAssistance!;
-  expect(compound.coachingOwned, isTrue);
-  final move = compound.move!;
-  final duckMove = compound.duckMove!;
+  final chessHint = shown().visibleAssistance!;
+  expect(chessHint.coachingOwned, isTrue);
+  expect(chessHint.duckMove, isNull);
+  final move = chessHint.move!;
+  final sideToMove = shown().position!.sideToMove;
+  final movingPiece = shown().position!.pieces[move.from];
+  expect(movingPiece, isNotNull);
+  final duckFrom = shown().gameStatus!.duckSquare!;
   final duckDestination = find.bySemanticsLabel(
     RegExp(RegExp.escape(strings.duckHintDestination)),
   );
   final chessSource = find.bySemanticsLabel(
     RegExp(RegExp.escape(strings.hintStartsHere)),
   );
-  final duckMarker = find.byKey(
-    ValueKey('duck-assistance-to-${algebraicSquare(duckMove.to)}'),
-  );
-  expect(duckDestination, findsOneWidget);
+  expect(chessSource, findsOneWidget);
+  expect(duckDestination, findsNothing);
 
   occupancy &= ~(BigInt.one << move.from);
   await hall();
@@ -225,27 +227,26 @@ Future<void> followCoachedDuckHint(
   );
   final held = shown().visibleAssistance!;
   expect(held.move, move);
-  expect(held.duckMove, duckMove);
+  expect(held.duckMove, isNull);
   final native = await ble.frame(tester);
   expect(
     held.legalDestinations,
     BigInt.parse(native['destinations'] as String, radix: 16),
   );
-  expect(duckDestination, findsOneWidget);
+  expect(duckDestination, findsNothing);
 
   final alternate = Iterable<int>.generate(64).firstWhere(
     (square) =>
         square != move.to &&
         (held.legalDestinations! & (BigInt.one << square)) != BigInt.zero,
   );
-  expect(duckMarker, findsOneWidget);
   expect(
     find.byKey(ValueKey('assistance-to-${algebraicSquare(alternate)}')),
     findsOneWidget,
   );
   final alternateLanding = BigInt.one << alternate;
   final chessLanding = BigInt.one << move.to;
-  final duckSource = BigInt.one << duckMove.from;
+  final duckSource = BigInt.one << duckFrom;
   occupancy &= ~duckSource;
   await hall();
   await until(
@@ -268,7 +269,6 @@ Future<void> followCoachedDuckHint(
     );
   }
   expect(duckDestination, findsNothing);
-  expect(duckMarker, findsNothing);
 
   occupancy &= ~alternateLanding;
   await hall();
@@ -286,7 +286,8 @@ Future<void> followCoachedDuckHint(
     'Lifting both ambiguous placements restores the held guide.',
   );
   expect(shown().duckLandingRemovalMask, isNull);
-  expect(shown().visibleAssistance?.duckMove, duckMove);
+  expect(shown().visibleAssistance?.move, move);
+  expect(shown().visibleAssistance?.duckMove, isNull);
   occupancy |= duckSource;
   await hall();
 
@@ -296,23 +297,79 @@ Future<void> followCoachedDuckHint(
     () => shown().homeStateAction == HomeStateAction.settle,
     'Chess placement waits for physical Circle.',
   );
-  expect(shown().visibleAssistance?.duckMove, duckMove);
-  expect(shown().visibleAssistance?.move, isNull);
-  expect(duckDestination, findsOneWidget);
-  expect(duckMarker, findsOneWidget);
+  expect(shown().visibleAssistance, isNull);
+  expect(duckDestination, findsNothing);
   expect(chessSource, findsNothing);
 
   await circle();
   await until(
-    () => shown().visibleDuckRelocation?.owner == HomeDuckRelocationOwner.human,
-    'The binary handoff keeps the human relocation selectable.',
+    () =>
+        shown().visibleDuckRelocation?.owner == HomeDuckRelocationOwner.human &&
+        shown().visibleAssistance?.presentation ==
+            HomeAssistancePresentation.duck,
+    'Only the confirmed binary handoff reveals the human Duck step.',
   );
-  expect(shown().visibleAssistance?.duckMove, duckMove);
+  final duckMove = shown().visibleAssistance!.duckMove!;
+  expect(duckMove.from, duckFrom);
+  expect(shown().visibleAssistance!.coachingOwned, isTrue);
   expect(shown().visibleAssistance?.move, isNull);
   expect(duckDestination, findsOneWidget);
+  final duckMarker = find.byKey(
+    ValueKey('duck-assistance-to-${algebraicSquare(duckMove.to)}'),
+  );
+  expect(duckMarker, findsOneWidget);
+  expect(chessSource, findsNothing);
+  final relocationFrame = await publishedBoardFrame(tester, ble);
+  expect(
+    relocationFrame['logical_to_physical'],
+    List<int>.generate(64, (i) => i),
+  );
+  final duckTargetColor =
+      ((relocationFrame['board'] as List)[duckMove.to][1] as List).cast<int>();
+  expect(duckTargetColor[0], greaterThan(0));
+  expect(duckTargetColor[1], duckTargetColor[0]);
+  expect(duckTargetColor.skip(2), [0, 0]);
+
+  occupancy &= ~duckSource;
+  await hall();
+  await until(
+    () => shown().physicalStatus?.occupiedSquares == occupancy,
+    'The current Duck source is lifted after the chess move is accepted.',
+  );
+  expect(shown().visibleAssistance?.duckMove, duckMove);
+  expect(duckMarker, findsOneWidget);
+  occupancy |= BigInt.one << duckMove.to;
+  await hall();
+  await until(
+    () => shown().homeStateAction == HomeStateAction.settle,
+    'The Duck landing waits for its own physical Circle confirmation.',
+  );
+  expect(shown().position!.sideToMove, sideToMove);
+  expect(shown().visibleAssistance, isNull);
+  expect(duckDestination, findsNothing);
+  await circle();
+  await until(
+    () =>
+        shown().gameStatus?.duckMovePending == false &&
+        shown().homeStateAction == HomeStateAction.idle &&
+        shown().position?.sideToMove != sideToMove,
+    'The complete chess-and-Duck turn advances to the other player.',
+  );
+  expect(shown().gameStatus!.duckSquare, duckMove.to);
+  expect(shown().position!.pieces[move.from], isNull);
+  expect(shown().position!.pieces[move.to], movingPiece);
+  expect(shown().physicalStatus!.occupiedSquares, occupancy);
+  expect(duckMarker, findsNothing);
+  final completedFrame = await publishedBoardFrame(tester, ble);
+  expect(completedFrame['duck_square'], duckMove.to);
+  expect(
+    BigInt.parse(completedFrame['expected'] as String, radix: 16),
+    occupancy,
+  );
+  expectOrdinaryEmptyCenters(ble, completedFrame, 'completed phased Duck turn');
   debugPrint(
-    'VIRTUAL_LITCH modern Duck Hint $move then $duckMove stayed visible '
-    'through legal pickup, ambiguity recovery, Circle settle and relocation; '
+    'VIRTUAL_LITCH phased Duck Hint $move then $duckMove completed '
+    'through legal pickup, ambiguity recovery and separate Circle confirmations; '
     'Console dropped.',
   );
 }
@@ -387,8 +444,18 @@ Future<void> tapCoachingWithStableActions(
   VirtualLitchBle ble,
   int owner,
 ) async {
-  await tester.ensureVisible(coaching(owner));
+  await tester.scrollUntilVisible(
+    coaching(owner),
+    200,
+    scrollable: find
+        .descendant(
+          of: find.byKey(const ValueKey('home-details-scroll')),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
   await tester.pumpAndSettle();
+  expect(coaching(owner).hitTestable(), findsOneWidget);
   final before = boardActionAppearance(tester);
   // Delay real firmware ACK/Home delivery, preserving the production request
   // and rendering path while checking the transition a person actually sees.
